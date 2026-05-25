@@ -1,9 +1,8 @@
-import fs from "fs";
-import path from "path";
 import dotenv from "dotenv";
 import pg from "pg";
 import { getInitialStore } from "../src/store";
 import { backfillMegaDemoData } from "../src/mockSeeds";
+import { runMigrations } from "../src/dbMigrations";
 
 dotenv.config();
 
@@ -48,7 +47,7 @@ async function insertBatch(
 }
 
 async function main() {
-  await pool.query(fs.readFileSync(path.join(process.cwd(), "migrations", "001_initial_schema.postgres.sql"), "utf8"));
+  await runMigrations(pool);
   const client = await pool.connect();
 
   try {

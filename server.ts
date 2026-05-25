@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import fs from "fs";
 import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -9,6 +8,7 @@ import pg from "pg";
 import { getInitialStore } from "./src/store";
 import { verifyPassword } from "./src/authHash";
 import { Course, Enrollment, LessonProgress, Question, TuitionFee, User } from "./src/types";
+import { runMigrations } from "./src/dbMigrations";
 
 dotenv.config();
 
@@ -223,8 +223,7 @@ function questionFromRow(row: any): Question {
 }
 
 async function initializeDatabase() {
-  const migration = fs.readFileSync(path.join(process.cwd(), "migrations", "001_initial_schema.postgres.sql"), "utf8");
-  await pool.query(migration);
+  await runMigrations(pool);
   await pool.query(`
     UPDATE users SET role = 'finance' WHERE role = 'ke_toan';
     UPDATE users SET role = 'academic' WHERE role IN ('quan_ly_hoc_vu', 'academic_admin');
