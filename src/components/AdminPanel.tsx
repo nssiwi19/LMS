@@ -383,8 +383,8 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
 
   return (
     <div className="space-y-6">
-      {isLoading && <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">?ang t?i d? li?u...</div>}
-      {isError && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">Kh?ng th? t?i d? li?u t? server.</div>}
+      {isLoading && <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">Đang tải dữ liệu...</div>}
+      {isError && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">Không thể tải dữ liệu từ server.</div>}
       {/* Toast alarms logs alert */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#2563eb] border border-blue-400 text-white font-medium text-xs px-4 py-3 rounded-2xl shadow-2xl animate-fade-in animate-bounce">
@@ -723,12 +723,12 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-white/10 bg-white/2 text-[10px] uppercase text-white/50">
-                        <th className="py-2.5 px-3">H? v? T?n</th>
-                        <th className="py-2.5 px-3">Email c? nh?n</th>
-                        {userDirTab === "student" && <th className="py-2.5 px-3">H? s? h?c v?</th>}
-                        <th className="py-2.5 px-3">Quy?n h?n</th>
-                        <th className="py-2.5 px-3">Tr?ng th?i kh?a</th>
-                        <th className="py-2.5 px-3 text-right">Kh?a/M? Kh?a</th>
+                        <th className="py-2.5 px-3">Họ và Tên</th>
+                        <th className="py-2.5 px-3">Email cá nhân</th>
+                        {userDirTab === "student" && <th className="py-2.5 px-3">Hồ sơ học vụ</th>}
+                        <th className="py-2.5 px-3">Quyền hạn</th>
+                        <th className="py-2.5 px-3">Trạng thái khóa</th>
+                        <th className="py-2.5 px-3 text-right">Khóa/Mở Khóa</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
@@ -741,8 +741,8 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                             <td className="py-3 px-3 font-mono text-white/60">{usr.email}</td>
                             {userDirTab === "student" && (
                               <td className="py-3 px-3 text-white/70">
-                                <div className="font-mono text-indigo-300">{profile?.studentCode || "Ch?a c? m?"}</div>
-                                <div className="text-[10px] text-white/40">{program?.name || profile?.programId || "Ch?a g?n ng?nh"} ? GPA {profile?.gpa ?? 0}</div>
+                                <div className="font-mono text-indigo-300">{profile?.studentCode || "Chưa có mã"}</div>
+                                <div className="text-[10px] text-white/40">{program?.name || profile?.programId || "Chưa gán ngành"} · GPA {profile?.gpa ?? 0}</div>
                               </td>
                             )}
                             <td className="py-3 px-3">
@@ -752,20 +752,20 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                                 disabled={usr.id === currentUser.id}
                                 className="bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-200 disabled:opacity-50"
                               >
-                                <option value="student" className="bg-slate-900">Sinh vi?n</option>
-                                <option value="teacher" className="bg-slate-900">Gi?ng vi?n</option>
+                                <option value="student" className="bg-slate-900">Sinh viên</option>
+                                <option value="teacher" className="bg-slate-900">Giảng viên</option>
                                 <option value="admin" className="bg-slate-900">Admin</option>
-                                <option value="finance" className="bg-slate-900">T?i ch?nh</option>
-                                <option value="academic" className="bg-slate-900">H?c v?</option>
-                                <option value="le_tan" className="bg-slate-900">L? t?n</option>
-                                <option value="advisor" className="bg-slate-900">C? v?n</option>
+                                <option value="finance" className="bg-slate-900">Tài chính</option>
+                                <option value="academic" className="bg-slate-900">Học vụ</option>
+                                <option value="le_tan" className="bg-slate-900">Lễ tân</option>
+                                <option value="advisor" className="bg-slate-900">Cố vấn</option>
                               </select>
                             </td>
                             <td className="py-3 px-3">
                               {usr.isActive ? (
-                                <span className="text-emerald-400 font-bold text-[10.5px]">?ang ho?t ??ng</span>
+                                <span className="text-emerald-400 font-bold text-[10.5px]">Đang hoạt động</span>
                               ) : (
-                                <span className="text-red-400 font-bold text-[10.5px]">?ang kh?a</span>
+                                <span className="text-red-400 font-bold text-[10.5px]">Đang khóa</span>
                               )}
                             </td>
                             <td className="py-3 px-3 text-right">
@@ -774,10 +774,10 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                                   onClick={() => handleToggleUserStatus(usr.id)}
                                   className={`px-2 py-1 rounded transition text-[10.5px] cursor-pointer ${usr.isActive ? "bg-red-500/10 text-red-400 hover:bg-red-500/15" : "bg-emerald-500/10 text-emerald-400"}`}
                                 >
-                                  {usr.isActive ? "Kh?a" : "K?ch ho?t"}
+                                  {usr.isActive ? "Khóa" : "Kích hoạt"}
                                 </button>
                               ) : (
-                                <span className="text-white/30 text-[10.5px]">T?i kho?n hi?n h?nh</span>
+                                <span className="text-white/30 text-[10.5px]">Tài khoản hiện hành</span>
                               )}
                             </td>
                           </tr>
@@ -786,7 +786,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                       {paginatedUsers.length === 0 && (
                         <tr>
                           <td colSpan={userDirTab === "student" ? 6 : 5} className="py-10 text-center text-white/35">
-                            Kh?ng c? t?i kho?n ph? h?p trong th? m?c n?y.
+                            Không có tài khoản phù hợp trong thư mục này.
                           </td>
                         </tr>
                       )}

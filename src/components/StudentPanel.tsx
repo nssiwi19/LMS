@@ -662,8 +662,8 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
         {/* Tab 4: Graduation Certificates display board */}
         {activeSubTab === "certificates" && (
           <div className="space-y-6">
-      {isLoading && <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">?ang t?i d? li?u...</div>}
-      {isError && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">Kh?ng th? t?i d? li?u t? server.</div>}
+      {isLoading && <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">Đang tải dữ liệu...</div>}
+      {isError && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">Không thể tải dữ liệu từ server.</div>}
             <h4 className="text-base font-display font-semibold text-white">Chứng nhận của tôi ({store.certificates.filter(c => c.studentId === currentUser.id).length})</h4>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

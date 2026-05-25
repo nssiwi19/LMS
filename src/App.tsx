@@ -342,7 +342,7 @@ function AppShell() {
 
                 <div className="bg-white/5 p-4 rounded-xl text-xs space-y-1">
                   <p className="font-mono text-indigo-300 uppercase font-bold text-[9px]">
-                    Vai tr??: {roleLabel(currentUser.role)}
+                    Vai trò: {roleLabel(currentUser.role)}
                   </p>
                   <p className="text-white font-bold truncate">{currentUser.name}</p>
                 </div>
