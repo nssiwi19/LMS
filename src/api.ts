@@ -1,11 +1,18 @@
 import { LMSDataStore } from "./types";
 
+export function setCsrfToken(token: string | null) {
+  if (token) sessionStorage.setItem("e16_lms_csrf", token);
+  else sessionStorage.removeItem("e16_lms_csrf");
+}
+
 async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const csrfToken = sessionStorage.getItem("e16_lms_csrf");
   const response = await fetch(url, {
     ...init,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
       ...(init.headers || {})
     }
   });

@@ -29,7 +29,7 @@ import ReceptionPanel from "./components/ReceptionPanel";
 import AcademicPanel from "./components/AcademicPanel";
 import AdvisorPanel from "./components/AdvisorPanel";
 import ParentPanel from "./components/ParentPanel";
-import { api } from "./api";
+import { api, setCsrfToken } from "./api";
 
 export default function App() {
   // Store instance reactivity state
@@ -123,6 +123,7 @@ export default function App() {
       }
 
       setCurrentUser(data.user);
+      setCsrfToken(data.csrfToken || null);
       await refreshStoreDataFromServer();
       AppStore.log(data.user.id, "authentication_login", "security", `Successfully authenticated into profile desk role: ${data.user.role}`);
       setLoginEmail("");
@@ -141,6 +142,7 @@ export default function App() {
       credentials: "include"
     }).catch(() => undefined);
     setCurrentUser(null);
+    setCsrfToken(null);
   };
 
   const handleInstantDemoLogin = (email: string, pass: string) => {

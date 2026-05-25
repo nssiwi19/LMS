@@ -14,10 +14,16 @@ dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const JWT_SECRET = process.env.JWT_SECRET || "dev-only-e16-lms-secret";
+const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === "production" ? "" : "dev-only-e16-lms-secret");
 const revokedTokens = new Set<string>();
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const csrfSafeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 
 app.use(express.json({ limit: "10mb" }));
+
+if (process.env.NODE_ENV === "production" && !JWT_SECRET) {
+  throw new Error("JWT_SECRET is required in production.");
+}
 
 type AuthRequest = express.Request & { user?: User };
 type DbUserRow = {
@@ -97,8 +103,16 @@ function setAuthCookie(res: express.Response, token: string) {
   res.setHeader("Set-Cookie", `e16_lms_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}`);
 }
 
+function setCsrfCookie(res: express.Response, token: string) {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  res.append("Set-Cookie", `e16_lms_csrf=${token}; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 8}${secure}`);
+}
+
 function clearAuthCookie(res: express.Response) {
-  res.setHeader("Set-Cookie", "e16_lms_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
+  res.setHeader("Set-Cookie", [
+    "e16_lms_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
+    "e16_lms_csrf=; SameSite=Lax; Path=/; Max-Age=0"
+  ]);
 }
 
 function extractBearerToken(req: express.Request): string | null {
@@ -106,6 +120,42 @@ function extractBearerToken(req: express.Request): string | null {
   if (header?.startsWith("Bearer ")) return header.slice("Bearer ".length);
   const match = (req.header("Cookie") || "").match(/(?:^|;\s*)e16_lms_session=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : null;
+}
+
+function extractCookie(req: express.Request, name: string): string | null {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = (req.header("Cookie") || "").match(new RegExp(`(?:^|;\\s*)${escaped}=([^;]+)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function rateLimitLogin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const key = req.ip || req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const maxAttempts = 10;
+  const entry = loginAttempts.get(key);
+  if (!entry || entry.resetAt <= now) {
+    loginAttempts.set(key, { count: 1, resetAt: now + windowMs });
+    return next();
+  }
+  if (entry.count >= maxAttempts) {
+    const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+    res.setHeader("Retry-After", String(retryAfter));
+    return res.status(429).json({ error: "Too many login attempts. Please try again later." });
+  }
+  entry.count += 1;
+  next();
+}
+
+function requireCsrf(req: AuthRequest, res: express.Response, next: express.NextFunction) {
+  if (csrfSafeMethods.has(req.method)) return next();
+  if (req.path === "/auth/login" || req.path === "/api/auth/login") return next();
+  const cookieToken = extractCookie(req, "e16_lms_csrf");
+  const headerToken = req.header("X-CSRF-Token");
+  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    return res.status(403).json({ error: "Invalid CSRF token." });
+  }
+  next();
 }
 
 async function requireAuth(req: AuthRequest, res: express.Response, next: express.NextFunction) {
@@ -119,6 +169,8 @@ async function requireAuth(req: AuthRequest, res: express.Response, next: expres
   req.user = toPublicUser(row);
   next();
 }
+
+app.use("/api", requireCsrf);
 
 function requireRole(roles: Array<User["role"]>) {
   return (req: AuthRequest, res: express.Response, next: express.NextFunction) => {
@@ -247,6 +299,64 @@ async function storeSnapshotFromDb() {
   return { ...getInitialStore(), users, courses, lessons, enrollments, lessonProgress, quizzes, questions, quizAttempts, assignments, submissions, tuitionFees, academicWarnings };
 }
 
+function limitStoreForRole(store: any, user: User) {
+  if (user.role === "admin" || user.role === "super_admin" || user.role === "academic") {
+    return {
+      ...store,
+      users: store.users.map((item: User) => ({
+        id: item.id,
+        email: item.email,
+        name: item.name,
+        role: item.role,
+        isActive: item.isActive,
+        phone: item.phone,
+        linkedStudentId: item.linkedStudentId,
+        createdAt: item.createdAt,
+        passwordHash: ""
+      }))
+    };
+  }
+
+  if (user.role === "teacher") {
+    const teacherCourseIds = new Set(store.courses.filter((course: Course) => course.teacherId === user.id).map((course: Course) => course.id));
+    const visibleEnrollments = store.enrollments.filter((item: Enrollment) => teacherCourseIds.has(item.courseId));
+    const visibleStudentIds = new Set(visibleEnrollments.map((item: Enrollment) => item.studentId));
+    visibleStudentIds.add(user.id);
+    return {
+      ...store,
+      users: store.users.filter((item: User) => visibleStudentIds.has(item.id) || item.id === user.id).map((item: User) => ({ ...item, passwordHash: "" })),
+      courses: store.courses.filter((course: Course) => teacherCourseIds.has(course.id)),
+      enrollments: visibleEnrollments,
+      lessonProgress: store.lessonProgress.filter((item: LessonProgress) => visibleEnrollments.some((enroll: Enrollment) => enroll.id === item.enrollmentId)),
+      quizzes: store.quizzes.filter((quiz: any) => teacherCourseIds.has(quiz.courseId)),
+      assignments: store.assignments.filter((assignment: any) => teacherCourseIds.has(assignment.courseId)),
+      submissions: store.submissions.filter((submission: any) => visibleStudentIds.has(submission.studentId))
+    };
+  }
+
+  if (user.role === "student") {
+    const myEnrollments = store.enrollments.filter((item: Enrollment) => item.studentId === user.id);
+    const myCourseIds = new Set(myEnrollments.map((item: Enrollment) => item.courseId));
+    const myAssignmentIds = new Set(store.assignments.filter((item: any) => myCourseIds.has(item.courseId)).map((item: any) => item.id));
+    return {
+      ...store,
+      users: store.users.filter((item: User) => item.id === user.id).map((item: User) => ({ ...item, passwordHash: "" })),
+      enrollments: myEnrollments,
+      lessonProgress: store.lessonProgress.filter((item: LessonProgress) => myEnrollments.some((enroll: Enrollment) => enroll.id === item.enrollmentId)),
+      quizAttempts: store.quizAttempts.filter((item: any) => item.studentId === user.id),
+      submissions: store.submissions.filter((item: any) => item.studentId === user.id),
+      tuitionFees: store.tuitionFees.filter((item: any) => item.studentId === user.id),
+      academicWarnings: store.academicWarnings.filter((item: any) => item.studentId === user.id),
+      assignments: store.assignments.filter((item: any) => myCourseIds.has(item.courseId) || myAssignmentIds.has(item.id))
+    };
+  }
+
+  return {
+    ...store,
+    users: store.users.filter((item: User) => item.id === user.id).map((item: User) => ({ ...item, passwordHash: "" }))
+  };
+}
+
 const apiKey = process.env.GEMINI_API_KEY;
 const ai = apiKey ? new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": "aistudio-build" } } }) : null;
 
@@ -279,7 +389,16 @@ app.post("/api/analyze", async (req, res) => {
   }
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.get("/health", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.json({ ok: true, database: "ok", uptime: process.uptime() });
+  } catch {
+    res.status(503).json({ ok: false, database: "unavailable" });
+  }
+});
+
+app.post("/api/auth/login", rateLimitLogin, async (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const password = String(req.body?.password || "");
   if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
@@ -288,7 +407,9 @@ app.post("/api/auth/login", async (req, res) => {
   if (!row.is_active) return res.status(403).json({ error: "Account inactive." });
   const user = toPublicUser(row);
   setAuthCookie(res, signToken(user));
-  res.json({ user });
+  const csrfToken = crypto.randomBytes(24).toString("base64url");
+  setCsrfCookie(res, csrfToken);
+  res.json({ user, csrfToken });
 });
 
 app.post("/api/auth/logout", (req, res) => {
@@ -299,7 +420,7 @@ app.post("/api/auth/logout", (req, res) => {
 });
 
 app.get("/api/auth/me", requireAuth, (req: AuthRequest, res) => res.json({ user: req.user }));
-app.get("/api/store", requireAuth, async (_req, res) => res.json(await storeSnapshotFromDb()));
+app.get("/api/store", requireAuth, async (req: AuthRequest, res) => res.json(limitStoreForRole(await storeSnapshotFromDb(), req.user!)));
 app.get("/api/courses", requireAuth, async (_req, res) => res.json((await pool.query("SELECT * FROM courses ORDER BY created_at DESC")).rows.map(courseFromRow)));
 
 app.post("/api/courses", requireAuth, requireRole(["teacher", "admin", "super_admin", "academic"]), async (req: AuthRequest, res) => {
@@ -411,6 +532,11 @@ async function setupServer() {
     app.use(express.static(distPath));
     app.get("*", (_req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error(err);
+    if (res.headersSent) return;
+    res.status(err.status || 500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error." : err.message || "Internal server error." });
+  });
   app.listen(PORT, "0.0.0.0", () => console.log(`Server running on http://localhost:${PORT}`));
 }
 

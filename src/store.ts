@@ -906,10 +906,14 @@ export class AppStore {
     this.storeInstance = store;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stripCredentialFields(store)));
     if (typeof fetch !== "undefined") {
+      const csrfToken = sessionStorage.getItem("e16_lms_csrf");
       fetch("/api/store/sync", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {})
+        },
         body: JSON.stringify(store)
       }).catch(() => undefined);
     }
