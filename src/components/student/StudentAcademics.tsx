@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert } from "lucide-react";
 import { AppStore } from "../../store";
+import { api } from "../../api";
 
 /** Format date string to dd/mm/yyyy. Never shows time. Returns '—' for empty. */
 const fmtDate = (s?: string | null): string => {
@@ -191,25 +192,41 @@ export default function StudentAcademics(props: ComponentProps) {
                     return;
                   }
                   const storeData = AppStore.get();
-                  storeData.studentProfiles = (storeData.studentProfiles || []).map(p => {
-                    if (p.userId === currentUser.id) {
-                      AppStore.log(currentUser.id, "update_profile", p.studentCode, "Cập nhật hồ sơ thông tin trực tuyến.");
-                      return {
-                        ...p,
-                        phone: editPhone,
-                        dateOfBirth: editBirth,
-                        gender: editGender,
-                        address: editAddress,
-                        guardianName: editParent,
-                        guardianPhone: editParentPhone
-                      };
-                    }
-                    return p;
+                  
+                  // Call backend API to persist in PostgreSQL database securely
+                  api.updateStudentProfile({
+                    phone: editPhone || undefined,
+                    dateOfBirth: editBirth || undefined,
+                    gender: editGender || undefined,
+                    address: editAddress || undefined,
+                    guardianName: editParent || undefined,
+                    guardianPhone: editParentPhone || undefined
+                  }).then(() => {
+                    storeData.studentProfiles = (storeData.studentProfiles || []).map(p => {
+                      if (p.userId === currentUser.id) {
+                        AppStore.log(currentUser.id, "update_profile", p.studentCode, "Cập nhật hồ sơ thông tin trực tuyến.");
+                        return {
+                          ...p,
+                          phone: editPhone,
+                          dateOfBirth: editBirth,
+                          gender: editGender,
+                          address: editAddress,
+                          guardianName: editParent,
+                          guardianPhone: editParentPhone
+                        };
+                      }
+                      return p;
+                    });
+                    
+                    // Keep client state in sync
+                    AppStore.save(storeData);
+                    setShowProfileEditForm(false);
+                    onRefreshData();
+                    triggerToast("✅ Cập nhật hồ sơ lý lịch thành công!");
+                  }).catch(err => {
+                    console.error("Profile update failed:", err);
+                    triggerToast("❗ Cập nhật hồ sơ thất bại: " + err.message);
                   });
-                  AppStore.save(storeData);
-                  setShowProfileEditForm(false);
-                  onRefreshData();
-                  triggerToast("✅ Cập nhật hồ sơ lý lịch thành công!");
                 }}
                 className="bg-white/3 border border-white/5 rounded-3xl p-5 md:p-6 text-xs space-y-4"
               >

@@ -512,6 +512,48 @@ app.post("/api/users/change-password", requireAuth, asyncHandler(async (req, res
   res.json({ ok: true, message: "Đổi mật khẩu thành công!" });
 }));
 
+app.patch("/api/student/profile", requireAuth, requireRole(["student"]), validateBody(schemas.updateProfile), asyncHandler(async (req, res) => {
+  const { phone, dateOfBirth, gender, address, guardianName, guardianPhone } = req.body;
+  const exists = (await pool.query("SELECT id FROM student_profiles WHERE user_id = $1", [req.user!.id])).rowCount;
+  
+  if (!exists) {
+    const profileId = generateId("profile");
+    const studentCode = `SV${new Date().getFullYear()}${req.user!.id.slice(-4).toUpperCase()}`;
+    await pool.query(
+      `INSERT INTO student_profiles (
+         id, user_id, student_code, program_id, department_id, academic_year, enrollment_date,
+         expected_graduation, status, gpa, total_credits_earned, phone, date_of_birth, gender,
+         address, guardian_name, guardian_phone
+       ) VALUES ($1,$2,$3,'prog_se','dept_cs',1,$4,$5,$6,$7,$8,$9,$10)`,
+      [
+        profileId, req.user!.id, studentCode,
+        new Date().toISOString().slice(0, 10),
+        new Date(new Date().setFullYear(new Date().getFullYear() + 4)).toISOString().slice(0, 10),
+        phone || null, dateOfBirth || null, gender || null, address || null, guardianName || null, guardianPhone || null
+      ]
+    );
+  } else {
+    await pool.query(
+      `UPDATE student_profiles
+       SET phone = $1,
+           date_of_birth = $2,
+           gender = $3,
+           address = $4,
+           guardian_name = $5,
+           guardian_phone = $6
+       WHERE user_id = $7`,
+      [phone || null, dateOfBirth || null, gender || null, address || null, guardianName || null, guardianPhone || null, req.user!.id]
+    );
+  }
+
+  if (phone) {
+    await pool.query("UPDATE users SET phone = $1 WHERE id = $2", [phone, req.user!.id]);
+  }
+
+  await audit(req, "update_profile", req.user!.id, "Student updated their personal profile.");
+  res.json({ ok: true, message: "Cập nhật hồ sơ lý lịch thành công!" });
+}));
+
 app.get("/api/store", requireAuth, asyncHandler(async (req, res) => res.json(limitStoreForRole(await storeSnapshotFromDb(pool), req.user!))));
 
 app.get("/api/dashboard/admin", requireAuth, requireRole(["admin", "super_admin"]), asyncHandler(async (req, res) => {
@@ -681,6 +723,16 @@ app.post("/api/advisor/notes", requireAuth, requireRole(["advisor"]), validateBo
   const note = await advisorsRepository.createNote(pool, { advisorId: req.user!.id, ...req.body });
   await audit(req, "add_advisor_note", note.student_id, note.type);
   res.status(201).json(note);
+}));
+
+app.patch("/api/advisor/student-profile/:studentId", requireAuth, requireRole(["advisor", "academic_admin", "admin", "super_admin"]), validateBody(schemas.updateStudentNotes), asyncHandler(async (req, res) => {
+  const { notes } = req.body;
+  await pool.query(
+    "UPDATE student_profiles SET notes = $1 WHERE user_id = $2",
+    [notes, req.params.studentId]
+  );
+  await audit(req, "update_student_notes", req.params.studentId, "Advisor updated student academic plan/notes.");
+  res.json({ ok: true, message: "Cập nhật đề xuất lộ trình thành công!" });
 }));
 app.post("/api/advisor/assignments", requireAuth, requireRole(["academic_admin", "admin", "super_admin"]), validateBody(schemas.advisorAssignment), asyncHandler(async (req, res) => {
   const assignment = await advisorsRepository.assignStudent(pool, req.body.advisorId, req.body.studentId, req.body.semesterId);

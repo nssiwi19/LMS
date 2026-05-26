@@ -153,5 +153,16 @@ export const schemas = {
   }),
   graduationApplicationReview: z.object({
     note: z.string().optional()
+  }),
+  updateProfile: z.object({
+    phone: z.string().trim().optional(),
+    dateOfBirth: z.string().trim().optional(),
+    gender: z.string().trim().optional(),
+    address: z.string().trim().optional(),
+    guardianName: z.string().trim().optional(),
+    guardianPhone: z.string().trim().optional()
+  }),
+  updateStudentNotes: z.object({
+    notes: z.string().min(1)
   })
 };

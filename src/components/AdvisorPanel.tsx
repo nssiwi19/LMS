@@ -19,6 +19,7 @@ import {
 import { User, StudentProfile, AdvisorNote, AcademicWarning, Course, ProgramCourse, Semester, CourseSection } from "../types";
 import { AppStore } from "../store";
 import { generateId } from "../utils";
+import { api } from "../api";
 
 interface AdvisorPanelProps {
   currentUser: User;
@@ -71,58 +72,69 @@ export default function AdvisorPanel({ currentUser, onLogout, onRefreshData }: A
     e.preventDefault();
     if (!noteContent.trim() || !selectedStudentId) return;
 
-    const freshStore = AppStore.get();
-    const newNote: AdvisorNote & { shareWithParent?: boolean } = {
-      id: generateId("adv_note"),
-      advisorId: currentUser.id,
+    // Call backend API first to persist note in PostgreSQL database securely
+    api.addAdvisorNote({
       studentId: selectedStudentId,
-      content: noteContent.trim(),
       type: noteType,
-      createdAt: new Date().toISOString(),
+      content: noteContent.trim(),
       shareWithParent: shareWithParent
-    } as any;
+    }).then((savedNote: any) => {
+      const freshStore = AppStore.get();
+      const newNote: AdvisorNote & { shareWithParent?: boolean } = {
+        id: savedNote.id || generateId("adv_note"),
+        advisorId: currentUser.id,
+        studentId: selectedStudentId,
+        content: noteContent.trim(),
+        type: noteType,
+        createdAt: savedNote.createdAt || new Date().toISOString(),
+        shareWithParent: shareWithParent
+      } as any;
 
-    freshStore.advisorNotes.unshift(newNote);
-    
-    // Add audit log
-    freshStore.auditLogs.unshift({
-      id: generateId("log"),
-      userId: currentUser.id,
-      action: "add_advisor_note",
-      target: "advisor_notes",
-      detail: `Đã thêm nhận xét cố vấn loại ${noteType} cho sinh viên ${selectedUser?.name}`,
-      createdAt: new Date().toISOString()
-    });
+      freshStore.advisorNotes.unshift(newNote);
+      
+      // Add audit log
+      freshStore.auditLogs.unshift({
+        id: generateId("log"),
+        userId: currentUser.id,
+        action: "add_advisor_note",
+        target: "advisor_notes",
+        detail: `Đã thêm nhận xét cố vấn loại ${noteType} cho sinh viên ${selectedUser?.name}`,
+        createdAt: new Date().toISOString()
+      });
 
-    // Notify Student
-    freshStore.notifications.unshift({
-      id: generateId("note"),
-      userId: selectedStudentId,
-      type: "info",
-      message: `Cố vấn học tập ${currentUser.name} vừa thêm nhận xét học tập mới cho bạn.`,
-      isRead: false,
-      createdAt: new Date().toISOString()
-    });
+      // Notify Student
+      freshStore.notifications.unshift({
+        id: generateId("note"),
+        userId: selectedStudentId,
+        type: "info",
+        message: `Cố vấn học tập ${currentUser.name} vừa thêm nhận xét học tập mới cho bạn.`,
+        isRead: false,
+        createdAt: new Date().toISOString()
+      });
 
-    // Notify Parent
-    if (shareWithParent) {
-      const parentUser = freshStore.users.find(u => u.role === "parent" && u.linkedStudentId === selectedStudentId);
-      if (parentUser) {
-        freshStore.notifications.unshift({
-          id: generateId("note"),
-          userId: parentUser.id,
-          type: "info",
-          message: `Cố vấn học tập đã chia sẻ nhận xét mới về tiến trình của con bạn: "${noteContent.slice(0, 50)}..."`,
-          isRead: false,
-          createdAt: new Date().toISOString()
-        });
+      // Notify Parent
+      if (shareWithParent) {
+        const parentUser = freshStore.users.find(u => u.role === "parent" && u.linkedStudentId === selectedStudentId);
+        if (parentUser) {
+          freshStore.notifications.unshift({
+            id: generateId("note"),
+            userId: parentUser.id,
+            type: "info",
+            message: `Cố vấn học tập đã chia sẻ nhận xét mới về tiến trình của con bạn: "${noteContent.slice(0, 50)}..."`,
+            isRead: false,
+            createdAt: new Date().toISOString()
+          });
+        }
       }
-    }
 
-    AppStore.save(freshStore);
-    setNoteContent("");
-    onRefreshData();
-    showToast("Thêm nhận xét cố vấn thành công!");
+      AppStore.save(freshStore);
+      setNoteContent("");
+      onRefreshData();
+      showToast("Thêm nhận xét cố vấn thành công!");
+    }).catch(err => {
+      console.error("Failed to add advisor note:", err);
+      showToast("❗ Thêm nhận xét thất bại: " + err.message);
+    });
   };
 
   const handleSaveSuggestedPlan = (e: React.FormEvent) => {
@@ -132,31 +144,39 @@ export default function AdvisorPanel({ currentUser, onLogout, onRefreshData }: A
     const freshStore = AppStore.get();
     const profile = freshStore.studentProfiles.find(p => p.userId === selectedStudentId);
     if (profile) {
-      // Save semester suggested plan in profile notes
-      profile.notes = (profile.notes || "") + `\n[Kế hoạch đề xuất đăng ký kì tới]: ${suggestedPlanText}`;
+      const updatedNotes = (profile.notes || "") + `\n[Kế hoạch đề xuất đăng ký kì tới]: ${suggestedPlanText}`;
       
-      freshStore.auditLogs.unshift({
-        id: generateId("log"),
-        userId: currentUser.id,
-        action: "save_semester_plan",
-        target: "student_profiles",
-        detail: `Đã cập nhật kế hoạch đăng ký lớp đề xuất cho sinh viên ${selectedUser?.name}`,
-        createdAt: new Date().toISOString()
-      });
+      // Call backend API to persist notes in PostgreSQL securely
+      api.updateStudentNotes(selectedStudentId, updatedNotes).then(() => {
+        // Save semester suggested plan in profile notes locally
+        profile.notes = updatedNotes;
+        
+        freshStore.auditLogs.unshift({
+          id: generateId("log"),
+          userId: currentUser.id,
+          action: "save_semester_plan",
+          target: "student_profiles",
+          detail: `Đã cập nhật kế hoạch đăng ký lớp đề xuất cho sinh viên ${selectedUser?.name}`,
+          createdAt: new Date().toISOString()
+        });
 
-      freshStore.notifications.unshift({
-        id: generateId("note"),
-        userId: selectedStudentId,
-        type: "success",
-        message: `Kế hoạch đề xuất kì tới đã được cố vấn ${currentUser.name} phê duyệt. Hãy kiểm tra tại trang đăng ký môn.`,
-        isRead: false,
-        createdAt: new Date().toISOString()
-      });
+        freshStore.notifications.unshift({
+          id: generateId("note"),
+          userId: selectedStudentId,
+          type: "success",
+          message: `Kế hoạch đề xuất kì tới đã được cố vấn ${currentUser.name} phê duyệt. Hãy kiểm tra tại trang đăng ký môn.`,
+          isRead: false,
+          createdAt: new Date().toISOString()
+        });
 
-      AppStore.save(freshStore);
-      setSuggestedPlanText("");
-      onRefreshData();
-      showToast("Đã lưu kế hoạch đăng ký đề xuất!");
+        AppStore.save(freshStore);
+        setSuggestedPlanText("");
+        onRefreshData();
+        showToast("Đã lưu kế hoạch đăng ký đề xuất!");
+      }).catch(err => {
+        console.error("Failed to save suggested plan:", err);
+        showToast("❗ Lưu kế hoạch thất bại: " + err.message);
+      });
     }
   };
 
