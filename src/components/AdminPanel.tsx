@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { 
   Users, 
   BookOpen, 
@@ -105,14 +105,14 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
   const handleCreateUserSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUserEmail.includes("@") || newUserPassword.length < 6 || !newUserName.trim()) {
-      triggerToast("Thông tin đăng ký chưa hợp lệ (Mật khẩu tối thiểu 6 ký tự).");
+      triggerToast("ThÃ´ng tin Ä‘Äƒng kÃ½ chÆ°a há»£p lá»‡ (Máº­t kháº©u tá»‘i thiá»ƒu 6 kÃ½ tá»±).");
       return;
     }
 
     const storeData = AppStore.get();
     const exists = storeData.users.find(u => u.email.toLowerCase() === newUserEmail.toLowerCase());
     if (exists) {
-      triggerToast("Email đăng ký này tài khoản đã tồn tại.");
+      triggerToast("Email Ä‘Äƒng kÃ½ nÃ y tÃ i khoáº£n Ä‘Ã£ tá»“n táº¡i.");
       return;
     }
 
@@ -149,7 +149,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
       });
     }
 
-    AppStore.log(currentUser.id, "create_user", added.email, `Khởi tạo người dùng quyền: ${added.role}`);
+    AppStore.log(currentUser.id, "create_user", added.email, `Khá»Ÿi táº¡o ngÆ°á»i dÃ¹ng quyá»n: ${added.role}`);
     AppStore.save(storeData);
     
     setNewUserEmail("");
@@ -157,14 +157,14 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
     setNewUserPassword("");
     setShowAddUserModal(false);
     onRefreshData();
-    triggerToast("Đã lưu trữ và thiết lập tài khoản thành công.");
+    triggerToast("ÄÃ£ lÆ°u trá»¯ vÃ  thiáº¿t láº­p tÃ i khoáº£n thÃ nh cÃ´ng.");
   };
 
   // CSV Users Bulk Import Entry
   const handleImportCSVSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!csvText.trim()) {
-      triggerToast("Chưa nhập nội dung tệp CSV.");
+      triggerToast("ChÆ°a nháº­p ná»™i dung tá»‡p CSV.");
       return;
     }
 
@@ -223,7 +223,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
           });
         }
 
-        AppStore.notify(importedUser.id, "info", `Tài khoản của bạn đã được khởi tạo thông qua tệp nhập liệu CSV của Quản trị viên.`);
+        AppStore.notify(importedUser.id, "info", `TÃ i khoáº£n cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c khá»Ÿi táº¡o thÃ´ng qua tá»‡p nháº­p liá»‡u CSV cá»§a Quáº£n trá»‹ viÃªn.`);
         successCount++;
       } else {
         errorCount++;
@@ -231,19 +231,19 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
     });
 
     if (successCount > 0) {
-      AppStore.log(currentUser.id, "bulk_csv_import", "users", `Nhập dữ liệu CSV đồng loạt thành công: ${successCount} dòng.`);
+      AppStore.log(currentUser.id, "bulk_csv_import", "users", `Nháº­p dá»¯ liá»‡u CSV Ä‘á»“ng loáº¡t thÃ nh cÃ´ng: ${successCount} dÃ²ng.`);
       AppStore.save(storeData);
       onRefreshData();
       setImportMessage({ 
         type: "success", 
-        text: `Đã nhập đồng loạt. Thành công: ${successCount} tài khoản. Thất bại hoặc trùng lặp: ${errorCount}.` 
+        text: `ÄÃ£ nháº­p Ä‘á»“ng loáº¡t. ThÃ nh cÃ´ng: ${successCount} tÃ i khoáº£n. Tháº¥t báº¡i hoáº·c trÃ¹ng láº·p: ${errorCount}.` 
       });
       setCsvText("");
       setTimeout(() => setShowImportModal(false), 3000);
     } else {
       setImportMessage({ 
         type: "error", 
-        text: `Nhập dữ liệu đồng loạt thất bại. Toàn bộ ${errorCount} dòng có lỗi schema cấu trúc cấu trúc hoặc đã bị trùng email.` 
+        text: `Nháº­p dá»¯ liá»‡u Ä‘á»“ng loáº¡t tháº¥t báº¡i. ToÃ n bá»™ ${errorCount} dÃ²ng cÃ³ lá»—i schema cáº¥u trÃºc cáº¥u trÃºc hoáº·c Ä‘Ã£ bá»‹ trÃ¹ng email.` 
       });
     }
   };
@@ -254,14 +254,14 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
     storeData.users = storeData.users.map(u => {
       if (u.id === userId) {
         const nextState = !u.isActive;
-        AppStore.log(currentUser.id, "toggle_user_status", u.email, `Thay đổi trạng thái tài khoản thành: ${nextState ? "Active" : "Locked"}`);
+        AppStore.log(currentUser.id, "toggle_user_status", u.email, `Thay Ä‘á»•i tráº¡ng thÃ¡i tÃ i khoáº£n thÃ nh: ${nextState ? "Active" : "Locked"}`);
         return { ...u, isActive: nextState };
       }
       return u;
     });
     AppStore.save(storeData);
     onRefreshData();
-    triggerToast("Đã cập nhật trạng thái hoạt động người dùng.");
+    triggerToast("ÄÃ£ cáº­p nháº­t tráº¡ng thÃ¡i hoáº¡t Ä‘á»™ng ngÆ°á»i dÃ¹ng.");
   };
 
   const ensureStudentProfile = (storeData: LMSDataStore, userId: string) => {
@@ -292,7 +292,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
     AppStore.log(currentUser.id, "update_user_role", userId, `Changed role to ${newRole}`);
     AppStore.save(storeData);
     onRefreshData();
-    triggerToast("Đã cập nhật quyền hạn người dùng và đồng bộ xuống PostgreSQL.");
+    triggerToast("ÄÃ£ cáº­p nháº­t quyá»n háº¡n ngÆ°á»i dÃ¹ng vÃ  Ä‘á»“ng bá»™ xuá»‘ng PostgreSQL.");
   };
 
   // Approve Course selection
@@ -300,15 +300,15 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
     const storeData = AppStore.get();
     storeData.courses = storeData.courses.map(c => {
       if (c.id === courseId) {
-        AppStore.log(currentUser.id, "approve_course", c.title, "Phê duyệt công khai khóa giảng dạy.");
-        AppStore.notify(c.teacherId, "success", `Tin vui: Bài yêu cầu mở môn "${c.title}" của bạn đã được quản trị viên duyệt công bố hoàn tất!`);
+        AppStore.log(currentUser.id, "approve_course", c.title, "PhÃª duyá»‡t cÃ´ng khai khÃ³a giáº£ng dáº¡y.");
+        AppStore.notify(c.teacherId, "success", `Tin vui: BÃ i yÃªu cáº§u má»Ÿ mÃ´n "${c.title}" cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c quáº£n trá»‹ viÃªn duyá»‡t cÃ´ng bá»‘ hoÃ n táº¥t!`);
         return { ...c, status: "published" };
       }
       return c;
     });
     AppStore.save(storeData);
     onRefreshData();
-    triggerToast("Đã phê duyệt và phát hành khóa học.");
+    triggerToast("ÄÃ£ phÃª duyá»‡t vÃ  phÃ¡t hÃ nh khÃ³a há»c.");
   };
 
   const handleStartRejectCourse = (courseId: string) => {
@@ -319,15 +319,15 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
   const handleConfirmRejectCourse = () => {
     if (!rejectingCourseId) return;
     if (!rejectReason.trim()) {
-      triggerToast("Vui lòng ghi rõ lý do trả về học phần.");
+      triggerToast("Vui lÃ²ng ghi rÃµ lÃ½ do tráº£ vá» há»c pháº§n.");
       return;
     }
 
     const storeData = AppStore.get();
     storeData.courses = storeData.courses.map(c => {
       if (c.id === rejectingCourseId) {
-        AppStore.log(currentUser.id, "reject_course", c.title, `Trả về yêu cầu: ${rejectReason}`);
-        AppStore.notify(c.teacherId, "danger", `Bài đăng ký khóa học "${c.title}" của bạn đã được phản hồi lỗi điều chỉnh học phần lý do: ${rejectReason}`);
+        AppStore.log(currentUser.id, "reject_course", c.title, `Tráº£ vá» yÃªu cáº§u: ${rejectReason}`);
+        AppStore.notify(c.teacherId, "danger", `BÃ i Ä‘Äƒng kÃ½ khÃ³a há»c "${c.title}" cá»§a báº¡n Ä‘Ã£ Ä‘Æ°á»£c pháº£n há»“i lá»—i Ä‘iá»u chá»‰nh há»c pháº§n lÃ½ do: ${rejectReason}`);
         return { ...c, status: "rejected" };
       }
       return c;
@@ -335,7 +335,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
     AppStore.save(storeData);
     setRejectingCourseId(null);
     onRefreshData();
-    triggerToast("Học phần lớp học được trả về để điều hành giảng viên bổ sung.");
+    triggerToast("Há»c pháº§n lá»›p há»c Ä‘Æ°á»£c tráº£ vá» Ä‘á»ƒ Ä‘iá»u hÃ nh giáº£ng viÃªn bá»• sung.");
   };
 
   // Local JSON snapshot export dump backup
@@ -347,7 +347,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
-    triggerToast("Đã sao lưu dọn dẹp kết tinh tệp JSON sao lưu.");
+    triggerToast("ÄÃ£ sao lÆ°u dá»n dáº¹p káº¿t tinh tá»‡p JSON sao lÆ°u.");
   };
 
   // Computed counters metrics
@@ -383,8 +383,8 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
 
   return (
     <div className="space-y-6">
-      {isLoading && <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">Đang tải dữ liệu...</div>}
-      {isError && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">Không thể tải dữ liệu từ server.</div>}
+      {isLoading && <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">Äang táº£i dá»¯ liá»‡u...</div>}
+      {isError && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">KhÃ´ng thá»ƒ táº£i dá»¯ liá»‡u tá»« server.</div>}
       {/* Toast alarms logs alert */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#2563eb] border border-blue-400 text-white font-medium text-xs px-4 py-3 rounded-2xl shadow-2xl animate-fade-in animate-bounce">
@@ -396,10 +396,10 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-9e0">
         <div>
           <span className="text-xs font-mono font-semibold tracking-widest text-[#2563eb] bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20 uppercase">
-            CỔNG THÔNG TIN QUẢN TRỊ VIÊN & PHÒNG ĐÀO TẠO (SIS-LMS)
+            Cá»”NG THÃ”NG TIN QUáº¢N TRá»Š VIÃŠN & PHÃ’NG ÄÃ€O Táº O (SIS-LMS)
           </span>
           <h2 className="text-xl font-display font-bold text-white mt-2">Executive Portal & Academic Records</h2>
-          <p className="text-xs text-white/50">Phân quyền giám sát cấu trúc học kỳ niên khóa, chuyên cần học sinh, tổng vụ tài chính kế toán.</p>
+          <p className="text-xs text-white/50">PhÃ¢n quyá»n giÃ¡m sÃ¡t cáº¥u trÃºc há»c ká»³ niÃªn khÃ³a, chuyÃªn cáº§n há»c sinh, tá»•ng vá»¥ tÃ i chÃ­nh káº¿ toÃ¡n.</p>
         </div>
 
         <div className="flex flex-wrap gap-2 text-xs">
@@ -407,19 +407,19 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
             onClick={() => setShowImportModal(true)}
             className="px-3.5 py-1.5 text-xs font-bold text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl flex items-center gap-1.5 transition cursor-pointer"
           >
-            <Upload className="h-4.5 w-4.5" /> Nhập CSV Users
+            <Upload className="h-4.5 w-4.5" /> Nháº­p CSV Users
           </button>
           <button 
             onClick={handleExportDataStore}
             className="px-3.5 py-1.5 text-xs font-bold text-white/90 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl flex items-center gap-1.5 transition cursor-pointer"
           >
-            <Download className="h-4.5 w-4.5" /> Sao lưu JSON
+            <Download className="h-4.5 w-4.5" /> Sao lÆ°u JSON
           </button>
           <button 
             onClick={() => setShowAddUserModal(true)}
             className="px-3.5 py-1.5 text-xs font-bold text-indigo-950 bg-white hover:bg-white/95 rounded-xl flex items-center gap-1.5 transition shadow-sm cursor-pointer"
           >
-            <UserPlus className="h-4.5 w-4.5" /> Tạo người dùng
+            <UserPlus className="h-4.5 w-4.5" /> Táº¡o ngÆ°á»i dÃ¹ng
           </button>
         </div>
       </div>
@@ -427,15 +427,15 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
       {/* Grid counters stat cards metrics */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-white/5 border border-white/5 p-4 rounded-2xl">
-          <p className="text-[10px] text-white/40 uppercase tracking-widest font-black">Nhân khẩu học (Tổng số tài khoản)</p>
+          <p className="text-[10px] text-white/40 uppercase tracking-widest font-black">NhÃ¢n kháº©u há»c (Tá»•ng sá»‘ tÃ i khoáº£n)</p>
           <h3 className="text-2xl font-bold font-mono text-white mt-1">{totalUsersCount}</h3>
         </div>
         <div className="bg-white/5 border border-white/5 p-4 rounded-2xl">
-          <p className="text-[10px] text-white/40 uppercase tracking-widest font-black">Khóa học môn giảng dạy</p>
+          <p className="text-[10px] text-white/40 uppercase tracking-widest font-black">KhÃ³a há»c mÃ´n giáº£ng dáº¡y</p>
           <h3 className="text-2xl font-bold font-mono text-white mt-1">{totalCoursesCount}</h3>
         </div>
         <div className="bg-white/5 border border-white/5 p-4 rounded-2xl">
-          <p className="text-[10px] text-white/40 uppercase tracking-widest font-black">Đăng ký lớp học niên khóa</p>
+          <p className="text-[10px] text-white/40 uppercase tracking-widest font-black">ÄÄƒng kÃ½ lá»›p há»c niÃªn khÃ³a</p>
           <h3 className="text-2xl font-bold font-mono text-white mt-1">{totalEnrollmentsCount}</h3>
         </div>
       </div>
@@ -449,7 +449,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
             
             <div className="space-y-1.5">
               <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest block px-2.5">
-                SCHOLASTIC (Cấu trúc đào tạo)
+                SCHOLASTIC (Cáº¥u trÃºc Ä‘Ã o táº¡o)
               </span>
               <button
                 onClick={() => { setActiveSubTab("academic_years"); setRegistryLookupStudentId(null); }}
@@ -457,7 +457,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   activeSubTab === "academic_years" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Năm học</span>
+                <span className="flex items-center gap-2"><Calendar className="h-4 w-4" /> NÄƒm há»c</span>
               </button>
               <button
                 onClick={() => { setActiveSubTab("semesters"); setRegistryLookupStudentId(null); }}
@@ -465,7 +465,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   activeSubTab === "semesters" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><Clock className="h-4 w-4" /> Học Kỳ</span>
+                <span className="flex items-center gap-2"><Clock className="h-4 w-4" /> Há»c Ká»³</span>
               </button>
               <button
                 onClick={() => { setActiveSubTab("departments"); setRegistryLookupStudentId(null); }}
@@ -481,13 +481,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   activeSubTab === "programs" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> Chương trình đào tạo</span>
+                <span className="flex items-center gap-2"><BookOpen className="h-4 w-4" /> ChÆ°Æ¡ng trÃ¬nh Ä‘Ã o táº¡o</span>
               </button>
             </div>
 
             <div className="space-y-1.5 border-t border-white/5 pt-3">
               <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest block px-2.5">
-                STUDENTS & ACADEMICS (Hồ sơ học vụ)
+                STUDENTS & ACADEMICS (Há»“ sÆ¡ há»c vá»¥)
               </span>
               <button
                 onClick={() => { setActiveSubTab("students"); setRegistryLookupStudentId(null); }}
@@ -495,7 +495,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   activeSubTab === "students" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Sổ Học sinh Sinh viên</span>
+                <span className="flex items-center gap-2"><GraduationCap className="h-4 w-4" /> Sá»• Há»c sinh Sinh viÃªn</span>
               </button>
               <button
                 onClick={() => { setActiveSubTab("attendance"); setRegistryLookupStudentId(null); }}
@@ -503,7 +503,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   activeSubTab === "attendance" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><Activity className="h-4 w-4" /> Quản trị Điểm danh</span>
+                <span className="flex items-center gap-2"><Activity className="h-4 w-4" /> Quáº£n trá»‹ Äiá»ƒm danh</span>
               </button>
               <button
                 onClick={() => { setActiveSubTab("tuition"); setRegistryLookupStudentId(null); }}
@@ -511,13 +511,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   activeSubTab === "tuition" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><DollarSign className="h-4 w-4" /> Kế toán Học Phí</span>
+                <span className="flex items-center gap-2"><DollarSign className="h-4 w-4" /> Káº¿ toÃ¡n Há»c PhÃ­</span>
               </button>
             </div>
 
             <div className="space-y-1.5 border-t border-white/5 pt-3">
               <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest block px-2.5">
-                LEARNING PLATFORM (LMS mặc định)
+                LEARNING PLATFORM (LMS máº·c Ä‘á»‹nh)
               </span>
               <button
                 onClick={() => { setActiveSubTab("approval"); setRegistryLookupStudentId(null); }}
@@ -525,7 +525,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   activeSubTab === "approval" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Duyệt khóa học</span>
+                <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Duyá»‡t khÃ³a há»c</span>
                 {pendingCourses.length > 0 && (
                   <span className="bg-amber-500 text-slate-950 font-sans font-bold text-[9px] w-4.5 h-4.5 rounded-full flex items-center justify-center">
                     {pendingCourses.length}
@@ -538,7 +538,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   activeSubTab === "users" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><Users className="h-4 w-4" /> Phân quyền người dùng</span>
+                <span className="flex items-center gap-2"><Users className="h-4 w-4" /> PhÃ¢n quyá»n ngÆ°á»i dÃ¹ng</span>
               </button>
               <button
                 onClick={() => { setActiveSubTab("audit"); setRegistryLookupStudentId(null); }}
@@ -546,13 +546,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   activeSubTab === "audit" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><Database className="h-4 w-4" /> Nhật ký hệ thống (Audit)</span>
+                <span className="flex items-center gap-2"><Database className="h-4 w-4" /> Nháº­t kÃ½ há»‡ thá»‘ng (Audit)</span>
               </button>
             </div>
 
             <div className="space-y-1.5 border-t border-white/5 pt-3">
               <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest block px-2.5">
-                REPORTS STATS (Thống kê tổng hợp)
+                REPORTS STATS (Thá»‘ng kÃª tá»•ng há»£p)
               </span>
               <button
                 onClick={() => { setActiveSubTab("warnings"); setRegistryLookupStudentId(null); }}
@@ -560,7 +560,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   activeSubTab === "warnings" ? "bg-white/10 text-white font-bold" : "text-white/60 hover:bg-white/2 hover:text-white"
                 }`}
               >
-                <span className="flex items-center gap-2"><ShieldAlert className="h-4 w-4" /> Cảnh báo & Thống Kê</span>
+                <span className="flex items-center gap-2"><ShieldAlert className="h-4 w-4" /> Cáº£nh bÃ¡o & Thá»‘ng KÃª</span>
               </button>
             </div>
 
@@ -576,7 +576,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
               store={store} 
               currentUser={currentUser} 
               onRefreshData={onRefreshData} 
-              triggerToast={triggerToast} 
+              triggerToast={triggerToast}
+              initialTab={
+                activeSubTab === "academic_years" ? "years" :
+                activeSubTab === "semesters" ? "semesters" :
+                activeSubTab === "departments" ? "departments" :
+                "programs"
+              }
             />
           )}
 
@@ -625,13 +631,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
           {activeSubTab === "approval" && (
             <div className="space-y-6">
               <div className="border-b border-white/10 pb-3">
-                <h3 className="text-base font-bold text-white">Xử lý Phê duyệt Mở Môn học & Đề cương</h3>
-                <p className="text-xs text-white/50">Phê duyệt để đưa bài khóa học của Giáo viên chuyên môn lên Hệ thống tuyển sinh đào tạo.</p>
+                <h3 className="text-base font-bold text-white">Xá»­ lÃ½ PhÃª duyá»‡t Má»Ÿ MÃ´n há»c & Äá» cÆ°Æ¡ng</h3>
+                <p className="text-xs text-white/50">PhÃª duyá»‡t Ä‘á»ƒ Ä‘Æ°a bÃ i khÃ³a há»c cá»§a GiÃ¡o viÃªn chuyÃªn mÃ´n lÃªn Há»‡ thá»‘ng tuyá»ƒn sinh Ä‘Ã o táº¡o.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {pendingCourses.map(course => {
-                  const teacherUser = store.users.find(u => u.id === course.teacherId) || { name: "Giảng viên" };
+                  const teacherUser = store.users.find(u => u.id === course.teacherId) || { name: "Giáº£ng viÃªn" };
                   return (
                     <div key={course.id} className="p-4 bg-white/3 border border-white/5 rounded-2xl flex flex-col justify-between">
                       <div className="space-y-2">
@@ -648,13 +654,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                           onClick={() => handleStartRejectCourse(course.id)}
                           className="px-3.5 py-1.5 text-red-400 hover:bg-red-500/10 rounded-xl transition text-[11px]"
                         >
-                          Trả về yêu cầu
+                          Tráº£ vá» yÃªu cáº§u
                         </button>
                         <button
                           onClick={() => handleApproveCourse(course.id)}
                           className="px-4.5 py-1.5 bg-white text-indigo-950 font-bold rounded-xl hover:bg-indigo-50 transition text-[11px]"
                         >
-                          Phê duyệt lập tức
+                          PhÃª duyá»‡t láº­p tá»©c
                         </button>
                       </div>
                     </div>
@@ -662,7 +668,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                 })}
                 {pendingCourses.length === 0 && (
                   <div className="col-span-2 py-16 text-center text-white/30 text-xs">
-                    Sạch tệp hồ tuyển sinh! Không có bài yêu cầu phê duyệt mở học phần nào đang treo.
+                    Sáº¡ch tá»‡p há»“ tuyá»ƒn sinh! KhÃ´ng cÃ³ bÃ i yÃªu cáº§u phÃª duyá»‡t má»Ÿ há»c pháº§n nÃ o Ä‘ang treo.
                   </div>
                 )}
               </div>
@@ -675,13 +681,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-3">
                 <div>
                   <h3 className="text-base font-bold text-white">Interactive User Directory & Access Controls</h3>
-                  <p className="text-xs text-white/50">Giám sát tài khoản phân hệ trực quan.</p>
+                  <p className="text-xs text-white/50">GiÃ¡m sÃ¡t tÃ i khoáº£n phÃ¢n há»‡ trá»±c quan.</p>
                 </div>
 
                 <div className="flex flex-wrap gap-2 text-xs">
                   <input
                     type="text"
-                    placeholder="Tìm theo tên, email..."
+                    placeholder="TÃ¬m theo tÃªn, email..."
                     value={userSearch}
                     onChange={(e) => { setUserSearch(e.target.value); setUserPage(1); }}
                     className="px-3 py-1.5 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-xl focus:outline-none"
@@ -692,21 +698,21 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                     onChange={(e) => { setFilterRole(e.target.value); setUserPage(1); }}
                     className="p-1.5 bg-black/25 text-white/85 border border-white/10 rounded-xl"
                   >
-                    <option value="all" className="bg-slate-900">Mọi vai trò</option>
-                    <option value="student" className="bg-slate-900">Sinh Viên</option>
-                    <option value="teacher" className="bg-slate-900">Giáo Viên</option>
-                    <option value="admin" className="bg-slate-900">Quản Trị Viên</option>
-                    <option value="finance" className="bg-slate-900">Kế Toán</option>
-                    <option value="academic_admin" className="bg-slate-900">Chuyên viên Học Vụ</option>
+                    <option value="all" className="bg-slate-900">Má»i vai trÃ²</option>
+                    <option value="student" className="bg-slate-900">Sinh ViÃªn</option>
+                    <option value="teacher" className="bg-slate-900">GiÃ¡o ViÃªn</option>
+                    <option value="admin" className="bg-slate-900">Quáº£n Trá»‹ ViÃªn</option>
+                    <option value="finance" className="bg-slate-900">Káº¿ ToÃ¡n</option>
+                    <option value="academic_admin" className="bg-slate-900">ChuyÃªn viÃªn Há»c Vá»¥</option>
                   </select>
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-2">
                 {[
-                  { id: "student", label: "Sinh Viên" },
-                  { id: "teacher", label: "Giảng Viên" },
-                  { id: "other", label: "Chức Năng Khác" }
+                  { id: "student", label: "Sinh ViÃªn" },
+                  { id: "teacher", label: "Giáº£ng ViÃªn" },
+                  { id: "other", label: "Chá»©c NÄƒng KhÃ¡c" }
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -723,12 +729,12 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-white/10 bg-white/2 text-[10px] uppercase text-white/50">
-                        <th className="py-2.5 px-3">Họ và Tên</th>
-                        <th className="py-2.5 px-3">Email cá nhân</th>
-                        {userDirTab === "student" && <th className="py-2.5 px-3">Hồ sơ học vụ</th>}
-                        <th className="py-2.5 px-3">Quyền hạn</th>
-                        <th className="py-2.5 px-3">Trạng thái khóa</th>
-                        <th className="py-2.5 px-3 text-right">Khóa/Mở Khóa</th>
+                        <th className="py-2.5 px-3">Há» vÃ  TÃªn</th>
+                        <th className="py-2.5 px-3">Email cÃ¡ nhÃ¢n</th>
+                        {userDirTab === "student" && <th className="py-2.5 px-3">Há»“ sÆ¡ há»c vá»¥</th>}
+                        <th className="py-2.5 px-3">Quyá»n háº¡n</th>
+                        <th className="py-2.5 px-3">Tráº¡ng thÃ¡i khÃ³a</th>
+                        <th className="py-2.5 px-3 text-right">KhÃ³a/Má»Ÿ KhÃ³a</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
@@ -741,8 +747,8 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                             <td className="py-3 px-3 font-mono text-white/60">{usr.email}</td>
                             {userDirTab === "student" && (
                               <td className="py-3 px-3 text-white/70">
-                                <div className="font-mono text-indigo-300">{profile?.studentCode || "Chưa có mã"}</div>
-                                <div className="text-[10px] text-white/40">{program?.name || profile?.programId || "Chưa gán ngành"} · GPA {profile?.gpa ?? 0}</div>
+                                <div className="font-mono text-indigo-300">{profile?.studentCode || "ChÆ°a cÃ³ mÃ£"}</div>
+                                <div className="text-[10px] text-white/40">{program?.name || profile?.programId || "ChÆ°a gÃ¡n ngÃ nh"} Â· GPA {profile?.gpa ?? 0}</div>
                               </td>
                             )}
                             <td className="py-3 px-3">
@@ -752,20 +758,20 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                                 disabled={usr.id === currentUser.id}
                                 className="bg-black/30 border border-white/10 rounded-lg px-2 py-1 text-[10px] font-bold text-indigo-200 disabled:opacity-50"
                               >
-                                <option value="student" className="bg-slate-900">Sinh viên</option>
-                                <option value="teacher" className="bg-slate-900">Giảng viên</option>
+                                <option value="student" className="bg-slate-900">Sinh viÃªn</option>
+                                <option value="teacher" className="bg-slate-900">Giáº£ng viÃªn</option>
                                 <option value="admin" className="bg-slate-900">Admin</option>
-                                <option value="finance" className="bg-slate-900">Tài chính</option>
-                                <option value="academic_admin" className="bg-slate-900">Học vụ</option>
-                                <option value="le_tan" className="bg-slate-900">Lễ tân</option>
-                                <option value="advisor" className="bg-slate-900">Cố vấn</option>
+                                <option value="finance" className="bg-slate-900">TÃ i chÃ­nh</option>
+                                <option value="academic_admin" className="bg-slate-900">Há»c vá»¥</option>
+                                <option value="le_tan" className="bg-slate-900">Lá»… tÃ¢n</option>
+                                <option value="advisor" className="bg-slate-900">Cá»‘ váº¥n</option>
                               </select>
                             </td>
                             <td className="py-3 px-3">
                               {usr.isActive ? (
-                                <span className="text-emerald-400 font-bold text-[10.5px]">Đang hoạt động</span>
+                                <span className="text-emerald-400 font-bold text-[10.5px]">Äang hoáº¡t Ä‘á»™ng</span>
                               ) : (
-                                <span className="text-red-400 font-bold text-[10.5px]">Đang khóa</span>
+                                <span className="text-red-400 font-bold text-[10.5px]">Äang khÃ³a</span>
                               )}
                             </td>
                             <td className="py-3 px-3 text-right">
@@ -774,10 +780,10 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                                   onClick={() => handleToggleUserStatus(usr.id)}
                                   className={`px-2 py-1 rounded transition text-[10.5px] cursor-pointer ${usr.isActive ? "bg-red-500/10 text-red-400 hover:bg-red-500/15" : "bg-emerald-500/10 text-emerald-400"}`}
                                 >
-                                  {usr.isActive ? "Khóa" : "Kích hoạt"}
+                                  {usr.isActive ? "KhÃ³a" : "KÃ­ch hoáº¡t"}
                                 </button>
                               ) : (
-                                <span className="text-white/30 text-[10.5px]">Tài khoản hiện hành</span>
+                                <span className="text-white/30 text-[10.5px]">TÃ i khoáº£n hiá»‡n hÃ nh</span>
                               )}
                             </td>
                           </tr>
@@ -786,7 +792,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                       {paginatedUsers.length === 0 && (
                         <tr>
                           <td colSpan={userDirTab === "student" ? 6 : 5} className="py-10 text-center text-white/35">
-                            Không có tài khoản phù hợp trong thư mục này.
+                            KhÃ´ng cÃ³ tÃ i khoáº£n phÃ¹ há»£p trong thÆ° má»¥c nÃ y.
                           </td>
                         </tr>
                       )}
@@ -803,7 +809,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                     disabled={userPage === 1}
                     className="p-1 px-2 border border-white/10 rounded hover:bg-white/5 disabled:opacity-40"
                   >
-                    Trước
+                    TrÆ°á»›c
                   </button>
                   <span className="text-white/50 text-[11px]">Trang {userPage} / {pageCount}</span>
                   <button
@@ -823,8 +829,8 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
           {activeSubTab === "audit" && (
             <div className="space-y-6">
               <div className="border-b border-white/10 pb-3">
-                <h3 className="text-base font-bold text-white">Nhật ký Hệ thống & Access Audits (Infrastructure Logs)</h3>
-                <p className="text-xs text-white/50">Nhật ký theo dõi các bút toán an ninh, sửa đổi kết cấu điểm số, học bạ chính xác theo thời gian thực.</p>
+                <h3 className="text-base font-bold text-white">Nháº­t kÃ½ Há»‡ thá»‘ng & Access Audits (Infrastructure Logs)</h3>
+                <p className="text-xs text-white/50">Nháº­t kÃ½ theo dÃµi cÃ¡c bÃºt toÃ¡n an ninh, sá»­a Ä‘á»•i káº¿t cáº¥u Ä‘iá»ƒm sá»‘, há»c báº¡ chÃ­nh xÃ¡c theo thá»i gian thá»±c.</p>
               </div>
 
               <div className="bg-black/40 border border-white/10 rounded-2xl p-4 font-mono text-[10.5px] leading-relaxed max-h-96 overflow-y-auto space-y-2 text-white/90">
@@ -857,16 +863,16 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
             </button>
 
             <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5 border-b border-white/10 pb-3 uppercase tracking-wider">
-              Khởi tạo người dùng hệ thống mới
+              Khá»Ÿi táº¡o ngÆ°á»i dÃ¹ng há»‡ thá»‘ng má»›i
             </h3>
 
             <form onSubmit={handleCreateUserSubmit} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="text-white/60">Họ và Tên</label>
+                <label className="text-white/60">Há» vÃ  TÃªn</label>
                 <input
                   type="text"
                   required
-                  placeholder="Ví dụ: Gavin Belson"
+                  placeholder="VÃ­ dá»¥: Gavin Belson"
                   value={newUserName}
                   onChange={(e) => setNewUserName(e.target.value)}
                   className="w-full px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl focus:outline-none"
@@ -874,11 +880,11 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
               </div>
 
               <div className="space-y-1">
-                <label className="text-white/60">Địa chỉ Email</label>
+                <label className="text-white/60">Äá»‹a chá»‰ Email</label>
                 <input
                   type="email"
                   required
-                  placeholder="Ví dụ: gavin@hooli.com"
+                  placeholder="VÃ­ dá»¥: gavin@hooli.com"
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
                   className="w-full px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl focus:outline-none"
@@ -886,11 +892,11 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
               </div>
 
               <div className="space-y-1">
-                <label className="text-white/60">Mật khẩu ban đầu</label>
+                <label className="text-white/60">Máº­t kháº©u ban Ä‘áº§u</label>
                 <input
                   type="password"
                   required
-                  placeholder="Tối thiểu 6 ký tự bảo mật"
+                  placeholder="Tá»‘i thiá»ƒu 6 kÃ½ tá»± báº£o máº­t"
                   value={newUserPassword}
                   onChange={(e) => setNewUserPassword(e.target.value)}
                   className="w-full px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl focus:outline-none"
@@ -898,17 +904,17 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
               </div>
 
               <div className="space-y-1">
-                <label className="text-white/60">Phân hệ Quyền</label>
+                <label className="text-white/60">PhÃ¢n há»‡ Quyá»n</label>
                 <select
                   value={newUserRole}
                   onChange={(e) => setNewUserRole(e.target.value as any)}
                   className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none"
                 >
-                  <option value="student" className="bg-slate-900">Sinh Viên (Student)</option>
-                  <option value="teacher" className="bg-slate-900">Giảng Viên (Teacher)</option>
-                  <option value="admin" className="bg-slate-900">Quản Trị Viên (Admin)</option>
-                  <option value="finance" className="bg-slate-900">Cán bộ Kế toán (Ke toan)</option>
-                  <option value="academic_admin" className="bg-slate-900">Quản Lý Học Vụ (Học vụ)</option>
+                  <option value="student" className="bg-slate-900">Sinh ViÃªn (Student)</option>
+                  <option value="teacher" className="bg-slate-900">Giáº£ng ViÃªn (Teacher)</option>
+                  <option value="admin" className="bg-slate-900">Quáº£n Trá»‹ ViÃªn (Admin)</option>
+                  <option value="finance" className="bg-slate-900">CÃ¡n bá»™ Káº¿ toÃ¡n (Ke toan)</option>
+                  <option value="academic_admin" className="bg-slate-900">Quáº£n LÃ½ Há»c Vá»¥ (Há»c vá»¥)</option>
                 </select>
               </div>
 
@@ -918,13 +924,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   onClick={() => setShowAddUserModal(false)}
                   className="px-4 py-2 bg-transparent text-white/50 hover:text-white transition cursor-pointer"
                 >
-                  Bỏ qua
+                  Bá» qua
                 </button>
                 <button
                   type="submit"
                   className="px-4.5 py-2 bg-white text-indigo-950 font-bold rounded-xl hover:bg-slate-50 transition cursor-pointer"
                 >
-                  Tạo tài khoản
+                  Táº¡o tÃ i khoáº£n
                 </button>
               </div>
             </form>
@@ -944,15 +950,15 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
             </button>
 
             <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5 border-b border-white/10 pb-3 uppercase">
-              Trả lại hồ sơ đăng lý giảng dạy
+              Tráº£ láº¡i há»“ sÆ¡ Ä‘Äƒng lÃ½ giáº£ng dáº¡y
             </h3>
 
             <form onSubmit={(e) => { e.preventDefault(); handleConfirmRejectCourse(); }} className="space-y-4 text-xs">
               <div className="space-y-1">
-                <label className="text-white/60">Góp ý lý do trả về đính kèm:</label>
+                <label className="text-white/60">GÃ³p Ã½ lÃ½ do tráº£ vá» Ä‘Ã­nh kÃ¨m:</label>
                 <textarea
                   required
-                  placeholder="Ví dụ: Đề cương chương 3 chưa đính kèm bài giảng lý thuyết..."
+                  placeholder="VÃ­ dá»¥: Äá» cÆ°Æ¡ng chÆ°Æ¡ng 3 chÆ°a Ä‘Ã­nh kÃ¨m bÃ i giáº£ng lÃ½ thuyáº¿t..."
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
                   className="w-full px-3 py-2 bg-black/25 text-white placeholder-white/20 border border-white/10 rounded-xl focus:outline-none h-24"
@@ -965,13 +971,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   onClick={() => setRejectingCourseId(null)}
                   className="px-4 py-2 bg-transparent text-white/50 hover:text-white transition cursor-pointer"
                 >
-                  Hủy
+                  Há»§y
                 </button>
                 <button
                   type="submit"
                   className="px-4.5 py-2 bg-red-600 text-white font-bold rounded-xl transition cursor-pointer"
                 >
-                  Xác nhận trả về
+                  XÃ¡c nháº­n tráº£ vá»
                 </button>
               </div>
             </form>
@@ -991,7 +997,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
             </button>
 
             <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-1.5 border-b border-white/10 pb-3 uppercase tracking-wider">
-              Nhập đồng loạt người dùng từ CSV
+              Nháº­p Ä‘á»“ng loáº¡t ngÆ°á»i dÃ¹ng tá»« CSV
             </h3>
 
             {importMessage && (
@@ -1008,7 +1014,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
             <form onSubmit={handleImportCSVSubmit} className="space-y-4 text-xs">
               <div className="space-y-1">
                 <p className="text-[10.5px] text-white/45 leading-relaxed">
-                  Nhập dòng giá trị ngăn cách bởi dấu phẩy. Cột định dạng: <code className="text-indigo-400 font-bold">name, email, role</code>. Mật khẩu mặc định sinh tự động là <code className="text-cyan-400 font-bold">password123</code>.
+                  Nháº­p dÃ²ng giÃ¡ trá»‹ ngÄƒn cÃ¡ch bá»Ÿi dáº¥u pháº©y. Cá»™t Ä‘á»‹nh dáº¡ng: <code className="text-indigo-400 font-bold">name, email, role</code>. Máº­t kháº©u máº·c Ä‘á»‹nh sinh tá»± Ä‘á»™ng lÃ  <code className="text-cyan-400 font-bold">password123</code>.
                 </p>
                 <textarea
                   required
@@ -1025,13 +1031,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   onClick={() => { setShowImportModal(false); setImportMessage(null); }}
                   className="px-4 py-2 bg-transparent text-white/50 hover:text-white transition cursor-pointer"
                 >
-                  Bỏ qua
+                  Bá» qua
                 </button>
                 <button
                   type="submit"
                   className="px-4.5 py-2 bg-white text-indigo-950 font-bold rounded-xl transition cursor-pointer"
                 >
-                  Xác nhận tải tệp lên
+                  XÃ¡c nháº­n táº£i tá»‡p lÃªn
                 </button>
               </div>
             </form>

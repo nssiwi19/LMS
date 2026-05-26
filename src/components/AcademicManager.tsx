@@ -20,10 +20,16 @@ interface AcademicManagerProps {
   currentUser: User;
   onRefreshData: () => void;
   triggerToast: (msg: string) => void;
+  initialTab?: "years" | "semesters" | "departments" | "programs";
 }
 
-export default function AcademicManager({ store, currentUser, onRefreshData, triggerToast }: AcademicManagerProps) {
-  const [activeTab, setActiveTab] = useState<"years" | "semesters" | "departments" | "programs">("years");
+export default function AcademicManager({ store, currentUser, onRefreshData, triggerToast, initialTab }: AcademicManagerProps) {
+  const [activeTab, setActiveTab] = useState<"years" | "semesters" | "departments" | "programs">(initialTab ?? "years");
+
+  // Sync activeTab when initialTab prop changes (sidebar click)
+  React.useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
 
   // Selection for Program Course Curriculum
   const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null);
