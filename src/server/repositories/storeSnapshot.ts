@@ -4,49 +4,125 @@ import { Queryable } from "../db";
 import { assignmentFromRow, courseFromRow, DbUserRow, enrollmentFromRow, questionFromRow, quizAttemptFromRow, quizFromRow, submissionFromRow, toPublicUser, tuitionFeeFromRow, academicWarningFromRow } from "../mappers";
 
 export async function storeSnapshotFromDb(db: Queryable) {
-  const users = (await db.query<DbUserRow>("SELECT * FROM users")).rows.map(toPublicUser);
-  const courses = (await db.query("SELECT * FROM courses")).rows.map(courseFromRow);
-  const lessons = (await db.query("SELECT * FROM lessons")).rows.map(row => ({ id: row.id, courseId: row.course_id, title: row.title, content: row.content, videoUrl: row.video_url || undefined, order: row.lesson_order, duration: row.duration }));
-  const enrollments = (await db.query("SELECT * FROM enrollments")).rows.map(enrollmentFromRow);
-  const lessonProgress = (await db.query("SELECT * FROM lesson_progress")).rows.map(row => ({ id: row.id, enrollmentId: row.enrollment_id, lessonId: row.lesson_id, completed: Boolean(row.completed), completedAt: row.completed_at || undefined }));
-  const quizzes = (await db.query("SELECT * FROM quizzes")).rows.map(quizFromRow);
-  const questions = (await db.query("SELECT * FROM questions")).rows.map(questionFromRow);
-  const quizAttempts = (await db.query("SELECT * FROM quiz_attempts")).rows.map(quizAttemptFromRow);
-  const assignments = (await db.query("SELECT * FROM assignments")).rows.map(assignmentFromRow);
-  const submissions = (await db.query("SELECT * FROM submissions")).rows.map(submissionFromRow);
-  const tuitionFees = (await db.query("SELECT * FROM tuition_fees")).rows.map(tuitionFeeFromRow);
-  const academicWarnings = (await db.query("SELECT * FROM academic_warnings")).rows.map(academicWarningFromRow);
-  const auditLogs = (await db.query("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 200")).rows.map(row => ({ id: row.id, userId: row.user_id, action: row.action, target: row.target, detail: row.detail || "", createdAt: row.created_at }));
+  const [
+    usersRes,
+    coursesRes,
+    lessonsRes,
+    enrollmentsRes,
+    lessonProgressRes,
+    quizzesRes,
+    questionsRes,
+    quizAttemptsRes,
+    assignmentsRes,
+    submissionsRes,
+    tuitionFeesRes,
+    academicWarningsRes,
+    auditLogsRes,
+    academicYearsRes,
+    semestersRes,
+    departmentsRes,
+    programsRes,
+    programCoursesRes,
+    studentProfilesRes,
+    attendanceSessionsRes,
+    attendanceRecordsRes,
+    notificationsRes,
+    transactionsRes,
+    advisorNotesRes,
+    courseSectionsRes,
+    registrationPeriodsRes,
+    courseRegistrationsRes,
+    scholarshipsRes,
+    scholarshipApplicationsRes,
+    gradeAppealsRes,
+    advisorAssignmentsRes,
+    leaveRequestsRes,
+    graduationApplicationsRes,
+    certificatesRes,
+    forumRepliesRes,
+    forumPostsRes
+  ] = await Promise.all([
+    db.query<DbUserRow>("SELECT * FROM users"),
+    db.query("SELECT * FROM courses"),
+    db.query("SELECT * FROM lessons"),
+    db.query("SELECT * FROM enrollments"),
+    db.query("SELECT * FROM lesson_progress"),
+    db.query("SELECT * FROM quizzes"),
+    db.query("SELECT * FROM questions"),
+    db.query("SELECT * FROM quiz_attempts"),
+    db.query("SELECT * FROM assignments"),
+    db.query("SELECT * FROM submissions"),
+    db.query("SELECT * FROM tuition_fees"),
+    db.query("SELECT * FROM academic_warnings"),
+    db.query("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 200"),
+    db.query("SELECT * FROM academic_years"),
+    db.query("SELECT * FROM semesters"),
+    db.query("SELECT * FROM departments"),
+    db.query("SELECT * FROM programs"),
+    db.query("SELECT * FROM program_courses"),
+    db.query("SELECT * FROM student_profiles"),
+    db.query("SELECT * FROM attendance_sessions"),
+    db.query("SELECT * FROM attendance_records"),
+    db.query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 200"),
+    db.query("SELECT * FROM transactions ORDER BY created_at DESC"),
+    db.query("SELECT * FROM advisor_notes"),
+    db.query("SELECT * FROM course_sections"),
+    db.query("SELECT * FROM registration_periods"),
+    db.query("SELECT * FROM course_registrations"),
+    db.query("SELECT * FROM scholarships"),
+    db.query("SELECT * FROM scholarship_applications"),
+    db.query("SELECT * FROM grade_appeals"),
+    db.query("SELECT * FROM advisor_assignments"),
+    db.query("SELECT * FROM leave_requests"),
+    db.query("SELECT * FROM graduation_applications"),
+    db.query("SELECT * FROM certificates"),
+    db.query("SELECT * FROM forum_replies"),
+    db.query("SELECT * FROM forum_posts")
+  ]);
+
+  const users = usersRes.rows.map(toPublicUser);
+  const courses = coursesRes.rows.map(courseFromRow);
+  const lessons = lessonsRes.rows.map(row => ({ id: row.id, courseId: row.course_id, title: row.title, content: row.content, videoUrl: row.video_url || undefined, order: row.lesson_order, duration: row.duration }));
+  const enrollments = enrollmentsRes.rows.map(enrollmentFromRow);
+  const lessonProgress = lessonProgressRes.rows.map(row => ({ id: row.id, enrollmentId: row.enrollment_id, lessonId: row.lesson_id, completed: Boolean(row.completed), completedAt: row.completed_at || undefined }));
+  const quizzes = quizzesRes.rows.map(quizFromRow);
+  const questions = questionsRes.rows.map(questionFromRow);
+  const quizAttempts = quizAttemptsRes.rows.map(quizAttemptFromRow);
+  const assignments = assignmentsRes.rows.map(assignmentFromRow);
+  const submissions = submissionsRes.rows.map(submissionFromRow);
+  const tuitionFees = tuitionFeesRes.rows.map(tuitionFeeFromRow);
+  const academicWarnings = academicWarningsRes.rows.map(academicWarningFromRow);
+  const auditLogs = auditLogsRes.rows.map(row => ({ id: row.id, userId: row.user_id, action: row.action, target: row.target, detail: row.detail || "", createdAt: row.created_at }));
 
   // New academic structural tables
-  const academicYears = (await db.query("SELECT * FROM academic_years")).rows.map(row => ({ id: row.id, name: row.name, startDate: row.start_date, endDate: row.end_date, isCurrent: Boolean(row.is_current) }));
-  const semesters = (await db.query("SELECT * FROM semesters")).rows.map(row => ({ id: row.id, academicYearId: row.academic_year_id, name: row.name, type: row.type, startDate: row.start_date, endDate: row.end_date, registrationOpen: row.registration_open, registrationClose: row.registration_close }));
-  const departments = (await db.query("SELECT * FROM departments")).rows.map(row => ({ id: row.id, name: row.name, code: row.code, headTeacherId: row.head_teacher_id, description: row.description }));
-  const programs = (await db.query("SELECT * FROM programs")).rows.map(row => ({ id: row.id, departmentId: row.department_id, name: row.name, code: row.code, type: row.type, totalCredits: row.total_credits, description: row.description }));
-  const programCourses = (await db.query("SELECT * FROM program_courses")).rows.map(row => ({ id: row.id, programId: row.program_id, courseId: row.course_id, credits: row.credits, isRequired: Boolean(row.is_required), semester: row.semester }));
+  const academicYears = academicYearsRes.rows.map(row => ({ id: row.id, name: row.name, startDate: row.start_date, endDate: row.end_date, isCurrent: Boolean(row.is_current) }));
+  const semesters = semestersRes.rows.map(row => ({ id: row.id, academicYearId: row.academic_year_id, name: row.name, type: row.type, startDate: row.start_date, endDate: row.end_date, registrationOpen: row.registration_open, registrationClose: row.registration_close }));
+  const departments = departmentsRes.rows.map(row => ({ id: row.id, name: row.name, code: row.code, headTeacherId: row.head_teacher_id, description: row.description }));
+  const programs = programsRes.rows.map(row => ({ id: row.id, departmentId: row.department_id, name: row.name, code: row.code, type: row.type, totalCredits: row.total_credits, description: row.description }));
+  const programCourses = programCoursesRes.rows.map(row => ({ id: row.id, programId: row.program_id, courseId: row.course_id, credits: row.credits, isRequired: Boolean(row.is_required), semester: row.semester }));
 
   // Missing Student Profiles, Attendance, Notifications & Transactions
-  const studentProfiles = (await db.query("SELECT * FROM student_profiles")).rows.map(row => ({ id: row.id, userId: row.user_id, studentCode: row.student_code, programId: row.program_id, departmentId: row.department_id, academicYear: row.academic_year, enrollmentDate: row.enrollment_date, expectedGraduation: row.expected_graduation, status: row.status, gpa: Number(row.gpa), totalCreditsEarned: row.total_credits_earned, address: row.address || undefined, phone: row.phone || undefined, dateOfBirth: row.date_of_birth || undefined, gender: row.gender || undefined, guardianName: row.guardian_name || undefined, guardianPhone: row.guardian_phone || undefined, guardianEmail: row.guardian_email || undefined, notes: row.notes || undefined, feeHold: Boolean(row.fee_hold), academicProbation: Boolean(row.academic_probation) }));
-  const attendanceSessions = (await db.query("SELECT * FROM attendance_sessions")).rows.map(row => ({ id: row.id, courseId: row.course_id, semesterId: row.semester_id, teacherId: row.teacher_id, date: row.date, topic: row.topic }));
-  const attendanceRecords = (await db.query("SELECT * FROM attendance_records")).rows.map(row => ({ id: row.id, sessionId: row.session_id, studentId: row.student_id, status: row.status, note: row.note || undefined }));
-  const notifications = (await db.query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 200")).rows.map(row => ({ id: row.id, userId: row.user_id, type: row.type, message: row.message, isRead: Boolean(row.is_read), createdAt: row.created_at }));
-  const transactions = (await db.query("SELECT * FROM transactions ORDER BY created_at DESC")).rows.map(row => ({ id: row.id, studentId: row.student_id, courseId: row.course_id, amount: Number(row.amount), status: row.status, paymentMethod: row.payment_method, createdAt: row.created_at, processedAt: row.processed_at || undefined, processedBy: row.processed_by || undefined, notes: row.notes || undefined }));
-  const advisorNotes = (await db.query("SELECT * FROM advisor_notes")).rows.map(row => ({ id: row.id, advisorId: row.advisor_id, studentId: row.student_id, content: row.content, type: row.type, createdAt: row.created_at }));
+  const studentProfiles = studentProfilesRes.rows.map(row => ({ id: row.id, userId: row.user_id, studentCode: row.student_code, programId: row.program_id, departmentId: row.department_id, academicYear: row.academic_year, enrollmentDate: row.enrollment_date, expectedGraduation: row.expected_graduation, status: row.status, gpa: Number(row.gpa), totalCreditsEarned: row.total_credits_earned, address: row.address || undefined, phone: row.phone || undefined, dateOfBirth: row.date_of_birth || undefined, gender: row.gender || undefined, guardianName: row.guardian_name || undefined, guardianPhone: row.guardian_phone || undefined, guardianEmail: row.guardian_email || undefined, notes: row.notes || undefined, feeHold: Boolean(row.fee_hold), academicProbation: Boolean(row.academic_probation) }));
+  const attendanceSessions = attendanceSessionsRes.rows.map(row => ({ id: row.id, courseId: row.course_id, semesterId: row.semester_id, teacherId: row.teacher_id, date: row.date, topic: row.topic }));
+  const attendanceRecords = attendanceRecordsRes.rows.map(row => ({ id: row.id, sessionId: row.session_id, studentId: row.student_id, status: row.status, note: row.note || undefined }));
+  const notifications = notificationsRes.rows.map(row => ({ id: row.id, userId: row.user_id, type: row.type, message: row.message, isRead: Boolean(row.is_read), createdAt: row.created_at }));
+  const transactions = transactionsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, courseId: row.course_id, amount: Number(row.amount), status: row.status, paymentMethod: row.payment_method, createdAt: row.created_at, processedAt: row.processed_at || undefined, processedBy: row.processed_by || undefined, notes: row.notes || undefined }));
+  const advisorNotes = advisorNotesRes.rows.map(row => ({ id: row.id, advisorId: row.advisor_id, studentId: row.student_id, content: row.content, type: row.type, createdAt: row.created_at }));
 
   // Missing registration & requests
-  const courseSections = (await db.query("SELECT * FROM course_sections")).rows.map(row => ({ id: row.id, courseId: row.course_id, semesterId: row.semester_id, teacherId: row.teacher_id, sectionCode: row.section_code, maxStudents: row.max_students, schedule: JSON.parse(row.schedule_json || '[]'), status: row.status }));
-  const registrationPeriods = (await db.query("SELECT * FROM registration_periods")).rows.map(row => ({ id: row.id, semesterId: row.semester_id, name: row.name, startDate: row.start_date, endDate: row.end_date, allowedYears: JSON.parse(row.allowed_years_json || '[]'), isOpen: Boolean(row.is_open) }));
-  const courseRegistrations = (await db.query("SELECT * FROM course_registrations")).rows.map(row => ({ id: row.id, studentId: row.student_id, sectionId: row.section_id, semesterId: row.semester_id, status: row.status, registeredAt: row.registered_at, droppedAt: row.dropped_at || undefined, grade: row.grade || undefined, letterGrade: row.letter_grade || undefined, gradePoint: row.grade_point === null ? undefined : Number(row.grade_point), credits: row.credits, isRetake: Boolean(row.is_retake) }));
-  const scholarships = (await db.query("SELECT * FROM scholarships")).rows.map(row => ({ id: row.id, name: row.name, type: row.type, amount: row.amount === null ? undefined : Number(row.amount), discountPercent: row.discount_percent === null ? undefined : Number(row.discount_percent), semesterId: row.semester_id, conditions: row.conditions }));
-  const scholarshipApplications = (await db.query("SELECT * FROM scholarship_applications")).rows.map(row => ({ id: row.id, studentId: row.student_id, scholarshipId: row.scholarship_id, semesterId: row.semester_id, status: row.status, appliedAt: row.applied_at, reviewedBy: row.reviewed_by || undefined, reviewNote: row.review_note || undefined }));
-  const gradeAppeals = (await db.query("SELECT * FROM grade_appeals")).rows.map(row => ({ id: row.id, studentId: row.student_id, courseRegistrationId: row.course_registration_id, reason: row.reason, status: row.status, originalGrade: Number(row.original_grade), revisedGrade: row.revised_grade === null ? undefined : Number(row.revised_grade), submittedAt: row.submitted_at, resolvedAt: row.resolved_at || undefined, resolvedBy: row.resolved_by || undefined, resolutionNote: row.resolution_note || undefined }));
-  const advisorAssignments = (await db.query("SELECT * FROM advisor_assignments")).rows.map(row => ({ id: row.id, advisorId: row.advisor_id, studentId: row.student_id, semesterId: row.semester_id, assignedAt: row.assigned_at }));
-  const leaveRequests = (await db.query("SELECT * FROM leave_requests")).rows.map(row => ({ id: row.id, studentId: row.student_id, type: row.type, semesterId: row.semester_id, reason: row.reason, status: row.status, requestedAt: row.requested_at, reviewedBy: row.reviewed_by || undefined, reviewNote: row.review_note || undefined, resumeSemesterId: row.resume_semester_id }));
-  const graduationApplications = (await db.query("SELECT * FROM graduation_applications")).rows.map(row => ({ id: row.id, studentId: row.student_id, status: row.status, appliedAt: row.applied_at, reviewedBy: row.reviewed_by || undefined, totalCreditsAtApplication: row.total_credits_at_application, gpaAtApplication: Number(row.gpa_at_application), note: row.note || undefined }));
-  const certificates = (await db.query("SELECT * FROM certificates")).rows.map(row => ({ id: row.id, enrollmentId: row.enrollment_id, studentId: row.student_id, courseId: row.course_id, issuedAt: row.issued_at, certificateCode: row.certificate_code }));
+  const courseSections = courseSectionsRes.rows.map(row => ({ id: row.id, courseId: row.course_id, semesterId: row.semester_id, teacherId: row.teacher_id, sectionCode: row.section_code, maxStudents: row.max_students, schedule: JSON.parse(row.schedule_json || '[]'), status: row.status }));
+  const registrationPeriods = registrationPeriodsRes.rows.map(row => ({ id: row.id, semesterId: row.semester_id, name: row.name, startDate: row.start_date, endDate: row.end_date, allowedYears: JSON.parse(row.allowed_years_json || '[]'), isOpen: Boolean(row.is_open) }));
+  const courseRegistrations = courseRegistrationsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, sectionId: row.section_id, semesterId: row.semester_id, status: row.status, registeredAt: row.registered_at, droppedAt: row.dropped_at || undefined, grade: row.grade || undefined, letterGrade: row.letter_grade || undefined, gradePoint: row.grade_point === null ? undefined : Number(row.grade_point), credits: row.credits, isRetake: Boolean(row.is_retake) }));
+  const scholarships = scholarshipsRes.rows.map(row => ({ id: row.id, name: row.name, type: row.type, amount: row.amount === null ? undefined : Number(row.amount), discountPercent: row.discount_percent === null ? undefined : Number(row.discount_percent), semesterId: row.semester_id, conditions: row.conditions }));
+  const scholarshipApplications = scholarshipApplicationsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, scholarshipId: row.scholarship_id, semesterId: row.semester_id, status: row.status, appliedAt: row.applied_at, reviewedBy: row.reviewed_by || undefined, reviewNote: row.review_note || undefined }));
+  const gradeAppeals = gradeAppealsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, courseRegistrationId: row.course_registration_id, reason: row.reason, status: row.status, originalGrade: Number(row.original_grade), revisedGrade: row.revised_grade === null ? undefined : Number(row.revised_grade), submittedAt: row.submitted_at, resolvedAt: row.resolved_at || undefined, resolvedBy: row.resolved_by || undefined, resolutionNote: row.resolution_note || undefined }));
+  const advisorAssignments = advisorAssignmentsRes.rows.map(row => ({ id: row.id, advisorId: row.advisor_id, studentId: row.student_id, semesterId: row.semester_id, assignedAt: row.assigned_at }));
+  const leaveRequests = leaveRequestsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, type: row.type, semesterId: row.semester_id, reason: row.reason, status: row.status, requestedAt: row.requested_at, reviewedBy: row.reviewed_by || undefined, reviewNote: row.review_note || undefined, resumeSemesterId: row.resume_semester_id }));
+  const graduationApplications = graduationApplicationsRes.rows.map(row => ({ id: row.id, studentId: row.student_id, status: row.status, appliedAt: row.applied_at, reviewedBy: row.reviewed_by || undefined, totalCreditsAtApplication: row.total_credits_at_application, gpaAtApplication: Number(row.gpa_at_application), note: row.note || undefined }));
+  const certificates = certificatesRes.rows.map(row => ({ id: row.id, enrollmentId: row.enrollment_id, studentId: row.student_id, courseId: row.course_id, issuedAt: row.issued_at, certificateCode: row.certificate_code }));
 
-  const forumReplies = (await db.query("SELECT * FROM forum_replies")).rows.map(row => ({ id: row.id, postId: row.post_id, authorId: row.author_id, content: row.content, createdAt: row.created_at }));
-  const forumPosts = (await db.query("SELECT * FROM forum_posts")).rows.map(row => {
+  const forumReplies = forumRepliesRes.rows.map(row => ({ id: row.id, postId: row.post_id, authorId: row.author_id, content: row.content, createdAt: row.created_at }));
+  const forumPosts = forumPostsRes.rows.map(row => {
     const postReplies = forumReplies.filter(r => r.postId === row.id);
     return { id: row.id, courseId: row.course_id, authorId: row.author_id, title: row.title, content: row.content, replies: postReplies, createdAt: row.created_at };
   });
