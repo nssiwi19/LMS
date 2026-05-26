@@ -58,5 +58,7 @@ export const api = {
   addAdvisorNote: (payload: unknown) => apiFetch("/api/advisor/notes", { method: "POST", body: JSON.stringify(payload) }),
   payTuition: (payload: { feeId: string; paidAmount: number }) => apiFetch("/api/tuition/pay", { method: "POST", body: JSON.stringify(payload) }),
   updateStudentProfile: (payload: unknown) => apiFetch("/api/student/profile", { method: "PATCH", body: JSON.stringify(payload) }),
-  updateStudentNotes: (studentId: string, notes: string) => apiFetch(`/api/advisor/student-profile/${studentId}`, { method: "PATCH", body: JSON.stringify({ notes }) })
+  updateStudentNotes: (studentId: string, notes: string) => apiFetch(`/api/advisor/student-profile/${studentId}`, { method: "PATCH", body: JSON.stringify({ notes }) }),
+  markNotificationRead: (id: string) => apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" }),
+  markAllNotificationsRead: () => apiFetch("/api/notifications/read-all", { method: "PATCH" })
 };

@@ -43,6 +43,7 @@ import StudentAcademics from "./student/StudentAcademics";
 import ParentPanel from "./ParentPanel";
 import { generateId, escapeHTML } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
+import { api } from "../api";
 
 interface StudentPanelProps {
   currentUser: UserType;
@@ -469,7 +470,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
     onRefreshData();
     // Also persist to server so React Query refetch doesn't revert
     try {
-      await fetch(`/api/notifications/${id}/read`, { method: "PATCH", credentials: "include" });
+      await api.markNotificationRead(id);
     } catch (_) { /* silent fail - local state already updated */ }
   };
 
@@ -483,7 +484,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
     onRefreshData();
     // Persist to server
     try {
-      await fetch("/api/notifications/read-all", { method: "PATCH", credentials: "include" });
+      await api.markAllNotificationsRead();
     } catch (_) { /* silent fail */ }
   };
 
