@@ -546,6 +546,87 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       );
     }
 
+    // Sync notifications
+    const clientNotes = store.notifications || [];
+    const clientNoteIds = clientNotes.map(n => n.id);
+    if (clientNoteIds.length > 0) {
+      await client.query(
+        "DELETE FROM notifications WHERE id NOT IN (" + 
+        clientNoteIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientNoteIds
+      );
+    } else {
+      await client.query("DELETE FROM notifications");
+    }
+
+    for (const note of clientNotes) {
+      await client.query(
+        `INSERT INTO notifications (id, user_id, type, message, is_read, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO UPDATE SET
+           user_id = EXCLUDED.user_id,
+           type = EXCLUDED.type,
+           message = EXCLUDED.message,
+           is_read = EXCLUDED.is_read,
+           created_at = EXCLUDED.created_at`,
+        [note.id, note.userId, note.type, note.message, Boolean(note.isRead), note.createdAt]
+      );
+    }
+
+    // Sync academic_warnings
+    const clientWarnings = store.academicWarnings || [];
+    const clientWarningIds = clientWarnings.map(w => w.id);
+    if (clientWarningIds.length > 0) {
+      await client.query(
+        "DELETE FROM academic_warnings WHERE id NOT IN (" + 
+        clientWarningIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientWarningIds
+      );
+    } else {
+      await client.query("DELETE FROM academic_warnings");
+    }
+
+    for (const w of clientWarnings) {
+      await client.query(
+        `INSERT INTO academic_warnings (id, student_id, type, message, is_resolved, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO UPDATE SET
+           student_id = EXCLUDED.student_id,
+           type = EXCLUDED.type,
+           message = EXCLUDED.message,
+           is_resolved = EXCLUDED.is_resolved,
+           created_at = EXCLUDED.created_at`,
+        [w.id, w.studentId, w.type, w.message, Boolean(w.isResolved), w.createdAt]
+      );
+    }
+
+    // Sync audit_logs
+    const clientLogs = store.auditLogs || [];
+    const clientLogIds = clientLogs.map(l => l.id);
+    if (clientLogIds.length > 0) {
+      await client.query(
+        "DELETE FROM audit_logs WHERE id NOT IN (" + 
+        clientLogIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientLogIds
+      );
+    } else {
+      await client.query("DELETE FROM audit_logs");
+    }
+
+    for (const log of clientLogs) {
+      await client.query(
+        `INSERT INTO audit_logs (id, user_id, action, target, detail, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO UPDATE SET
+           user_id = EXCLUDED.user_id,
+           action = EXCLUDED.action,
+           target = EXCLUDED.target,
+           detail = EXCLUDED.detail,
+           created_at = EXCLUDED.created_at`,
+        [log.id, log.userId, log.action, log.target, log.detail || null, log.createdAt]
+      );
+    }
+
     await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
