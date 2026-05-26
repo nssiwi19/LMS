@@ -492,6 +492,26 @@ app.post("/api/auth/logout", requireAuth, asyncHandler(async (req, res) => {
 }));
 
 app.get("/api/auth/me", requireAuth, (req: AuthRequest, res) => res.json({ user: req.user }));
+
+app.post("/api/users/change-password", requireAuth, asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: "Vui lòng nhập đầy đủ mật khẩu cũ và mới." });
+  
+  const row = await usersRepository.findAuthByEmail(pool, req.user!.email) as DbUserRow | null;
+  if (!row || !verifyPassword(currentPassword, row.password_hash, row.password_salt || undefined)) {
+    return res.status(401).json({ error: "Mật khẩu hiện tại không chính xác." });
+  }
+  
+  const credential = hashPassword(newPassword);
+  await pool.query(
+    "UPDATE users SET password_hash = $1, password_salt = $2 WHERE id = $3",
+    [credential.hash, credential.salt, req.user!.id]
+  );
+  
+  await audit(req, "change_password", req.user!.id, "User updated their account password.");
+  res.json({ ok: true, message: "Đổi mật khẩu thành công!" });
+}));
+
 app.get("/api/store", requireAuth, asyncHandler(async (req, res) => res.json(limitStoreForRole(await storeSnapshotFromDb(pool), req.user!))));
 
 app.get("/api/dashboard/admin", requireAuth, requireRole(["admin", "super_admin"]), asyncHandler(async (req, res) => {

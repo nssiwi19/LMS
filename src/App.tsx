@@ -58,6 +58,18 @@ function AppShell() {
   // Desktop sidebar collapse state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
+  // User profile dropdown menu popover state
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+
+  // Profile and Password Modals states
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changePasswordError, setChangePasswordError] = useState<string | null>(null);
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState<string | null>(null);
+
   const roleLabel = (role: User["role"]) => {
     if (role === "admin" || role === "super_admin") return "Ban Quản Trị";
     if (role === "teacher") return "Giảng Viên";
@@ -279,20 +291,21 @@ function AppShell() {
         <div className="min-h-screen flex flex-col md:flex-row relative">
           
           {/* DESKTOP SIDEBAR NAV BAR */}
-          <aside className={`hidden md:flex flex-col bg-slate-900 border-r border-white/10 p-6 flex-shrink-0 relative z-40 backdrop-blur-xl transition-all duration-300 ${
-            isSidebarCollapsed ? "w-20 items-center px-3" : "w-64"
+          <aside className={`hidden md:flex flex-col bg-slate-900 border-r border-white/10 p-4 flex-shrink-0 relative z-40 backdrop-blur-xl transition-all duration-300 ${
+            isSidebarCollapsed ? "w-20 items-center px-2" : "w-64"
           }`}>
-            <div className={`flex items-center justify-between pb-6 border-b border-white/5 w-full ${
-              isSidebarCollapsed ? "flex-col gap-4" : ""
+            {/* Top Logo and Toggle */}
+            <div className={`flex items-center justify-between pb-4 border-b border-white/5 w-full ${
+              isSidebarCollapsed ? "flex-col gap-3" : ""
             }`}>
-              <div className="flex items-center space-x-3">
-                <div className="w-9 h-9 bg-indigo-500 border border-white/20 rounded-xl flex items-center justify-center shrink-0">
-                  <GraduationCap className="h-5 w-5 text-white" />
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 bg-indigo-500 border border-white/20 rounded-xl flex items-center justify-center shrink-0 shadow-md">
+                  <GraduationCap className="h-4.5 w-4.5 text-white" />
                 </div>
                 {!isSidebarCollapsed && (
                   <div>
-                    <h1 className="text-base font-display font-black tracking-widest text-white uppercase">E16 LMS</h1>
-                    <p className="text-[10px] text-white/40 uppercase tracking-tighter">Academic suite v1.1</p>
+                    <h1 className="text-sm font-display font-black tracking-widest text-white uppercase leading-none">E16 LMS</h1>
+                    <p className="text-[9px] text-white/40 uppercase tracking-tighter mt-0.5">Academic suite v1.1</p>
                   </div>
                 )}
               </div>
@@ -300,70 +313,112 @@ function AppShell() {
               {/* Collapse/Expand Toggle Button */}
               <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className={`p-1 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition duration-150 cursor-pointer ${
-                  isSidebarCollapsed ? "mt-2" : ""
-                }`}
+                className="p-1 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition duration-150 cursor-pointer"
                 title={isSidebarCollapsed ? "Mở rộng thanh menu" : "Thu gọn thanh menu"}
               >
                 {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
               </button>
             </div>
 
-            {/* Profile badge summaries */}
-            <div className={`bg-white/5 border border-white/5 rounded-2xl p-4 w-full ${
-              isSidebarCollapsed ? "flex flex-col items-center justify-center p-3 space-y-0" : "space-y-2"
-            }`}>
-              <div className="flex items-center gap-1.5 text-xs text-indigo-300 font-mono justify-center w-full" title={roleLabel(currentUser.role)}>
-                <Fingerprint className="h-3.5 w-3.5 shrink-0" />
-                {!isSidebarCollapsed && (
-                  <span className="uppercase font-bold tracking-wider truncate max-w-[130px]">
-                    {roleLabel(currentUser.role)}
-                  </span>
-                )}
-              </div>
-              {!isSidebarCollapsed && (
-                <>
-                  <h5 className="text-xs font-bold text-white truncate" title={currentUser.name}>{currentUser.name}</h5>
-                  <p className="text-[10px] text-white/40 truncate font-mono" title={currentUser.email}>{currentUser.email}</p>
-                </>
-              )}
-            </div>
-
-            {/* General instructions instructions */}
-            {!isSidebarCollapsed && (
-              <div className="text-[11px] text-white/50 space-y-4">
-                <span className="text-[9px] font-mono tracking-widest text-white/40 block uppercase border-b border-white/5 pb-1">Chỉ dẫn Hệ thống</span>
-                <p className="leading-relaxed">
-                  Phiên đăng nhập được xác thực qua cookie bảo mật; dữ liệu học tập chính được đồng bộ từ server.
-                </p>
-              </div>
-            )}
-
-            {/* Standalone Action buttons inside desktop view */}
-            <div className="pt-2 w-full flex justify-center">
+            {/* Standalone Action button in the middle */}
+            <div className="pt-6 w-full flex justify-center">
               <button
                 onClick={handleExportStandaloneHTMLFile}
-                className={`w-full text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition duration-150 rounded-xl flex items-center justify-center gap-1.5 shadow cursor-pointer ${
-                  isSidebarCollapsed ? "p-3 h-10 w-10 bg-indigo-600/80 hover:bg-indigo-600" : "py-2 px-3 text-[10px]"
+                className={`w-full text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition duration-150 rounded-xl flex items-center justify-center gap-1.5 shadow-md cursor-pointer ${
+                  isSidebarCollapsed ? "p-3 h-10 w-10 bg-indigo-600/80 hover:bg-indigo-600" : "py-2.5 px-3 text-[10px]"
                 }`}
                 title="Tải tệp tin Standalone HTML"
               >
                 <Download className="h-4 w-4 shrink-0" />
-                {!isSidebarCollapsed && <span>Tải tệp tin Standalone HTML</span>}
+                {!isSidebarCollapsed && <span>Tải Standalone HTML</span>}
               </button>
             </div>
 
-            {/* Logout control anchor */}
-            <div className="pt-8 border-t border-white/5 mt-auto w-full flex justify-center">
+            {/* Flex spacer to push user profile menu to the bottom */}
+            <div className="flex-1" />
+
+            {/* USER PROFILE DROPDOWN MENU / POPOVER */}
+            <div className="relative w-full pt-4 border-t border-white/5">
+              {/* Dropdown Menu Popup */}
+              {userDropdownOpen && (
+                <div className={`absolute bottom-full mb-3 z-50 bg-[#0f172a] border border-white/10 rounded-2xl p-2.5 shadow-2xl backdrop-blur-2xl w-60 animate-in fade-in slide-in-from-bottom-2 duration-150 ${
+                  isSidebarCollapsed ? "left-0" : "left-0 right-0 w-full"
+                }`}>
+                  {/* Scoped Profile Header Info */}
+                  <div className="px-3 py-2 border-b border-white/5 mb-1.5 text-xs text-left">
+                    <p className="font-mono text-[9px] text-indigo-300 font-extrabold uppercase tracking-wider mb-0.5">
+                      {roleLabel(currentUser.role)}
+                    </p>
+                    <h6 className="font-bold text-white truncate text-xs">{currentUser.name}</h6>
+                    <p className="text-[10px] text-white/40 truncate font-mono mt-0.5">{currentUser.email}</p>
+                  </div>
+                  
+                  {/* Action Buttons */}
+                  <button
+                    onClick={() => { setShowProfileModal(true); setUserDropdownOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-white/70 hover:text-white hover:bg-white/5 rounded-xl transition flex items-center gap-2 cursor-pointer"
+                  >
+                    <Fingerprint className="h-4 w-4 text-indigo-400" />
+                    <span>Xem lý lịch cá nhân</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => { 
+                      setShowChangePasswordModal(true); 
+                      setUserDropdownOpen(false); 
+                      setChangePasswordError(null);
+                      setChangePasswordSuccess(null);
+                      setCurrentPassword("");
+                      setNewPassword("");
+                      setConfirmPassword("");
+                    }}
+                    className="w-full text-left px-3 py-2 text-xs font-medium text-white/70 hover:text-white hover:bg-white/5 rounded-xl transition flex items-center gap-2 cursor-pointer"
+                  >
+                    <Lock className="h-4 w-4 text-amber-400" />
+                    <span>Đổi mật khẩu tài khoản</span>
+                  </button>
+                  
+                  <div className="border-t border-white/5 my-1.5" />
+                  
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-3 py-2 text-xs font-bold text-red-400 hover:text-white hover:bg-red-500/10 rounded-xl transition flex items-center gap-2 cursor-pointer"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Đăng xuất phiên</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Main Profile Trigger Button */}
               <button
-                onClick={handleLogout}
-                className={`w-full text-xs font-semibold text-red-400 hover:text-white hover:bg-red-500/10 transition duration-150 rounded-xl flex items-center justify-center gap-2 cursor-pointer ${
-                  isSidebarCollapsed ? "p-3 h-10 w-10 bg-red-500/5 hover:bg-red-500/10" : "py-2 px-3"
+                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                className={`w-full flex items-center gap-3 p-2 bg-white/3 hover:bg-white/5 border border-white/5 hover:border-white/10 rounded-2xl transition duration-150 cursor-pointer ${
+                  isSidebarCollapsed ? "justify-center p-1.5 h-11 w-11" : "text-left"
                 }`}
-                title="Đăng xuất phiên làm việc"
+                title={currentUser.name}
               >
-                <LogOut className="h-4 w-4 shrink-0" />
-                {!isSidebarCollapsed && <span>Đăng xuất phiên làm việc</span>}
+                {/* Avatar circle */}
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center font-bold text-xs text-white shadow-inner shrink-0 uppercase font-mono">
+                  {currentUser.name.slice(0, 2)}
+                </div>
+                
+                {/* User Details */}
+                {!isSidebarCollapsed && (
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold text-white truncate leading-none">{currentUser.name}</p>
+                    <span className="text-[8px] font-mono font-bold tracking-wider text-white/30 truncate block mt-1 uppercase">
+                      {roleLabel(currentUser.role)}
+                    </span>
+                  </div>
+                )}
+
+                {/* Arrow indicator */}
+                {!isSidebarCollapsed && (
+                  <ChevronLeft className={`h-4 w-4 text-white/30 transform transition-transform duration-200 ${
+                    userDropdownOpen ? "-rotate-90" : ""
+                  }`} />
+                )}
               </button>
             </div>
           </aside>
@@ -664,6 +719,189 @@ function AppShell() {
 
           </div>
 
+        </div>
+      )}
+
+      {/* 1. VIEW PROFILE MODAL */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-white/15 w-full max-w-md rounded-3xl p-6 space-y-6 shadow-2xl relative animate-in zoom-in-95 duration-200 text-left">
+            <button 
+              onClick={() => setShowProfileModal(false)}
+              className="absolute top-4 right-4 p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/60 hover:text-white transition duration-150 cursor-pointer"
+            >
+              <X className="h-4.5 w-4.5" />
+            </button>
+            
+            <div className="flex items-center gap-3 pb-4 border-b border-white/5">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-400/20 flex items-center justify-center">
+                <Fingerprint className="h-5 w-5 text-indigo-400" />
+              </div>
+              <div>
+                <h4 className="font-display font-black text-white text-base leading-none uppercase tracking-widest">LÝ LỊCH CÁ NHÂN</h4>
+                <p className="text-[10px] text-white/40 uppercase tracking-tighter mt-1">Thông tin chi tiết tài khoản</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs font-sans">
+              <div className="space-y-1 py-1.5 border-b border-white/5 flex justify-between items-center">
+                <span className="text-white/40">Họ và Tên</span>
+                <strong className="text-white text-sm">{currentUser.name}</strong>
+              </div>
+              <div className="space-y-1 py-1.5 border-b border-white/5 flex justify-between items-center">
+                <span className="text-white/40">Địa chỉ Email</span>
+                <strong className="text-white font-mono">{currentUser.email}</strong>
+              </div>
+              <div className="space-y-1 py-1.5 border-b border-white/5 flex justify-between items-center">
+                <span className="text-white/40">Vai trò Hệ thống</span>
+                <strong className="text-indigo-300 font-bold uppercase">{roleLabel(currentUser.role)}</strong>
+              </div>
+              <div className="space-y-1 py-1.5 border-b border-white/5 flex justify-between items-center">
+                <span className="text-white/40">Số Điện thoại</span>
+                <strong className="text-white font-mono">{currentUser.phone || "Chưa cập nhật"}</strong>
+              </div>
+              {currentUser.linkedStudentId && (
+                <div className="space-y-1 py-1.5 border-b border-white/5 flex justify-between items-center">
+                  <span className="text-white/40">ID Học viên Liên kết</span>
+                  <strong className="text-white font-mono">{currentUser.linkedStudentId}</strong>
+                </div>
+              )}
+              <div className="space-y-1 py-1.5 flex justify-between items-center">
+                <span className="text-white/40">Ngày kích hoạt</span>
+                <strong className="text-white font-mono">{currentUser.createdAt ? new Date(currentUser.createdAt).toLocaleDateString() : "Chưa xác định"}</strong>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button 
+                onClick={() => setShowProfileModal(false)}
+                className="w-full py-2.5 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl text-xs transition cursor-pointer border border-white/10"
+              >
+                Đóng thông tin
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. CHANGE PASSWORD MODAL */}
+      {showChangePasswordModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-white/15 w-full max-w-md rounded-3xl p-6 space-y-6 shadow-2xl relative animate-in zoom-in-95 duration-200 text-left">
+            <button 
+              onClick={() => setShowChangePasswordModal(false)}
+              className="absolute top-4 right-4 p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/60 hover:text-white transition duration-150 cursor-pointer"
+            >
+              <X className="h-4.5 w-4.5" />
+            </button>
+            
+            <div className="flex items-center gap-3 pb-4 border-b border-white/5">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-400/20 flex items-center justify-center">
+                <Lock className="h-5 w-5 text-amber-400" />
+              </div>
+              <div>
+                <h4 className="font-display font-black text-white text-base leading-none uppercase tracking-widest">ĐỔI MẬT KHẨU</h4>
+                <p className="text-[10px] text-white/40 uppercase tracking-tighter mt-1">Cập nhật khóa bảo mật tài khoản</p>
+              </div>
+            </div>
+
+            {changePasswordError && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-3 rounded-xl text-xs">
+                {changePasswordError}
+              </div>
+            )}
+            
+            {changePasswordSuccess && (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 p-3 rounded-xl text-xs">
+                {changePasswordSuccess}
+              </div>
+            )}
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setChangePasswordError(null);
+              setChangePasswordSuccess(null);
+              
+              if (newPassword.length < 6) {
+                setChangePasswordError("Mật khẩu mới phải tối thiểu 6 ký tự.");
+                return;
+              }
+              if (newPassword !== confirmPassword) {
+                setChangePasswordError("Xác nhận mật khẩu mới không trùng khớp.");
+                return;
+              }
+              
+              try {
+                const csrfToken = sessionStorage.getItem("e16_lms_csrf");
+                const response = await fetch("/api/users/change-password", {
+                  method: "POST",
+                  headers: { 
+                    "Content-Type": "application/json",
+                    "X-CSRF-Token": csrfToken || ""
+                  },
+                  credentials: "include",
+                  body: JSON.stringify({ currentPassword, newPassword })
+                });
+                
+                const data = await response.json();
+                if (!response.ok) {
+                  setChangePasswordError(data.error || "Có lỗi xảy ra khi đổi mật khẩu.");
+                  return;
+                }
+                
+                setChangePasswordSuccess("Đổi mật khẩu thành công!");
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmPassword("");
+                setTimeout(() => setShowChangePasswordModal(false), 1500);
+              } catch (error) {
+                setChangePasswordError("Dịch vụ xác thực không phản hồi.");
+              }
+            }} className="space-y-4 text-xs font-sans">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-white/70 block">Mật khẩu hiện tại</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Nhập mật khẩu hiện tại"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/20 h-10"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-white/70 block">Mật khẩu mới</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/20 h-10"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-white/70 block">Xác nhận mật khẩu mới</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Nhập lại mật khẩu mới"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/20 h-10"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-xl transition cursor-pointer shadow-lg tracking-wider uppercase font-display"
+              >
+                Cập nhật Mật khẩu
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
