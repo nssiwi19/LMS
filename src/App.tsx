@@ -110,6 +110,7 @@ function AppShell() {
   // Refresh reactive data from store changes
   const refreshStoreData = () => {
     setStoreData({ ...AppStore.get() });
+    queryClient.invalidateQueries();
     
     // Update local currentUser reference
     if (currentUser) {

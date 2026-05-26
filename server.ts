@@ -372,7 +372,181 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       }
     }
 
-      await client.query("COMMIT");
+    // Sync structural tables (academic_years, semesters, departments, programs, program_courses)
+    // Order of deletion to respect foreign keys: program_courses -> programs -> departments -> semesters -> academic_years
+    // 1. Sync program_courses deletes
+    const clientProgCourses = store.programCourses || [];
+    const clientProgCourseIds = clientProgCourses.map(pc => pc.id);
+    if (clientProgCourseIds.length > 0) {
+      await client.query(
+        "DELETE FROM program_courses WHERE id NOT IN (" + 
+        clientProgCourseIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientProgCourseIds
+      );
+    } else {
+      await client.query("DELETE FROM program_courses");
+    }
+
+    // 2. Sync programs deletes
+    const clientProgs = store.programs || [];
+    const clientProgIds = clientProgs.map(p => p.id);
+    if (clientProgIds.length > 0) {
+      await client.query(
+        "DELETE FROM programs WHERE id NOT IN (" + 
+        clientProgIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientProgIds
+      );
+    } else {
+      await client.query("DELETE FROM programs");
+    }
+
+    // 3. Sync departments deletes
+    const clientDepts = store.departments || [];
+    const clientDeptIds = clientDepts.map(d => d.id);
+    if (clientDeptIds.length > 0) {
+      await client.query(
+        "DELETE FROM departments WHERE id NOT IN (" + 
+        clientDeptIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientDeptIds
+      );
+    } else {
+      await client.query("DELETE FROM departments");
+    }
+
+    // 4. Sync semesters deletes
+    const clientSemesters = store.semesters || [];
+    const clientSemesterIds = clientSemesters.map(s => s.id);
+    if (clientSemesterIds.length > 0) {
+      await client.query(
+        "DELETE FROM semesters WHERE id NOT IN (" + 
+        clientSemesterIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientSemesterIds
+      );
+    } else {
+      await client.query("DELETE FROM semesters");
+    }
+
+    // 5. Sync academic_years deletes
+    const clientYears = store.academicYears || [];
+    const clientYearIds = clientYears.map(y => y.id);
+    if (clientYearIds.length > 0) {
+      await client.query(
+        "DELETE FROM academic_years WHERE id NOT IN (" + 
+        clientYearIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientYearIds
+      );
+    } else {
+      await client.query("DELETE FROM academic_years");
+    }
+
+    // Order of upserts: academic_years -> semesters -> departments -> programs -> program_courses
+    // 1. Upsert academic_years
+    for (const year of clientYears) {
+      await client.query(
+        `INSERT INTO academic_years (id, name, start_date, end_date, is_current)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           start_date = EXCLUDED.start_date,
+           end_date = EXCLUDED.end_date,
+           is_current = EXCLUDED.is_current`,
+        [year.id, year.name, year.startDate, year.endDate, Boolean(year.isCurrent)]
+      );
+    }
+
+    // 2. Upsert semesters
+    for (const sem of clientSemesters) {
+      await client.query(
+        `INSERT INTO semesters (id, academic_year_id, name, type, start_date, end_date, registration_open, registration_close)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (id) DO UPDATE SET
+           academic_year_id = EXCLUDED.academic_year_id,
+           name = EXCLUDED.name,
+           type = EXCLUDED.type,
+           start_date = EXCLUDED.start_date,
+           end_date = EXCLUDED.end_date,
+           registration_open = EXCLUDED.registration_open,
+           registration_close = EXCLUDED.registration_close`,
+        [
+          sem.id,
+          sem.academicYearId || null,
+          sem.name,
+          sem.type || null,
+          sem.startDate || null,
+          sem.endDate || null,
+          sem.registrationOpen || null,
+          sem.registrationClose || null
+        ]
+      );
+    }
+
+    // 3. Upsert departments
+    for (const dept of clientDepts) {
+      await client.query(
+        `INSERT INTO departments (id, name, code, head_teacher_id, description)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           code = EXCLUDED.code,
+           head_teacher_id = EXCLUDED.head_teacher_id,
+           description = EXCLUDED.description`,
+        [
+          dept.id,
+          dept.name,
+          dept.code,
+          dept.headTeacherId || null,
+          dept.description || null
+        ]
+      );
+    }
+
+    // 4. Upsert programs
+    for (const prog of clientProgs) {
+      await client.query(
+        `INSERT INTO programs (id, department_id, name, code, type, total_credits, description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (id) DO UPDATE SET
+           department_id = EXCLUDED.department_id,
+           name = EXCLUDED.name,
+           code = EXCLUDED.code,
+           type = EXCLUDED.type,
+           total_credits = EXCLUDED.total_credits,
+           description = EXCLUDED.description`,
+        [
+          prog.id,
+          prog.departmentId,
+          prog.name,
+          prog.code,
+          prog.type || "degree",
+          Number(prog.totalCredits) || 0,
+          prog.description || null
+        ]
+      );
+    }
+
+    // 5. Upsert program_courses
+    for (const pc of clientProgCourses) {
+      await client.query(
+        `INSERT INTO program_courses (id, program_id, course_id, credits, is_required, semester)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO UPDATE SET
+           program_id = EXCLUDED.program_id,
+           course_id = EXCLUDED.course_id,
+           credits = EXCLUDED.credits,
+           is_required = EXCLUDED.is_required,
+           semester = EXCLUDED.semester`,
+        [
+          pc.id,
+          pc.programId,
+          pc.courseId,
+          Number(pc.credits) || 0,
+          Boolean(pc.isRequired),
+          Number(pc.semester) || 1
+        ]
+      );
+    }
+
+    await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
