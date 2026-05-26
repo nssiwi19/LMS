@@ -627,6 +627,75 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       );
     }
 
+    // Sync enrollments
+    const clientEnrollments = store.enrollments || [];
+    const clientEnrollmentIds = clientEnrollments.map(e => e.id);
+    if (clientEnrollmentIds.length > 0) {
+      await client.query(
+        "DELETE FROM enrollments WHERE id NOT IN (" + 
+        clientEnrollmentIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientEnrollmentIds
+      );
+    } else {
+      await client.query("DELETE FROM enrollments");
+    }
+
+    for (const e of clientEnrollments) {
+      await client.query(
+        `INSERT INTO enrollments (id, course_id, student_id, status, enrolled_at, completed_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO UPDATE SET
+           course_id = EXCLUDED.course_id,
+           student_id = EXCLUDED.student_id,
+           status = EXCLUDED.status,
+           enrolled_at = EXCLUDED.enrolled_at,
+           completed_at = EXCLUDED.completed_at`,
+        [e.id, e.courseId, e.studentId, e.status, e.enrolledAt, e.completedAt || null]
+      );
+    }
+
+    // Sync transactions
+    const clientTransactions = store.transactions || [];
+    const clientTxIds = clientTransactions.map(t => t.id);
+    if (clientTxIds.length > 0) {
+      await client.query(
+        "DELETE FROM transactions WHERE id NOT IN (" + 
+        clientTxIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientTxIds
+      );
+    } else {
+      await client.query("DELETE FROM transactions");
+    }
+
+    for (const t of clientTransactions) {
+      await client.query(
+        `INSERT INTO transactions (id, student_id, course_id, amount, status, payment_method, created_at, processed_at, processed_by, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (id) DO UPDATE SET
+           student_id = EXCLUDED.student_id,
+           course_id = EXCLUDED.course_id,
+           amount = EXCLUDED.amount,
+           status = EXCLUDED.status,
+           payment_method = EXCLUDED.payment_method,
+           created_at = EXCLUDED.created_at,
+           processed_at = EXCLUDED.processed_at,
+           processed_by = EXCLUDED.processed_by,
+           notes = EXCLUDED.notes`,
+        [
+          t.id,
+          t.studentId,
+          t.courseId,
+          Number(t.amount) || 0,
+          t.status,
+          t.paymentMethod,
+          t.createdAt,
+          t.processedAt || null,
+          t.processedBy || null,
+          t.notes || null
+        ]
+      );
+    }
+
     await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
@@ -871,7 +940,16 @@ app.post("/api/enrollments/register", requireAuth, requireRole(["student"]), val
   const course = await coursesRepository.findById(pool, req.body.courseId);
   if (!course || course.status !== "published") return res.status(404).json({ error: "Published course not found." });
   if (await enrollmentsRepository.existsForCourse(pool, req.user!.id, course.id)) return res.status(409).json({ error: "Enrollment already exists." });
-  const enrollment = await enrollmentsRepository.register(pool, req.user!.id, course.id, Number(course.price || 0) > 0);
+  const isPaid = Number(course.price || 0) > 0;
+  const enrollment = await enrollmentsRepository.register(pool, req.user!.id, course.id, isPaid);
+  if (isPaid) {
+    const txId = generateId("tx");
+    await pool.query(
+      `INSERT INTO transactions (id, student_id, course_id, amount, status, payment_method, created_at)
+       VALUES ($1, $2, $3, $4, 'pending', 'Chuyển khoản Ngân hàng (QR)', $5)`,
+      [txId, req.user!.id, course.id, Number(course.price), new Date().toISOString()]
+    );
+  }
   await audit(req, "enroll_course", course.id, course.title);
   res.status(201).json(enrollment);
 }));

@@ -174,6 +174,13 @@ async function main() {
       store.academicWarnings.map(w => [w.id, w.studentId, w.type, w.message, w.isResolved ? 1 : 0, w.createdAt])
     );
 
+    await insertBatch(
+      client,
+      "transactions",
+      ["id", "student_id", "course_id", "amount", "status", "payment_method", "created_at", "processed_at", "processed_by", "notes"],
+      (store.transactions || []).map(t => [t.id, t.studentId, t.courseId, t.amount, t.status, t.paymentMethod, t.createdAt, t.processedAt || null, t.processedBy || null, t.notes || null])
+    );
+
     await client.query("COMMIT");
     console.log(`Seeded Postgres database with ${store.users.filter(u => u.role === "student").length} students and ${store.courses.length} courses.`);
   } catch (error) {

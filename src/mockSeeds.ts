@@ -328,16 +328,57 @@ export function backfillMegaDemoData(store: LMSDataStore) {
       });
 
       const feeId = `fee_gen_${sId}_${crsIdx}`;
+      const isPaid = Math.random() > 0.4;
+      const isPending = !isPaid && Math.random() > 0.3; // 30% of unpaid fees are pending bank transfers
+
+      let feeStatus: "paid" | "unpaid" = "unpaid";
+      let paidAmount = 0;
+      let paidAt: string | undefined = undefined;
+      let receiptCode: string | undefined = undefined;
+
+      if (isPaid) {
+        feeStatus = "paid";
+        paidAmount = crs.price || 2000000;
+        paidAt = new Date(Date.now() - Math.floor(Math.random() * 30) * 24 * 60 * 60 * 1000).toISOString(); // random past date
+        receiptCode = `RC${222340 + index}`;
+
+        if (!store.transactions) store.transactions = [];
+        store.transactions.push({
+          id: `tx_gen_${sId}_${crsIdx}`,
+          studentId: sId,
+          courseId: crs.id,
+          amount: paidAmount,
+          status: "approved",
+          paymentMethod: "Chuyển khoản ngân hàng",
+          createdAt: paidAt,
+          processedAt: paidAt,
+          processedBy: "user_finance",
+          notes: "Giao dịch chuyển khoản tự động khớp sao kê"
+        });
+      } else if (isPending) {
+        const pendingAt = new Date(Date.now() - Math.floor(Math.random() * 3) * 24 * 60 * 60 * 1000).toISOString();
+        if (!store.transactions) store.transactions = [];
+        store.transactions.push({
+          id: `tx_gen_${sId}_${crsIdx}`,
+          studentId: sId,
+          courseId: crs.id,
+          amount: crs.price || 2000000,
+          status: "pending",
+          paymentMethod: "Chuyển khoản ngân hàng",
+          createdAt: pendingAt
+        });
+      }
+
       store.tuitionFees.push({
         id: feeId,
         studentId: sId,
         semesterId: "sem_spring25",
         amount: crs.price || 2000000,
         dueDate: "2026-06-30",
-        status: Math.random() > 0.4 ? "paid" : "unpaid",
-        paidAmount: Math.random() > 0.4 ? (crs.price || 2000000) : 0,
-        paidAt: Math.random() > 0.4 ? new Date("2026-02-28T10:00:00Z").toISOString() : undefined,
-        receiptCode: Math.random() > 0.4 ? `RC${222340 + index}` : undefined
+        status: feeStatus,
+        paidAmount,
+        paidAt,
+        receiptCode
       });
     });
   });

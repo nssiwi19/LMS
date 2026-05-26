@@ -248,6 +248,17 @@ export async function seedCoreLearningData(db: Queryable) {
       );
     }
   }
+
+  // 10. Seed Transactions
+  if (Number((await db.query("SELECT COUNT(*) AS count FROM transactions")).rows[0].count) === 0) {
+    for (const t of store.transactions || []) {
+      await db.query(
+        `INSERT INTO transactions (id, student_id, course_id, amount, status, payment_method, created_at, processed_at, processed_by, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (id) DO NOTHING`,
+        [t.id, t.studentId, t.courseId, t.amount, t.status, t.paymentMethod, t.createdAt, t.processedAt || null, t.processedBy || null, t.notes || null]
+      );
+    }
+  }
 }
 
 export async function seedAuthUsers(db: Queryable) {
