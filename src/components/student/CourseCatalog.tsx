@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert } from "lucide-react";
 import { AppStore } from "../../store";
 
@@ -7,6 +7,8 @@ interface ComponentProps {
 }
 
 export default function CourseCatalog(props: ComponentProps) {
+  const [catalogPage, setCatalogPage] = useState(0);
+  const COURSES_PER_PAGE = 9;
   const {
     activeSubTab,
     setActiveSubTab,
@@ -90,14 +92,14 @@ export default function CourseCatalog(props: ComponentProps) {
                     type="text"
                     placeholder="Tìm kiếm khóa học..."
                     value={catalogSearch}
-                    onChange={(e) => setCatalogSearch(e.target.value)}
+                    onChange={(e) => { setCatalogSearch(e.target.value); setCatalogPage(0); }}
                     className="pl-9 pr-4 py-2 text-xs bg-black/25 text-white placeholder-white/40 border border-white/10 rounded-xl focus:outline-none focus:border-white/20 w-52"
                   />
                 </div>
 
                 <select
                   value={catalogCategory}
-                  onChange={(e) => setCatalogCategory(e.target.value)}
+                  onChange={(e) => { setCatalogCategory(e.target.value); setCatalogPage(0); }}
                   className="p-2 py-1.5 text-xs bg-black/25 text-white/80 border border-white/10 rounded-xl focus:outline-none"
                 >
                   <option value="all" className="bg-slate-900">Tất cả Danh mục</option>
@@ -108,9 +110,11 @@ export default function CourseCatalog(props: ComponentProps) {
               </div>
             </div>
 
-            {/* Courses Matrix layout cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredCatalog.map(course => {
+            {/* Courses Matrix layout cards - paginated */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+              {filteredCatalog
+                .slice(catalogPage * COURSES_PER_PAGE, (catalogPage + 1) * COURSES_PER_PAGE)
+                .map(course => {
                 const lessonsCount = store.lessons.filter(l => l.courseId === course.id).length;
                 const isEnrolled = myEnrolledCourseIds.includes(course.id);
 
@@ -118,9 +122,9 @@ export default function CourseCatalog(props: ComponentProps) {
                   <div key={course.id} className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition duration-150 flex flex-col justify-between">
                     <div>
                       <div className="h-44 relative">
-                        <img 
+                        <img
                           referrerPolicy="no-referrer"
-                          src={course.thumbnail} 
+                          src={course.thumbnail}
                           alt={course.title}
                           className="w-full h-full object-cover"
                         />
@@ -159,6 +163,30 @@ export default function CourseCatalog(props: ComponentProps) {
                 </div>
               )}
             </div>
+
+            {/* Pagination controls */}
+            {filteredCatalog.length > COURSES_PER_PAGE && (
+              <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                <button
+                  onClick={() => setCatalogPage(p => Math.max(0, p - 1))}
+                  disabled={catalogPage === 0}
+                  className="px-4 py-2 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                >
+                  ← Trang trước
+                </button>
+                <span className="text-[11px] text-white/40 font-mono">
+                  {catalogPage + 1} / {Math.ceil(filteredCatalog.length / COURSES_PER_PAGE)} trang
+                  <span className="ml-2 text-white/20">({filteredCatalog.length} khóa học)</span>
+                </span>
+                <button
+                  onClick={() => setCatalogPage(p => Math.min(Math.ceil(filteredCatalog.length / COURSES_PER_PAGE) - 1, p + 1))}
+                  disabled={(catalogPage + 1) * COURSES_PER_PAGE >= filteredCatalog.length}
+                  className="px-4 py-2 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                >
+                  Trang sau →
+                </button>
+              </div>
+            )}
           </div>
         )}
 

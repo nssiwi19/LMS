@@ -479,12 +479,8 @@ function AppShell() {
                 </h3>
               </div>
 
-              {/* Instant dynamic indicators */}
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-white/50 mr-1.5 py-0.5 px-2.5 bg-white/5 border border-white/5 rounded-full">
-                  Trạng thái: Đã kết nối
-                </span>
-              </div>
+              {/* Header right spacer */}
+              <div />
             </header>
 
             {/* Inner responsive Padding page body */}

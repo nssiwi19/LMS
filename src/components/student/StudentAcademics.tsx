@@ -1,6 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert } from "lucide-react";
 import { AppStore } from "../../store";
+
+/** Format date string to dd/mm/yyyy. Never shows time. Returns '—' for empty. */
+const fmtDate = (s?: string | null): string => {
+  if (!s) return "—";
+  const plain = /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const d = plain ? new Date(s + "T00:00:00") : new Date(s);
+  if (isNaN(d.getTime())) return s || "—";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
+};
 
 interface ComponentProps {
   [key: string]: any;
@@ -101,7 +112,7 @@ export default function StudentAcademics(props: ComponentProps) {
                     </div>
                     <div>
                       <h5 className="font-bold text-white text-sm">{currentUser.name}</h5>
-                      <span className="text-[10.5px] text-indigo-300 font-mono font-bold block">{myProfile.studentCode} • dự kiến tốt nghiệp: {myProfile.expectedGraduation}</span>
+                      <span className="text-[10.5px] text-indigo-300 font-mono font-bold block">{myProfile.studentCode} • dự kiến tốt nghiệp: {fmtDate(myProfile.expectedGraduation)}</span>
                     </div>
                   </div>
 
@@ -112,7 +123,7 @@ export default function StudentAcademics(props: ComponentProps) {
                     </div>
                     <div>
                       <span className="text-white/40 block">Ngày sinh</span>
-                      <span className="font-bold text-white mt-0.5">{myProfile.dateOfBirth || "Chưa thiết lập"}</span>
+                      <span className="font-bold text-white mt-0.5">{fmtDate(myProfile.dateOfBirth)}</span>
                     </div>
                     <div>
                       <span className="text-white/40 block">Giới tính</span>
@@ -120,7 +131,7 @@ export default function StudentAcademics(props: ComponentProps) {
                     </div>
                     <div>
                       <span className="text-white/40 block">Ngày nhập học</span>
-                      <span className="font-bold text-white font-mono text-indigo-300 mt-0.5">{myProfile.enrollmentDate}</span>
+                      <span className="font-bold text-white font-mono text-indigo-300 mt-0.5">{fmtDate(myProfile.enrollmentDate)}</span>
                     </div>
                   </div>
 
@@ -162,6 +173,23 @@ export default function StudentAcademics(props: ComponentProps) {
               <form 
                 onSubmit={(e) => {
                   e.preventDefault();
+                  // Validate phone
+                  if (editPhone) {
+                    const phoneClean = editPhone.replace(/\s/g, "");
+                    if (!/^0[0-9]{9}$/.test(phoneClean)) {
+                      triggerToast("❗ Số điện thoại không hợp lệ. Phải là 10 số, bắt đầu bằng 0 (VD: 0912345678).");
+                      return;
+                    }
+                  }
+                  // Validate birthdate required
+                  if (!editBirth) {
+                    triggerToast("❗ Ngày sinh là bắt buộc. Vui lòng chọn ngày sinh.");
+                    return;
+                  }
+                  if (new Date(editBirth) > new Date()) {
+                    triggerToast("❗ Ngày sinh không thể là ngày trong tương lai.");
+                    return;
+                  }
                   const storeData = AppStore.get();
                   storeData.studentProfiles = (storeData.studentProfiles || []).map(p => {
                     if (p.userId === currentUser.id) {
@@ -181,36 +209,56 @@ export default function StudentAcademics(props: ComponentProps) {
                   AppStore.save(storeData);
                   setShowProfileEditForm(false);
                   onRefreshData();
-                  triggerToast("Cập nhật hồ sơ lý lịch thành tựu thành công!");
+                  triggerToast("✅ Cập nhật hồ sơ lý lịch thành công!");
                 }}
-                className="bg-white/3 border border-white/5 rounded-3xl p-6.5 text-xs space-y-4"
+                className="bg-white/3 border border-white/5 rounded-3xl p-5 md:p-6 text-xs space-y-4"
               >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Required field notice */}
+                <div className="flex items-center gap-1.5 text-[10px] text-amber-400/90 bg-amber-500/5 border border-amber-500/10 px-3 py-2 rounded-xl">
+                  <span className="text-red-400 font-bold">*</span>
+                  <span>Trường có dấu sao đỏ là bắt buộc nhập</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                   <div className="space-y-1">
-                    <label className="text-white/70 block font-bold">Số điện thoại cá nhân</label>
+                    <label className="text-white/70 block font-bold">
+                      Số điện thoại cá nhân
+                      <span className="text-white/35 text-[10px] font-normal ml-1">(10 số)</span>
+                    </label>
                     <input
-                      type="text"
-                      placeholder="Ví dụ: 0912xxxxx"
+                      type="tel"
+                      placeholder="VD: 0912345678"
                       value={editPhone}
                       onChange={(e) => setEditPhone(e.target.value)}
-                      className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl"
+                      className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500/40 transition"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-white/70 block font-bold">Ngày sinh</label>
+                    <label className="text-white/70 block font-bold">
+                      Ngày sinh <span className="text-red-400">*</span>
+                    </label>
                     <input
                       type="date"
                       value={editBirth}
+                      required
+                      max={new Date().toISOString().slice(0, 10)}
                       onChange={(e) => setEditBirth(e.target.value)}
-                      className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl"
+                      className={`w-full px-3 py-2 bg-black/25 text-white border rounded-xl focus:outline-none focus:border-indigo-500/40 transition ${
+                        !editBirth ? "border-red-500/40" : "border-white/10"
+                      }`}
                     />
+                    {!editBirth && (
+                      <p className="text-[10px] text-red-400 flex items-center gap-1 mt-0.5">
+                        <AlertCircle className="h-3 w-3 flex-shrink-0" /> Bắt buộc nhập
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1">
                     <label className="text-white/70 block font-bold">Giới tính</label>
                     <select
                       value={editGender}
                       onChange={(e) => setEditGender(e.target.value)}
-                      className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl"
+                      className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-500/40 transition"
                     >
                       <option value="Nam">Nam</option>
                       <option value="Nữ">Nữ</option>
@@ -457,7 +505,7 @@ export default function StudentAcademics(props: ComponentProps) {
                       </div>
                       <div>
                         <span className="text-white/40 block">Hạn đóng quy định</span>
-                        <span className="font-bold text-indigo-300 mt-0.5">{fee.dueDate}</span>
+                        <span className="font-bold text-indigo-300 mt-0.5">{fmtDate(fee.dueDate)}</span>
                       </div>
                     </div>
 
@@ -627,7 +675,7 @@ export default function StudentAcademics(props: ComponentProps) {
                 <span className="block">Khoa chuyên môn: Công nghệ Phần mềm</span>
               </div>
               <div className="text-right">
-                <span className="block font-bold">Ngày nhập học: {myProfile.enrollmentDate}</span>
+                <span className="block font-bold">Ngày nhập học: {fmtDate(myProfile.enrollmentDate)}</span>
                 <span className="block">Ngày in học bạ: {new Date().toLocaleDateString()}</span>
                 <span className="block">Trạng thái: Hoạt động chính thức</span>
               </div>

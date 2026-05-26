@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   BookOpen, 
   GraduationCap, 
@@ -30,6 +30,7 @@ import {
   Printer,
   FileSpreadsheet,
   Cpu,
+  ChevronUp,
   BadgeAlert
 } from "lucide-react";
 import { LMSDataStore, User as UserType, Course, Lesson, Enrollment, LessonProgress, Quiz, Question, QuizAttempt, Assignment, Submission, Certificate, Notification, Transaction, AttendanceRecord, AttendanceSession, TuitionFee, AcademicWarning } from "../types";
@@ -109,6 +110,10 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
   // Payment popup state
   const [paymentGuideTx, setPaymentGuideTx] = useState<Transaction | null>(null);
 
+  // Notification pagination
+  const [notifPage, setNotifPage] = useState(0);
+  const NOTIF_PER_PAGE = 10;
+
   // User avatar dropdown menu state
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -119,6 +124,27 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
   const [cpConfirmPass, setCpConfirmPass] = useState("");
   const [cpError, setCpError] = useState<string | null>(null);
   const [cpSuccess, setCpSuccess] = useState(false);
+
+  // Mobile sidebar visibility
+  const [showSidebar, setShowSidebar] = useState(false);
+
+  // Ref for mobile scroll-to-content
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Scroll-to-top button visibility
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 320);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // On mobile: scroll to content area when activeSubTab changes
+  useEffect(() => {
+    if (window.innerWidth < 1024 && contentRef.current) {
+      setTimeout(() => contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    }
+  }, [activeSubTab]);
 
   // Selection references
   const [viewingCourseId, setViewingCourseId] = useState<string | null>(null);
@@ -432,7 +458,8 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
     triggerToast("Assignment materials submitted successfully!");
   };
 
-  const handleMarkNotificationRead = (id: string) => {
+  const handleMarkNotificationRead = async (id: string) => {
+    // Optimistically update local store
     const storeData = AppStore.get();
     storeData.notifications = storeData.notifications.map(n => {
       if (n.id === id) return { ...n, isRead: true };
@@ -440,9 +467,13 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
     });
     AppStore.save(storeData);
     onRefreshData();
+    // Also persist to server so React Query refetch doesn't revert
+    try {
+      await fetch(`/api/notifications/${id}/read`, { method: "PATCH", credentials: "include" });
+    } catch (_) { /* silent fail - local state already updated */ }
   };
 
-  const handleMarkAllNotificationsRead = () => {
+  const handleMarkAllNotificationsRead = async () => {
     const storeData = AppStore.get();
     storeData.notifications = storeData.notifications.map(n => {
       if (n.userId === currentUser.id) return { ...n, isRead: true };
@@ -450,6 +481,10 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
     });
     AppStore.save(storeData);
     onRefreshData();
+    // Persist to server
+    try {
+      await fetch("/api/notifications/read-all", { method: "PATCH", credentials: "include" });
+    } catch (_) { /* silent fail */ }
   };
 
   const myNotifications = store.notifications.filter(n => n.userId === currentUser.id);
@@ -592,23 +627,8 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
           <p className="text-sm text-white/60">Explore public curriculum classes, view lessons complete logs, and take certificates assessments easily.</p>
         </div>
 
-        {/* Right header controls: notifications + user avatar */}
+        {/* Right header controls: user avatar only (Bell is in sidebar) */}
         <div className="flex items-center gap-2 self-start">
-          {/* Notification bell */}
-          <button
-            onClick={() => {
-              setActiveSubTab("notifications");
-              handleMarkAllNotificationsRead();
-            }}
-            className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl relative flex items-center gap-1.5 transition text-white text-xs cursor-pointer"
-          >
-            <Bell className="h-4 w-4" />
-            <span>Thông báo</span>
-            {myNotifications.some(n => !n.isRead) && (
-              <span className="w-2.5 h-2.5 bg-red-500 rounded-full absolute -top-1 -right-1 border border-slate-900 animate-pulse" />
-            )}
-          </button>
-
           {/* User avatar stack button with dropdown */}
           <div className="relative">
             <button
@@ -671,9 +691,36 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
       </div>
 
       {/* Side-by-side dashboard layout: sidebar navigation on the left, workspace canvas on the right */}
-      <div className="flex flex-col lg:flex-row gap-8 items-start">
+      <div className="flex flex-col lg:flex-row gap-4 md:gap-8 items-start">
+        {/* Mobile: sidebar toggle bar */}
+        <div className="lg:hidden w-full">
+          <button
+            onClick={() => setShowSidebar(s => !s)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-xs text-white/70 hover:text-white hover:bg-white/8 transition cursor-pointer"
+          >
+            <span className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full" />
+              <span className="font-semibold">Menu điều hướng</span>
+              <span className="text-white/40">— đang xem: <strong className="text-indigo-300">{{
+                catalog: "Khám phá khóa học",
+                learning: "Lớp học của tôi",
+                assignments: "Bài tập tự luận",
+                certificates: "Chứng nhận",
+                notifications: "Hộp thư",
+                profile: "Lý lịch cá nhân",
+                academics_record: "Kết quả học tập",
+                student_attendance: "Điểm chuyên cần",
+                student_tuition: "Đóng học phí",
+                student_transcript: "Học bạ",
+                parent_view: "Cổng phụ huynh",
+              }[activeSubTab] || activeSubTab}</strong></span>
+            </span>
+            <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${showSidebar ? "rotate-90" : ""}`} />
+          </button>
+        </div>
+
         {/* Left Navigation Sidebar */}
-        <div className="w-full lg:w-64 xl:w-72 flex flex-col gap-4 shrink-0">
+        <div className={`w-full lg:w-64 xl:w-72 flex flex-col gap-4 shrink-0 ${showSidebar ? "block" : "hidden"} lg:flex lg:flex-col`}>
           
           {/* LMS Modules group */}
           <div className="bg-white/3 border border-white/10 rounded-3xl p-3 flex flex-col gap-1 w-full text-xs">
@@ -681,7 +728,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               HỌC TẬP LMS
             </span>
             <button
-              onClick={() => { setActiveSubTab("catalog"); setLearningCourseId(null); }}
+              onClick={() => { setActiveSubTab("catalog"); setLearningCourseId(null); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "catalog" 
                   ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5" 
@@ -692,7 +739,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               <span>Khám phá Khóa học</span>
             </button>
             <button
-              onClick={() => setActiveSubTab("learning")}
+              onClick={() => { setActiveSubTab("learning"); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "learning" 
                   ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5" 
@@ -703,7 +750,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               <span>Lớp học của tôi</span>
             </button>
             <button
-              onClick={() => setActiveSubTab("assignments")}
+              onClick={() => { setActiveSubTab("assignments"); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "assignments" 
                   ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5" 
@@ -714,7 +761,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               <span>Bài tập tự luận</span>
             </button>
             <button
-              onClick={() => setActiveSubTab("certificates")}
+              onClick={() => { setActiveSubTab("certificates"); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "certificates" 
                   ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5" 
@@ -725,7 +772,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               <span>Chứng nhận của tôi</span>
             </button>
             <button
-              onClick={() => setActiveSubTab("notifications")}
+              onClick={() => { setActiveSubTab("notifications"); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center justify-between gap-2.5 ${
                 activeSubTab === "notifications" 
                   ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5" 
@@ -752,7 +799,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               HỒ SƠ HỌC VỤ SIS
             </span>
             <button
-              onClick={() => setActiveSubTab("profile")}
+              onClick={() => { setActiveSubTab("profile"); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "profile" 
                   ? "bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20" 
@@ -763,7 +810,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               <span>Lý lịch cá nhân</span>
             </button>
             <button
-              onClick={() => setActiveSubTab("academics_record")}
+              onClick={() => { setActiveSubTab("academics_record"); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "academics_record" 
                   ? "bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20" 
@@ -774,7 +821,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               <span>Kết quả học tập</span>
             </button>
             <button
-              onClick={() => setActiveSubTab("student_attendance")}
+              onClick={() => { setActiveSubTab("student_attendance"); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "student_attendance" 
                   ? "bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20" 
@@ -785,7 +832,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               <span>Điểm chuyên cần</span>
             </button>
             <button
-              onClick={() => setActiveSubTab("student_tuition")}
+              onClick={() => { setActiveSubTab("student_tuition"); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "student_tuition" 
                   ? "bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20" 
@@ -796,7 +843,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               <span>Đóng học phí</span>
             </button>
             <button
-              onClick={() => setActiveSubTab("student_transcript")}
+              onClick={() => { setActiveSubTab("student_transcript"); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "student_transcript" 
                   ? "bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20" 
@@ -807,7 +854,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               <span>Học bạ chính thức</span>
             </button>
             <button
-              onClick={() => setActiveSubTab("parent_view")}
+              onClick={() => { setActiveSubTab("parent_view"); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "parent_view" 
                   ? "bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-600/20" 
@@ -821,7 +868,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
         </div>
 
         {/* Right Canvas workspace content bodies */}
-        <div className="flex-1 w-full bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md min-w-0">
+        <div ref={contentRef} className="flex-1 w-full bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6 backdrop-blur-md min-w-0 scroll-mt-4">
 
         <CourseCatalog {...studentPanelProps} />
         <MyLearningWorkspace {...studentPanelProps} />
@@ -886,24 +933,42 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
         {/* Tab 5: alerts and Notifications list panel */}
         {activeSubTab === "notifications" && (
           <div className="space-y-4">
-            <h4 className="text-base font-display font-semibold text-white">Hộp thư thông báo từ Hệ thống</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-base font-display font-semibold text-white">Hộp thư thông báo từ Hệ thống</h4>
+              {myNotifications.some(n => !n.isRead) && (
+                <button
+                  onClick={() => handleMarkAllNotificationsRead()}
+                  className="text-[10px] text-indigo-300 hover:text-white bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 px-3 py-1.5 rounded-xl transition cursor-pointer font-mono"
+                >
+                  Đánh dấu tất cả đã đọc
+                </button>
+              )}
+            </div>
 
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {myNotifications.map((note) => (
-                <div 
-                  key={note.id} 
+            {/* Paginated notification list */}
+            <div className="space-y-2.5">
+              {myNotifications
+                .slice(notifPage * NOTIF_PER_PAGE, (notifPage + 1) * NOTIF_PER_PAGE)
+                .map((note) => (
+                <div
+                  key={note.id}
                   onClick={() => handleMarkNotificationRead(note.id)}
                   className={`p-4 rounded-2xl border flex items-start gap-3.5 transition duration-150 cursor-pointer ${
-                    note.isRead 
-                      ? "bg-white/5 border-white/5 text-white/50" 
+                    note.isRead
+                      ? "bg-white/5 border-white/5 text-white/50"
                       : "bg-[#2563eb]/10 border-indigo-500/25 text-indigo-200"
                   }`}
                 >
-                  <Bell className={`h-4.5 w-4.5 flex-shrink-0 mt-0.5 ${note.isRead ? "text-white/30" : "text-indigo-400"}`} />
-                  <div className="space-y-1 text-xs">
+                  <Bell className={`h-4 w-4 flex-shrink-0 mt-0.5 ${note.isRead ? "text-white/30" : "text-indigo-400"}`} />
+                  <div className="space-y-1 text-xs flex-1 min-w-0">
                     <p className="leading-relaxed font-sans">{note.message}</p>
-                    <span className="text-[10px] text-white/30 block font-mono">{new Date(note.createdAt).toLocaleDateString()}</span>
+                    <span className="text-[10px] text-white/30 block font-mono">
+                      {new Date(note.createdAt).toLocaleDateString("vi-VN")}
+                    </span>
                   </div>
+                  {!note.isRead && (
+                    <span className="w-2 h-2 bg-indigo-400 rounded-full flex-shrink-0 mt-1.5" />
+                  )}
                 </div>
               ))}
 
@@ -911,6 +976,29 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
                 <p className="text-xs text-white/40 text-center py-12">Hiện chưa có cập nhật/thông báo nào mới gửi tới tài khoản của bạn.</p>
               )}
             </div>
+
+            {/* Pagination controls */}
+            {myNotifications.length > NOTIF_PER_PAGE && (
+              <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                <button
+                  onClick={() => setNotifPage(p => Math.max(0, p - 1))}
+                  disabled={notifPage === 0}
+                  className="px-4 py-1.5 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                >
+                  ← Trước
+                </button>
+                <span className="text-[11px] text-white/40 font-mono">
+                  Trang {notifPage + 1} / {Math.ceil(myNotifications.length / NOTIF_PER_PAGE)}
+                </span>
+                <button
+                  onClick={() => setNotifPage(p => Math.min(Math.ceil(myNotifications.length / NOTIF_PER_PAGE) - 1, p + 1))}
+                  disabled={(notifPage + 1) * NOTIF_PER_PAGE >= myNotifications.length}
+                  className="px-4 py-1.5 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 rounded-xl disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                >
+                  Tiếp →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -928,6 +1016,16 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
 
         </div>
       </div>
+      {/* Scroll-to-top floating button */}
+      {showScrollTop && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-6 left-6 z-40 p-2.5 bg-indigo-600/90 hover:bg-indigo-500 text-white rounded-full shadow-2xl border border-indigo-500/30 transition-all duration-200 cursor-pointer backdrop-blur-sm"
+          aria-label="Lên đầu trang"
+        >
+          <ChevronUp className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }
