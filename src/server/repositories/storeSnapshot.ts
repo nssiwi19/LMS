@@ -228,6 +228,14 @@ export function limitStoreForRole(store: any, user: User) {
     };
   }
 
+  if (user.role === "finance" || user.role === "le_tan") {
+    return {
+      ...store,
+      users: store.users.map((item: User) => ({ ...item, passwordHash: "" })),
+      notifications: store.notifications.filter((item: any) => item.userId === user.id)
+    };
+  }
+
   return {
     ...store,
     users: store.users.filter((item: User) => item.id === user.id).map((item: User) => ({ ...item, passwordHash: "" })),

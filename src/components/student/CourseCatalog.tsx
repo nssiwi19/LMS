@@ -367,13 +367,16 @@ export default function CourseCatalog(props: ComponentProps) {
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end gap-2 text-xs">
+              <div className="pt-3 border-t border-white/10 space-y-2">
+                <p className="text-[10px] text-amber-300/80 text-center leading-relaxed">
+                  ✅ Sau khi chuyển khoản, hãy chờ bộ phận kế toán xác nhận (thường trong 1–2 ngày làm việc).
+                </p>
                 <button
                   type="button"
                   onClick={() => setPaymentGuideTx(null)}
-                  className="w-full py-2.5 bg-[#16a34a] hover:bg-[#15803d] text-slate-950 hover:text-white font-bold rounded-xl transition cursor-pointer text-center uppercase tracking-wider font-display text-[11px]"
+                  className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white font-semibold rounded-xl transition cursor-pointer text-center text-xs"
                 >
-                  Tôi đã chuyển khoản thành công
+                  Đóng hướng dẫn
                 </button>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert } from "lucide-react";
 import { AppStore } from "../../store";
 
@@ -70,6 +70,39 @@ export default function AssignmentSubmit(props: ComponentProps) {
     myNotifications,
     handleMarkNotificationRead
   } = props;
+
+  // Local file state for the submission modal
+  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSubmissionFile(e.target.files?.[0] || null);
+  };
+
+  const handleSubmitWithFile = (e: React.FormEvent) => {
+    e.preventDefault();
+    const hasText = submissionCodeText.trim().length > 0;
+    const hasFile = submissionFile !== null;
+    if (!hasText && !hasFile) {
+      triggerToast("Vui lòng nhập nội dung bài làm hoặc đính kèm tệp.");
+      return;
+    }
+    // Build combined content including file reference
+    let finalContent = submissionCodeText.trim();
+    if (hasFile) {
+      finalContent += (finalContent ? "\n\n" : "") + `[Tệp đính kèm: ${submissionFile!.name} (${(submissionFile!.size / 1024).toFixed(1)} KB)]`;
+    }
+    // Temporarily override submissionCodeText via a synthetic event trick
+    // by calling the handler with the composed content
+    const syntheticContent = finalContent;
+    setSubmissionCodeText(syntheticContent);
+    setSubmissionFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    // Defer to next tick so state update is applied before submit
+    setTimeout(() => {
+      handleSendAssignmentSubmit(e);
+    }, 0);
+  };
 
   return (
     <>
@@ -182,22 +215,48 @@ export default function AssignmentSubmit(props: ComponentProps) {
               Vui lòng soạn thảo hoặc dán mã nguồn, câu trả lời, nhận xét phân tích hoặc liên kết sản phẩm của bạn vào khung bên dưới. Sau khi hoàn thành, giảng viên sẽ chấm điểm và để lại nhận xét góp ý.
             </p>
 
-            <form onSubmit={handleSendAssignmentSubmit} className="space-y-4">
+            <form onSubmit={handleSubmitWithFile} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-white/70">Nội dung sản phẩm bài làm của học viên</label>
+                <label className="text-xs font-bold text-white/70">Nội dung bài làm (văn bản / mã nguồn)</label>
                 <textarea
-                  required
                   placeholder="Nhập mã nguồn HTML, tóm tắt giải pháp hay nội dung trả lời câu hỏi bài tập tự luận..."
                   value={submissionCodeText}
                   onChange={(e) => setSubmissionCodeText(e.target.value)}
-                  className="w-full px-3.5 py-3 bg-black/30 text-white font-mono placeholder-white/20 h-44 max-h-56 border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 text-xs mt-2"
+                  className="w-full px-3.5 py-3 bg-black/30 text-white font-mono placeholder-white/20 h-36 max-h-48 border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 text-xs mt-2"
                 />
+              </div>
+
+              {/* File attachment */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-white/70">Hoặc đính kèm tệp</label>
+                <label className={`mt-1.5 flex items-center gap-3 w-full px-4 py-3 border border-dashed rounded-xl cursor-pointer transition text-xs ${submissionFile ? "border-indigo-400/60 bg-indigo-500/10 text-indigo-300" : "border-white/15 bg-white/3 text-white/40 hover:border-white/30 hover:text-white/60"}`}>
+                  <FileText className="h-4 w-4 shrink-0" />
+                  <span className="truncate">
+                    {submissionFile ? submissionFile.name : "Chọn tệp đính kèm (PDF, DOCX, ZIP, ảnh...)"}
+                  </span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.doc,.docx,.zip,.rar,.png,.jpg,.jpeg,.txt,.py,.js,.html,.css,.java,.cpp,.c"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                </label>
+                {submissionFile && (
+                  <button
+                    type="button"
+                    onClick={() => { setSubmissionFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                    className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1 mt-1 cursor-pointer"
+                  >
+                    <X className="h-3 w-3" /> Xóa tệp đính kèm
+                  </button>
+                )}
               </div>
 
               <div className="pt-2 flex justify-end gap-2 text-xs">
                 <button
                   type="button"
-                  onClick={() => setSubmittingAssignmentId(null)}
+                  onClick={() => { setSubmittingAssignmentId(null); setSubmissionFile(null); }}
                   className="px-4 py-2 bg-transparent text-white/60 hover:text-white transition cursor-pointer"
                 >
                   Hủy bỏ

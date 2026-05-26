@@ -699,12 +699,13 @@ app.get("/api/parent/warnings", requireAuth, requireRole(["parent"]), resolveLin
 app.get("/api/parent/notifications", requireAuth, requireRole(["parent"]), asyncHandler(async (req, res) => res.json(await parentRepository.getNotifications(pool, req.user!.id))));
 
 app.get("/api/notifications", requireAuth, asyncHandler(async (req, res) => res.json(await notificationsRepository.listForUser(pool, req.user!.id, req.query.unreadOnly === "true"))));
-app.patch("/api/notifications/:id/read", requireAuth, asyncHandler(async (req, res) => {
-  await notificationsRepository.markRead(pool, req.params.id, req.user!.id);
-  res.status(204).send();
-}));
+// IMPORTANT: /read-all must be registered BEFORE /:id/read to avoid Express matching "read-all" as an id param
 app.patch("/api/notifications/read-all", requireAuth, asyncHandler(async (req, res) => {
   await notificationsRepository.markAllRead(pool, req.user!.id);
+  res.status(204).send();
+}));
+app.patch("/api/notifications/:id/read", requireAuth, asyncHandler(async (req, res) => {
+  await notificationsRepository.markRead(pool, req.params.id, req.user!.id);
   res.status(204).send();
 }));
 
