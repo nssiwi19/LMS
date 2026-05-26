@@ -5,7 +5,7 @@ import { enrollmentFromRow, lessonProgressFromRow } from "../mappers";
 
 export const enrollmentsRepository = {
   async listForUser(db: Queryable, user: User) {
-    const adminRoles = ["admin", "super_admin", "academic"] as User["role"][];
+    const adminRoles = ["admin", "super_admin", "academic_admin"] as User["role"][];
     const result = adminRoles.includes(user.role)
       ? await db.query("SELECT * FROM enrollments")
       : await db.query("SELECT * FROM enrollments WHERE student_id = $1", [user.id]);

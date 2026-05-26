@@ -21,7 +21,7 @@ export const schemas = {
     email: z.email().trim().toLowerCase(),
     password: z.string().min(8),
     name: z.string().trim().min(1),
-    role: z.enum(["admin", "super_admin", "teacher", "student", "le_tan", "academic", "finance", "advisor", "parent"]),
+    role: z.enum(["admin", "super_admin", "teacher", "student", "le_tan", "academic_admin", "finance", "advisor", "parent"]),
     phone: z.string().trim().optional(),
     linkedStudentId: z.string().trim().optional()
   }),
@@ -97,12 +97,61 @@ export const schemas = {
   }),
   createWarning: z.object({
     studentId: z.string().trim().min(1),
-    type: z.enum(["low-gpa", "attendance", "unpaid-fee", "overdue-assignment"]),
+    type: z.enum(["low_gpa", "low_attendance", "unpaid_fee", "exam_ban", "overdue_assignment"]),
     message: z.string().trim().min(1)
   }),
   addAdvisorNote: z.object({
     studentId: z.string().trim().min(1),
     content: z.string().trim().min(1),
     type: z.enum(["academic", "behavioral", "financial"])
+  }),
+  advisorNote: z.object({
+    studentId: z.string().min(1),
+    type: z.enum(["academic", "behavioral", "financial"]),
+    content: z.string().min(1).max(2000),
+    shareWithParent: z.boolean().default(false)
+  }),
+  advisorAssignment: z.object({
+    advisorId: z.string().min(1),
+    studentId: z.string().min(1),
+    semesterId: z.string().optional()
+  }),
+  courseRegistration: z.object({
+    sectionId: z.string().min(1)
+  }),
+  gradeAppeal: z.object({
+    courseRegistrationId: z.string().min(1),
+    reason: z.string().min(1).max(2000)
+  }),
+  gradeAppealReview: z.object({
+    revisedGrade: z.string().optional()
+  }),
+  gradeAppealResolve: z.object({
+    status: z.enum(["approved", "rejected"]),
+    resolutionNote: z.string().optional()
+  }),
+  leaveRequest: z.object({
+    type: z.enum(["medical", "personal", "financial"]),
+    semesterId: z.string().min(1),
+    reason: z.string().min(1).max(2000),
+    resumeSemesterId: z.string().optional()
+  }),
+  reviewNote: z.object({
+    reviewNote: z.string().optional()
+  }),
+  scholarship: z.object({
+    name: z.string().min(1),
+    type: z.enum(["full", "partial", "merit", "need-based"]),
+    amount: z.coerce.number().optional(),
+    discountPercent: z.coerce.number().optional(),
+    semesterId: z.string().optional(),
+    conditions: z.string().optional()
+  }),
+  scholarshipApplication: z.object({
+    scholarshipId: z.string().min(1),
+    semesterId: z.string().min(1)
+  }),
+  graduationApplicationReview: z.object({
+    note: z.string().optional()
   })
 };

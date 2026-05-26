@@ -77,7 +77,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserName, setNewUserName] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
-  const [newUserRole, setNewUserRole] = useState<"student" | "teacher" | "admin" | "finance" | "le_tan" | "academic">("student");
+  const [newUserRole, setNewUserRole] = useState<"student" | "teacher" | "admin" | "finance" | "le_tan" | "academic_admin">("student");
   const [importMessage, setImportMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Course rejection states
@@ -186,7 +186,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
 
       const [name, email, role] = columns;
       const cleanRole = role.toLowerCase() as any;
-      const roleValidated = ["student", "teacher", "admin", "finance", "le_tan", "academic"].includes(cleanRole);
+      const roleValidated = ["student", "teacher", "admin", "finance", "le_tan", "academic_admin"].includes(cleanRole);
       const emailUnique = !storeData.users.find(u => u.email.toLowerCase() === email.toLowerCase());
 
       if (name && email.includes("@") && roleValidated && emailUnique) {
@@ -284,7 +284,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
   };
 
   const handleUpdateUserRole = (userId: string, newRole: User["role"]) => {
-    const allowedRoles: User["role"][] = ["student", "teacher", "admin", "finance", "academic", "le_tan", "advisor"];
+    const allowedRoles: User["role"][] = ["student", "teacher", "admin", "finance", "academic_admin", "le_tan", "advisor"];
     if (!allowedRoles.includes(newRole)) return;
     const storeData = AppStore.get();
     storeData.users = storeData.users.map(user => user.id === userId ? { ...user, role: newRole } : user);
@@ -697,7 +697,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                     <option value="teacher" className="bg-slate-900">Giáo Viên</option>
                     <option value="admin" className="bg-slate-900">Quản Trị Viên</option>
                     <option value="finance" className="bg-slate-900">Kế Toán</option>
-                    <option value="academic" className="bg-slate-900">Chuyên viên Học Vụ</option>
+                    <option value="academic_admin" className="bg-slate-900">Chuyên viên Học Vụ</option>
                   </select>
                 </div>
               </div>
@@ -756,7 +756,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                                 <option value="teacher" className="bg-slate-900">Giảng viên</option>
                                 <option value="admin" className="bg-slate-900">Admin</option>
                                 <option value="finance" className="bg-slate-900">Tài chính</option>
-                                <option value="academic" className="bg-slate-900">Học vụ</option>
+                                <option value="academic_admin" className="bg-slate-900">Học vụ</option>
                                 <option value="le_tan" className="bg-slate-900">Lễ tân</option>
                                 <option value="advisor" className="bg-slate-900">Cố vấn</option>
                               </select>
@@ -908,7 +908,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   <option value="teacher" className="bg-slate-900">Giảng Viên (Teacher)</option>
                   <option value="admin" className="bg-slate-900">Quản Trị Viên (Admin)</option>
                   <option value="finance" className="bg-slate-900">Cán bộ Kế toán (Ke toan)</option>
-                  <option value="academic" className="bg-slate-900">Quản Lý Học Vụ (Học vụ)</option>
+                  <option value="academic_admin" className="bg-slate-900">Quản Lý Học Vụ (Học vụ)</option>
                 </select>
               </div>
 

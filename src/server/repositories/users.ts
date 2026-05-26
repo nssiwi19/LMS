@@ -6,8 +6,24 @@ export const usersRepository = {
   async normalizeLegacyRoles(db: Queryable) {
     await db.query(`
       UPDATE users SET role = 'finance' WHERE role = 'ke_toan';
-      UPDATE users SET role = 'academic' WHERE role IN ('quan_ly_hoc_vu', 'academic_admin');
+      UPDATE users SET role = 'academic_admin' WHERE role IN ('quan_ly_hoc_vu', 'academic');
     `);
+  },
+
+  async normalizeSystemUsers(db: Queryable) {
+    const systemUsers = [
+      ["finance@e16.local", "Nguyễn Văn Kế Toán"],
+      ["le_tan@e16.local", "Lê Thị Lễ Tân"],
+      ["academic@e16.local", "Trần Văn Học Vụ"],
+      ["advisor@e16.local", "Phạm Cố Vấn (Cố vấn Học tập)"]
+    ];
+
+    for (const [email, name] of systemUsers) {
+      await db.query(
+        "UPDATE users SET name = $1 WHERE lower(email) = $2",
+        [name, email]
+      );
+    }
   },
 
   async count(db: Queryable) {

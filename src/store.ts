@@ -27,7 +27,7 @@ function normalizeLegacyRoles(store: LMSDataStore): void {
   store.users = store.users.map(user => {
     const legacyRole = user.role as string;
     if (legacyRole === "ke_toan") return { ...user, role: "finance" };
-    if (legacyRole === "quan_ly_hoc_vu" || legacyRole === "academic_admin") return { ...user, role: "academic" };
+    if (legacyRole === "quan_ly_hoc_vu" || legacyRole === "academic") return { ...user, role: "academic_admin" };
     return user;
   });
 }
@@ -114,7 +114,7 @@ export function getInitialStore(): LMSDataStore {
         passwordHash: ACADEMIC_CREDENTIAL.hash,
         passwordSalt: ACADEMIC_CREDENTIAL.salt,
         name: "Trần Văn Học Vụ",
-        role: "academic",
+        role: "academic_admin",
         isActive: true,
         createdAt: new Date("2026-01-06T13:00:00Z").toISOString()
       },
@@ -552,7 +552,7 @@ export function getInitialStore(): LMSDataStore {
       {
         id: "warning_attendance",
         studentId: "user_student",
-        type: "attendance",
+        type: "low_attendance",
         message: "Cảnh báo chuyên cần: Tỉ lệ chuyên cần môn Full-Stack của bạn hiện tại là 33% (dưới mốc tối thiểu 80%).",
         isResolved: false,
         createdAt: "2026-05-18T10:00:00Z"
@@ -848,7 +848,7 @@ export class AppStore {
           if (!this.storeInstance.systemEvents) this.storeInstance.systemEvents = initial.systemEvents || [];
 
           // Ensure new seeded roles are present
-          const rolesToBackfill = ["le_tan", "academic", "finance", "advisor", "parent"];
+          const rolesToBackfill = ["le_tan", "academic_admin", "finance", "advisor", "parent"];
           const hasAllRoles = rolesToBackfill.every(r => this.storeInstance!.users.some(u => u.role === u.role && u.role === r));
           if (!hasAllRoles) {
             // Append missing users

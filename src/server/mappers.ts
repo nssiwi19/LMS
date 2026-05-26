@@ -1,4 +1,4 @@
-import { AcademicWarning, Assignment, Course, Enrollment, LessonProgress, Question, Quiz, QuizAttempt, Submission, TuitionFee, User } from "../types";
+import { AcademicWarning, Assignment, Course, Enrollment, LessonProgress, Question, Quiz, QuizAttempt, Submission, TuitionFee, User, UserRole } from "../types";
 
 export type DbUserRow = {
   id: string;
@@ -6,17 +6,17 @@ export type DbUserRow = {
   password_hash: string;
   password_salt?: string | null;
   name: string;
-  role: User["role"];
+  role: UserRole;
   is_active: number | boolean;
   phone?: string | null;
   linked_student_id?: string | null;
   created_at: string;
 };
 
-export function normalizeRole(role: string): User["role"] {
+export function normalizeRole(role: string): UserRole {
   if (role === "ke_toan") return "finance";
-  if (role === "quan_ly_hoc_vu" || role === "academic_admin") return "academic";
-  return role as User["role"];
+  if (role === "quan_ly_hoc_vu" || role === "academic") return "academic_admin";
+  return role as UserRole;
 }
 
 export function toPublicUser(row: DbUserRow): User {
@@ -150,8 +150,11 @@ export function academicWarningFromRow(row: any): AcademicWarning {
     id: row.id,
     studentId: row.student_id,
     type: row.type,
+    courseId: row.course_id || undefined,
     message: row.message,
     isResolved: Boolean(row.is_resolved),
+    resolvedBy: row.resolved_by || undefined,
+    resolvedAt: row.resolved_at || undefined,
     createdAt: row.created_at
   };
 }

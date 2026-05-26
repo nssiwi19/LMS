@@ -1,0 +1,74 @@
+import { Queryable } from "../db";
+import { generateId } from "../ids";
+import { eventBus } from "../eventBus";
+import { pool } from "../db";
+import { notifyStudent } from "../notify";
+
+export const gradeAppealsRepository = {
+  async create(db: Queryable, studentId: string, input: { courseRegistrationId: string; reason: string }) {
+    const reg = (await db.query("SELECT * FROM course_registrations WHERE id = $1 AND student_id = $2", [input.courseRegistrationId, studentId])).rows[0];
+    if (!reg) return { error: "Course registration not found.", status: 404 };
+    if (reg.grade_posted_at) {
+      const posted = new Date(reg.grade_posted_at).getTime();
+      if (Date.now() - posted > 7 * 24 * 60 * 60 * 1000) return { error: "Grade appeal window has closed.", status: 400 };
+    }
+    const row = (await db.query(
+      `INSERT INTO grade_appeals (id, student_id, course_registration_id, reason, status, original_grade, submitted_at)
+       VALUES ($1,$2,$3,$4,'pending',$5,$6)
+       RETURNING *`,
+      [generateId("appeal"), studentId, input.courseRegistrationId, input.reason, String(reg.grade || reg.letter_grade || ""), new Date().toISOString()]
+    )).rows[0];
+    return { row };
+  },
+
+  async list(db: Queryable, user: { id: string; role: string }) {
+    if (user.role === "student") {
+      return (await db.query("SELECT * FROM grade_appeals WHERE student_id = $1 ORDER BY submitted_at DESC", [user.id])).rows;
+    }
+    if (user.role === "teacher") {
+      return (await db.query(
+        `SELECT ga.*
+         FROM grade_appeals ga
+         JOIN course_registrations cr ON cr.id = ga.course_registration_id
+         JOIN course_sections cs ON cs.id = cr.section_id
+         WHERE cs.teacher_id = $1
+         ORDER BY ga.submitted_at DESC`,
+        [user.id]
+      )).rows;
+    }
+    return (await db.query("SELECT * FROM grade_appeals ORDER BY submitted_at DESC")).rows;
+  },
+
+  async review(db: Queryable, appealId: string, revisedGrade?: string) {
+    const row = (await db.query(
+      "UPDATE grade_appeals SET status = 'under_review', revised_grade = COALESCE($2, revised_grade) WHERE id = $1 RETURNING *",
+      [appealId, revisedGrade || null]
+    )).rows[0];
+    return row || null;
+  },
+
+  async resolve(db: Queryable, appealId: string, reviewerId: string, status: "approved" | "rejected", resolutionNote?: string) {
+    const row = (await db.query(
+      `UPDATE grade_appeals
+       SET status = $2, resolved_by = $3, resolution_note = $4, resolved_at = $5
+       WHERE id = $1
+       RETURNING *`,
+      [appealId, status, reviewerId, resolutionNote || null, new Date().toISOString()]
+    )).rows[0];
+    if (!row) return null;
+    if (status === "approved" && row.revised_grade) {
+      await db.query("UPDATE course_registrations SET grade = $1, grade_posted_at = $2 WHERE id = $3", [row.revised_grade, new Date().toISOString(), row.course_registration_id]);
+      await eventBus.emit("grade.saved", { studentId: row.student_id, courseRegistrationId: row.course_registration_id, grade: row.revised_grade }, pool);
+    }
+    await notifyStudent(db, row.student_id, status === "approved" ? "Grade appeal approved." : `Grade appeal rejected.${resolutionNote ? ` ${resolutionNote}` : ""}`, { relatedEntityType: "grade_appeal", relatedEntityId: appealId });
+    return row;
+  },
+
+  async escalate(db: Queryable, appealId: string, studentId: string) {
+    const row = (await db.query(
+      "UPDATE grade_appeals SET escalated = true, status = 'under_review' WHERE id = $1 AND student_id = $2 AND status = 'rejected' AND escalated = false RETURNING *",
+      [appealId, studentId]
+    )).rows[0];
+    return row || null;
+  }
+};

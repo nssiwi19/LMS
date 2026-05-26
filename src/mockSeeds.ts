@@ -289,7 +289,7 @@ export function backfillMegaDemoData(store: LMSDataStore) {
       store.academicWarnings.push({
         id: `warn_gen_${index}`,
         studentId: sId,
-        type: "low-gpa",
+        type: "low_gpa",
         message: `Cảnh báo học tập: Điểm trung bình GPA hiện tại của học viên là ${profile.gpa} (dưới ngưỡng an toàn 2.50). Đề xuất trao đổi với Cố vấn học tập sớm nhất.`,
         isResolved: false,
         createdAt: new Date("2026-05-15T09:00:00Z").toISOString()

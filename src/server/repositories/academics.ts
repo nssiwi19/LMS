@@ -13,15 +13,19 @@ export const academicsRepository = {
 
   async createWarning(db: Queryable, input: Omit<AcademicWarning, "id" | "createdAt" | "isResolved">) {
     const warning: AcademicWarning = { ...input, id: generateId("warning"), isResolved: false, createdAt: new Date().toISOString() };
-    await db.query(
-      "INSERT INTO academic_warnings (id, student_id, type, message, is_resolved, created_at) VALUES ($1,$2,$3,$4,$5,$6)",
-      [warning.id, warning.studentId, warning.type, warning.message, false, warning.createdAt]
+    const res = await db.query(
+      `INSERT INTO academic_warnings (id, student_id, type, course_id, message, is_resolved, created_at)
+       VALUES ($1,$2,$3,$4,$5,false,$6)
+       ON CONFLICT (student_id, type, COALESCE(course_id, '')) DO UPDATE
+       SET message = EXCLUDED.message, is_resolved = false, created_at = EXCLUDED.created_at
+       RETURNING *`,
+      [warning.id, warning.studentId, warning.type, warning.courseId || null, warning.message, warning.createdAt]
     );
-    return warning;
+    return academicWarningFromRow(res.rows[0]);
   },
 
-  async resolveWarning(db: Queryable, id: string) {
-    const row = (await db.query("UPDATE academic_warnings SET is_resolved = true WHERE id = $1 RETURNING *", [id])).rows[0];
+  async resolveWarning(db: Queryable, id: string, resolvedBy?: string) {
+    const row = (await db.query("UPDATE academic_warnings SET is_resolved = true, resolved_by = $2, resolved_at = $3 WHERE id = $1 RETURNING *", [id, resolvedBy || null, new Date().toISOString()])).rows[0];
     return row ? academicWarningFromRow(row) : null;
   },
 

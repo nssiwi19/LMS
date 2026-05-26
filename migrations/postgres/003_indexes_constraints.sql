@@ -26,7 +26,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_enrollments_student_course ON enrollments (
 CREATE UNIQUE INDEX IF NOT EXISTS ux_lesson_progress_enrollment_lesson ON lesson_progress (enrollment_id, lesson_id);
 
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'super_admin', 'teacher', 'student', 'le_tan', 'academic', 'finance', 'advisor', 'parent'));
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'super_admin', 'teacher', 'student', 'le_tan', 'academic_admin', 'finance', 'advisor', 'parent'));
 
 ALTER TABLE courses DROP CONSTRAINT IF EXISTS courses_status_check;
 ALTER TABLE courses ADD CONSTRAINT courses_status_check CHECK (status IN ('draft', 'pending', 'published', 'rejected'));

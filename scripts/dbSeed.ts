@@ -3,6 +3,7 @@ import pg from "pg";
 import { getInitialStore } from "../src/store";
 import { backfillMegaDemoData } from "../src/mockSeeds";
 import { runMigrations } from "../src/dbMigrations";
+import { hashPassword } from "../src/authHash";
 
 dotenv.config();
 
@@ -59,6 +60,21 @@ async function main() {
       ["id", "email", "password_hash", "password_salt", "name", "role", "is_active", "phone", "linked_student_id", "created_at"],
       store.users.map(u => [u.id, u.email.toLowerCase(), u.passwordHash, u.passwordSalt || null, u.name, u.role, u.isActive ? 1 : 0, u.phone || null, u.linkedStudentId || null, u.createdAt]),
       `(id) DO UPDATE SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash, password_salt = EXCLUDED.password_salt, name = EXCLUDED.name, role = EXCLUDED.role, is_active = EXCLUDED.is_active, phone = EXCLUDED.phone, linked_student_id = EXCLUDED.linked_student_id`
+    );
+    const parentCredential = hashPassword("parent16");
+    await insertBatch(
+      client,
+      "users",
+      ["id", "email", "password_hash", "password_salt", "name", "role", "is_active", "phone", "linked_student_id", "created_at"],
+      [["user_parent_demo", "parent@e16.local", parentCredential.hash, parentCredential.salt, "Parent Demo", "parent", true, null, "user_student", new Date().toISOString()]],
+      `(id) DO UPDATE SET email = EXCLUDED.email, password_hash = EXCLUDED.password_hash, password_salt = EXCLUDED.password_salt, name = EXCLUDED.name, role = EXCLUDED.role, is_active = EXCLUDED.is_active, linked_student_id = EXCLUDED.linked_student_id`
+    );
+    await insertBatch(
+      client,
+      "parent_links",
+      ["id", "parent_id", "student_id", "created_at"],
+      [["plink_parent_demo_student", "user_parent_demo", "user_student", new Date().toISOString()]],
+      `(parent_id, student_id) DO NOTHING`
     );
 
     await insertBatch(

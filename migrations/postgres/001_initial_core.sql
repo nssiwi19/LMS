@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   password_salt TEXT,
   name TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('admin', 'super_admin', 'teacher', 'student', 'le_tan', 'academic', 'finance', 'advisor', 'parent')),
+  role TEXT NOT NULL CHECK (role IN ('admin', 'super_admin', 'teacher', 'student', 'le_tan', 'academic_admin', 'finance', 'advisor', 'parent')),
   is_active INTEGER NOT NULL DEFAULT 1,
   phone TEXT,
   linked_student_id TEXT REFERENCES users(id),
@@ -17,7 +17,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_salt TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS linked_student_id TEXT REFERENCES users(id);
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'super_admin', 'teacher', 'student', 'le_tan', 'academic', 'finance', 'advisor', 'parent'));
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'super_admin', 'teacher', 'student', 'le_tan', 'academic_admin', 'finance', 'advisor', 'parent'));
 
 CREATE TABLE IF NOT EXISTS academic_years (
   id TEXT PRIMARY KEY,

@@ -1,10 +1,21 @@
+export type UserRole =
+  | "super_admin"
+  | "admin"
+  | "academic_admin"
+  | "finance"
+  | "advisor"
+  | "teacher"
+  | "student"
+  | "parent"
+  | "le_tan";
+
 export interface User {
   id: string;
   email: string;
   passwordHash: string;
   passwordSalt?: string;
   name: string;
-  role: "admin" | "super_admin" | "teacher" | "student" | "le_tan" | "academic" | "finance" | "advisor" | "parent";
+  role: UserRole;
   isActive: boolean;
   phone?: string;
   createdAt: string;
@@ -227,6 +238,8 @@ export interface StudentProfile {
   guardianPhone?: string;
   guardianEmail?: string;
   notes?: string;
+  feeHold?: boolean;
+  academicProbation?: boolean;
 }
 
 export interface AttendanceSession {
@@ -261,9 +274,12 @@ export interface TuitionFee {
 export interface AcademicWarning {
   id: string;
   studentId: string;
-  type: "low-gpa" | "attendance" | "unpaid-fee" | "overdue-assignment";
+  type: "low_gpa" | "low_attendance" | "unpaid_fee" | "exam_ban" | "overdue_assignment" | "low-gpa" | "attendance" | "unpaid-fee" | "overdue-assignment";
+  courseId?: string;
   message: string;
   isResolved: boolean;
+  resolvedBy?: string;
+  resolvedAt?: string;
   createdAt: string;
 }
 
@@ -291,6 +307,7 @@ export interface AdvisorNote {
   studentId: string;
   content: string;
   type: "academic" | "behavioral" | "financial";
+  shareWithParent?: boolean;
   createdAt: string;
 }
 
@@ -328,6 +345,8 @@ export interface CourseRegistration {
   gradePoint?: number;
   credits: number;
   isRetake?: boolean;                // true if student previously failed this course
+  examBan?: boolean;
+  gradePostedAt?: string;
 }
 
 export interface Scholarship {

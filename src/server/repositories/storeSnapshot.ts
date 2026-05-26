@@ -26,7 +26,7 @@ export async function storeSnapshotFromDb(db: Queryable) {
   const programCourses = (await db.query("SELECT * FROM program_courses")).rows.map(row => ({ id: row.id, programId: row.program_id, courseId: row.course_id, credits: row.credits, isRequired: Boolean(row.is_required), semester: row.semester }));
 
   // Missing Student Profiles, Attendance, Notifications & Transactions
-  const studentProfiles = (await db.query("SELECT * FROM student_profiles")).rows.map(row => ({ id: row.id, userId: row.user_id, studentCode: row.student_code, programId: row.program_id, departmentId: row.department_id, academicYear: row.academic_year, enrollmentDate: row.enrollment_date, expectedGraduation: row.expected_graduation, status: row.status, gpa: Number(row.gpa), totalCreditsEarned: row.total_credits_earned, address: row.address || undefined, phone: row.phone || undefined, dateOfBirth: row.date_of_birth || undefined, gender: row.gender || undefined, guardianName: row.guardian_name || undefined, guardianPhone: row.guardian_phone || undefined, guardianEmail: row.guardian_email || undefined, notes: row.notes || undefined }));
+  const studentProfiles = (await db.query("SELECT * FROM student_profiles")).rows.map(row => ({ id: row.id, userId: row.user_id, studentCode: row.student_code, programId: row.program_id, departmentId: row.department_id, academicYear: row.academic_year, enrollmentDate: row.enrollment_date, expectedGraduation: row.expected_graduation, status: row.status, gpa: Number(row.gpa), totalCreditsEarned: row.total_credits_earned, address: row.address || undefined, phone: row.phone || undefined, dateOfBirth: row.date_of_birth || undefined, gender: row.gender || undefined, guardianName: row.guardian_name || undefined, guardianPhone: row.guardian_phone || undefined, guardianEmail: row.guardian_email || undefined, notes: row.notes || undefined, feeHold: Boolean(row.fee_hold), academicProbation: Boolean(row.academic_probation) }));
   const attendanceSessions = (await db.query("SELECT * FROM attendance_sessions")).rows.map(row => ({ id: row.id, courseId: row.course_id, semesterId: row.semester_id, teacherId: row.teacher_id, date: row.date, topic: row.topic }));
   const attendanceRecords = (await db.query("SELECT * FROM attendance_records")).rows.map(row => ({ id: row.id, sessionId: row.session_id, studentId: row.student_id, status: row.status, note: row.note || undefined }));
   const notifications = (await db.query("SELECT * FROM notifications ORDER BY created_at DESC LIMIT 200")).rows.map(row => ({ id: row.id, userId: row.user_id, type: row.type, message: row.message, isRead: Boolean(row.is_read), createdAt: row.created_at }));
@@ -92,7 +92,7 @@ export async function storeSnapshotFromDb(db: Queryable) {
 }
 
 export function limitStoreForRole(store: any, user: User) {
-  if (user.role === "admin" || user.role === "super_admin" || user.role === "academic") {
+  if (user.role === "admin" || user.role === "super_admin" || user.role === "academic_admin") {
     return {
       ...store,
       users: store.users.map((item: User) => ({ ...item, passwordHash: "" }))

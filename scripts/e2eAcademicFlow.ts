@@ -173,7 +173,7 @@ async function main() {
   const warning = await request<any>("/api/academics/warnings", {
     method: "POST",
     session: academic,
-    body: JSON.stringify({ studentId: student.user.id, type: "low-gpa", message: `E2E warning ${stamp}` })
+    body: JSON.stringify({ studentId: student.user.id, type: "low_gpa", message: `E2E warning ${stamp}` })
   });
   assert(warning.studentId === student.user.id, "academic warning creation failed");
 

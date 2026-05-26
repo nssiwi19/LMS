@@ -22,14 +22,14 @@ import {
 } from "lucide-react";
 import { User, LMSDataStore } from "./types";
 import { AppStore } from "./store";
-import AdminPanel from "./components/AdminPanel";
-import TeacherPanel from "./components/TeacherPanel";
-import StudentPanel from "./components/StudentPanel";
-import FinancePanel from "./components/FinancePanel";
-import ReceptionPanel from "./components/ReceptionPanel";
-import AcademicPanel from "./components/AcademicPanel";
-import AdvisorPanel from "./components/AdvisorPanel";
-import ParentPanel from "./components/ParentPanel";
+const AdminPanel = React.lazy(() => import("./components/AdminPanel"));
+const TeacherPanel = React.lazy(() => import("./components/TeacherPanel"));
+const StudentPanel = React.lazy(() => import("./components/StudentPanel"));
+const FinancePanel = React.lazy(() => import("./components/FinancePanel"));
+const ReceptionPanel = React.lazy(() => import("./components/ReceptionPanel"));
+const AcademicPanel = React.lazy(() => import("./components/AcademicPanel"));
+const AdvisorPanel = React.lazy(() => import("./components/AdvisorPanel"));
+const ParentPanel = React.lazy(() => import("./components/ParentPanel"));
 import { api, setCsrfToken } from "./api";
 
 const queryClient = new QueryClient();
@@ -59,7 +59,7 @@ function AppShell() {
     if (role === "student") return "Học Viên";
     if (role === "finance") return "Phòng Tài Chính";
     if (role === "le_tan") return "Quầy Tiếp Tân";
-    if (role === "academic") return "Phòng Học Vụ";
+    if (role === "academic_admin") return "Phòng Học Vụ";
     if (role === "advisor") return "Cố Vấn Học Tập";
     if (role === "parent") return "Trang Phụ Huynh";
     return role;
@@ -392,62 +392,69 @@ function AppShell() {
 
             {/* Inner responsive Padding page body */}
             <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-              {(currentUser.role === "admin" || currentUser.role === "super_admin") && (
-                <AdminPanel 
-                  currentUser={currentUser} 
-                  onLogout={handleLogout} 
-                  onRefreshData={refreshStoreData} 
-                />
-              )}
-              {currentUser.role === "teacher" && (
-                <TeacherPanel 
-                  currentUser={currentUser} 
-                  onLogout={handleLogout} 
-                  onRefreshData={refreshStoreData} 
-                />
-              )}
-              {currentUser.role === "student" && (
-                <StudentPanel 
-                  currentUser={currentUser} 
-                  onLogout={handleLogout} 
-                  onRefreshData={refreshStoreData} 
-                />
-              )}
-              {(currentUser.role === "finance") && (
-                <FinancePanel 
-                  currentUser={currentUser} 
-                  onLogout={handleLogout} 
-                  onRefreshData={refreshStoreData} 
-                />
-              )}
-              {currentUser.role === "le_tan" && (
-                <ReceptionPanel 
-                  currentUser={currentUser} 
-                  onLogout={handleLogout} 
-                  onRefreshData={refreshStoreData} 
-                />
-              )}
-              {(currentUser.role === "academic") && (
-                <AcademicPanel 
-                  currentUser={currentUser} 
-                  onLogout={handleLogout} 
-                  onRefreshData={refreshStoreData} 
-                />
-              )}
-              {currentUser.role === "advisor" && (
-                <AdvisorPanel 
-                  currentUser={currentUser} 
-                  onLogout={handleLogout} 
-                  onRefreshData={refreshStoreData} 
-                />
-              )}
-              {currentUser.role === "parent" && (
-                <ParentPanel 
-                  currentUser={currentUser} 
-                  onLogout={handleLogout} 
-                  onRefreshData={refreshStoreData} 
-                />
-              )}
+              <React.Suspense fallback={
+                <div className="flex flex-col items-center justify-center p-16 space-y-4">
+                  <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                  <span className="text-xs text-indigo-300 font-mono tracking-widest uppercase">Đang tải phân hệ học vụ...</span>
+                </div>
+              }>
+                {(currentUser.role === "admin" || currentUser.role === "super_admin") && (
+                  <AdminPanel 
+                    currentUser={currentUser} 
+                    onLogout={handleLogout} 
+                    onRefreshData={refreshStoreData} 
+                  />
+                )}
+                {currentUser.role === "teacher" && (
+                  <TeacherPanel 
+                    currentUser={currentUser} 
+                    onLogout={handleLogout} 
+                    onRefreshData={refreshStoreData} 
+                  />
+                )}
+                {currentUser.role === "student" && (
+                  <StudentPanel 
+                    currentUser={currentUser} 
+                    onLogout={handleLogout} 
+                    onRefreshData={refreshStoreData} 
+                  />
+                )}
+                {(currentUser.role === "finance") && (
+                  <FinancePanel 
+                    currentUser={currentUser} 
+                    onLogout={handleLogout} 
+                    onRefreshData={refreshStoreData} 
+                  />
+                )}
+                {currentUser.role === "le_tan" && (
+                  <ReceptionPanel 
+                    currentUser={currentUser} 
+                    onLogout={handleLogout} 
+                    onRefreshData={refreshStoreData} 
+                  />
+                )}
+                {(currentUser.role === "academic_admin") && (
+                  <AcademicPanel 
+                    currentUser={currentUser} 
+                    onLogout={handleLogout} 
+                    onRefreshData={refreshStoreData} 
+                  />
+                )}
+                {currentUser.role === "advisor" && (
+                  <AdvisorPanel 
+                    currentUser={currentUser} 
+                    onLogout={handleLogout} 
+                    onRefreshData={refreshStoreData} 
+                  />
+                )}
+                {currentUser.role === "parent" && (
+                  <ParentPanel 
+                    currentUser={currentUser} 
+                    onLogout={handleLogout} 
+                    onRefreshData={refreshStoreData} 
+                  />
+                )}
+              </React.Suspense>
             </div>
           </main>
 

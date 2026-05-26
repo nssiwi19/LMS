@@ -1,0 +1,47 @@
+import { pool } from "./db";
+import { eventBus } from "./eventBus";
+
+export function startScheduler() {
+  setInterval(async () => {
+    await checkOverdueFees();
+    await checkAttendanceAlerts();
+    await checkGPAWarnings();
+  }, 60 * 60 * 1000);
+
+  setTimeout(async () => {
+    await checkOverdueFees();
+  }, 5000);
+}
+
+async function checkOverdueFees() {
+  const overdue = await pool.query(`
+    SELECT id, student_id, semester_id FROM tuition_fees
+    WHERE status != 'paid' AND due_date::date < NOW()::date
+  `);
+  for (const row of overdue.rows) {
+    await eventBus.emit("tuition.overdue", { feeId: row.id, studentId: row.student_id, semesterId: row.semester_id }, pool);
+  }
+}
+
+async function checkAttendanceAlerts() {
+  const rows = await pool.query(`
+    SELECT DISTINCT s.course_id, ar.student_id
+    FROM attendance_sessions s
+    JOIN attendance_records ar ON ar.session_id = s.id
+  `);
+  const byCourse = new Map<string, Array<{ studentId: string }>>();
+  for (const row of rows.rows) {
+    if (!byCourse.has(row.course_id)) byCourse.set(row.course_id, []);
+    byCourse.get(row.course_id)!.push({ studentId: row.student_id });
+  }
+  for (const [courseId, records] of byCourse.entries()) {
+    await eventBus.emit("attendance.session.saved", { courseId, records }, pool);
+  }
+}
+
+async function checkGPAWarnings() {
+  const students = await pool.query("SELECT user_id FROM student_profiles WHERE status = 'active'");
+  for (const row of students.rows) {
+    await eventBus.emit("grade.saved", { studentId: row.user_id, grade: "GPA check" }, pool);
+  }
+}

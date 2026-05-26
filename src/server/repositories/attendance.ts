@@ -1,5 +1,7 @@
 import { AttendanceSession, AttendanceRecord } from "../../types";
 import { Queryable } from "../db";
+import { pool } from "../db";
+import { eventBus } from "../eventBus";
 
 export const attendanceRepository = {
   async createSession(db: Queryable, session: AttendanceSession): Promise<AttendanceSession> {
@@ -19,6 +21,16 @@ export const attendanceRepository = {
         [r.id, r.sessionId, r.studentId, r.status, r.note || null]
       );
     }
+    if (records.length) {
+      const session = (await db.query("SELECT course_id FROM attendance_sessions WHERE id = $1", [records[0].sessionId])).rows[0];
+      if (session) await eventBus.emit("attendance.session.saved", { sessionId: records[0].sessionId, courseId: session.course_id, records }, pool);
+    }
+  },
+
+  async saveAttendanceSession(db: Queryable, session: AttendanceSession, records: AttendanceRecord[]) {
+    await this.createSession(db, session);
+    await this.bulkMarkRecords(db, records);
+    return session;
   },
 
   async calcAttendancePercent(db: Queryable, studentId: string, courseId: string): Promise<number> {

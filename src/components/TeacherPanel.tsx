@@ -32,6 +32,7 @@ import GradebookTable from "./teacher/GradebookTable";
 import TeacherAnalytics from "./teacher/TeacherAnalytics";
 import { generateId } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
+import { api } from "../api";
 
 interface TeacherPanelProps {
   currentUser: User;
@@ -158,10 +159,22 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
         thumbnail: courseThumb || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=60",
         createdAt: new Date().toISOString(),
         price: Number(coursePrice) || 0,
-        level: courseLevel,
+        level: courseLevel as any,
         tags: tagsArray
       };
       storeData.courses.push(newCourse);
+      
+      api.createCourse({
+        title: courseTitle,
+        description: courseDesc,
+        teacherId: currentUser.id,
+        category: courseCategory,
+        thumbnail: courseThumb || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=60",
+        price: Number(coursePrice) || 0,
+        level: courseLevel,
+        tags: tagsArray
+      }).catch(err => console.warn("Failed to create course on server:", err));
+
       AppStore.log(currentUser.id, "create_course_draft", newCourse.title, "Saved course outline draft successfully.");
       triggerToast("Đã lập bản nháp khóa đào tạo mới thành công.");
     } else {
@@ -175,7 +188,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
             category: courseCategory, 
             thumbnail: courseThumb,
             price: Number(coursePrice) || 0,
-            level: courseLevel,
+            level: courseLevel as any,
             tags: tagsArray
           };
         }
@@ -198,6 +211,9 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
       }
       return c;
     });
+
+    api.submitCourse(courseId).catch(err => console.warn("Failed to submit course for approval on server:", err));
+
     AppStore.save(storeData);
     onRefreshData();
     triggerToast("Course submitted into administrative review queue.");
@@ -214,6 +230,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
 
     const storeData = AppStore.get();
     const currentLessons = storeData.lessons.filter(l => l.courseId === selectedCourseId);
+    const orderNum = currentLessons.length + 1;
     
     const newLesson: Lesson = {
       id: generateId("lesson"),
@@ -221,11 +238,21 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
       title: lessonTitle,
       content: lessonContent,
       videoUrl: lessonVideo,
-      order: currentLessons.length + 1,
+      order: orderNum,
       duration: lessonDuration
     };
 
     storeData.lessons.push(newLesson);
+
+    api.addLesson({
+      courseId: selectedCourseId,
+      title: lessonTitle,
+      content: lessonContent,
+      videoUrl: lessonVideo || undefined,
+      order: orderNum,
+      duration: lessonDuration
+    }).catch(err => console.warn("Failed to add lesson on server:", err));
+
     AppStore.log(currentUser.id, "add_lesson", newLesson.title, `Added learning module inside course: ${selectedCourseId}`);
     AppStore.save(storeData);
     
@@ -259,6 +286,15 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
     };
 
     storeData.quizzes.push(newQuiz);
+
+    api.createQuiz({
+      courseId: selectedCourseId,
+      title: quizTitle,
+      passingScore: quizPassing,
+      timeLimit: quizLimit,
+      maxAttempts: quizAttempts
+    }).catch(err => console.warn("Failed to create quiz on server:", err));
+
     AppStore.log(currentUser.id, "create_quiz", newQuiz.title, `Added assessment linked to course: ${selectedCourseId}`);
     AppStore.save(storeData);
 
@@ -293,6 +329,14 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
     };
 
     storeData.questions.push(newQuestion);
+
+    api.addQuestion(selectedQuizId, {
+      text: qText,
+      type: qType,
+      options: cleanedOptions,
+      correctAnswer: qCorrect
+    }).catch(err => console.warn("Failed to add question on server:", err));
+
     AppStore.log(currentUser.id, "add_quiz_question", newQuestion.text, `Added question mapping inside quiz ID: ${selectedQuizId}`);
     AppStore.save(storeData);
 
@@ -324,6 +368,15 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
     };
 
     storeData.assignments.push(newAssign);
+
+    api.createAssignment({
+      courseId: selectedCourseId,
+      title: assignTitle,
+      description: assignDesc,
+      deadline: assignDeadline,
+      maxScore: Number(assignMaxScore)
+    }).catch(err => console.warn("Failed to create assignment on server:", err));
+
     AppStore.log(currentUser.id, "create_assignment", newAssign.title, `Added task outline inside course: ${selectedCourseId}`);
     AppStore.save(storeData);
 
@@ -337,9 +390,20 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
   };
 
   // Submit Grading Score
-  const handleGradeSubmission = (e: React.FormEvent) => {
+  const handleGradeSubmission = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeSubmissionId) return;
+
+    // Call server API first to persist in PostgreSQL if running on server
+    try {
+      await api.gradeAssignment({
+        submissionId: activeSubmissionId,
+        score: Number(gradingScore),
+        feedback: gradingFeedback
+      });
+    } catch (err) {
+      console.warn("Failed to grade assignment on server, using local store fallback:", err);
+    }
 
     const storeData = AppStore.get();
     storeData.submissions = storeData.submissions.map(sub => {

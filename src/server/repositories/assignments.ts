@@ -1,5 +1,7 @@
 import { Assignment, Submission } from "../../types";
 import { Queryable } from "../db";
+import { pool } from "../db";
+import { eventBus } from "../eventBus";
 import { generateId } from "../ids";
 
 export const assignmentsRepository = {
@@ -27,6 +29,8 @@ export const assignmentsRepository = {
 
   async grade(db: Queryable, submissionId: string, score: number, feedback: string) {
     await db.query("UPDATE submissions SET score = $1, feedback = $2, graded_at = $3 WHERE id = $4", [score, feedback, new Date().toISOString(), submissionId]);
+    const submission = (await db.query("SELECT student_id FROM submissions WHERE id = $1", [submissionId])).rows[0];
+    if (submission) await eventBus.emit("grade.saved", { studentId: submission.student_id, grade: score }, pool);
     return { id: submissionId, score, feedback };
   }
 };

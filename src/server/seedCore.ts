@@ -2,20 +2,16 @@ import { getInitialStore } from "../store";
 import { backfillMegaDemoData } from "../mockSeeds";
 import { Queryable } from "./db";
 import { usersRepository } from "./repositories/users";
+import { hashPassword } from "../authHash";
+import { generateId } from "./ids";
 
 async function cleanupParentSeedData(db: Queryable) {
-  await db.query(`
-    DELETE FROM audit_logs WHERE user_id IN (SELECT id FROM users WHERE role = 'parent');
-    DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE role = 'parent');
-    DELETE FROM users WHERE role = 'parent';
-    UPDATE student_profiles SET guardian_name = NULL, guardian_phone = NULL, guardian_email = NULL;
-  `);
+  await db.query("SELECT 1");
 }
 
 function getBackfilledSeedStore() {
   const store = getInitialStore();
   backfillMegaDemoData(store);
-  store.users = store.users.filter(user => user.role !== "parent");
   store.studentProfiles = (store.studentProfiles || []).map(profile => ({
     ...profile,
     guardianName: undefined,
@@ -256,6 +252,23 @@ export async function seedCoreLearningData(db: Queryable) {
 
 export async function seedAuthUsers(db: Queryable) {
   await cleanupParentSeedData(db);
+  const credential = hashPassword("parent16");
+  await db.query(
+    `INSERT INTO users (id, email, password_hash, password_salt, name, role, is_active, linked_student_id, created_at)
+     VALUES ($1,$2,$3,$4,$5,'parent',true,$6,$7)
+     ON CONFLICT (email) DO UPDATE SET
+       name = EXCLUDED.name,
+       role = EXCLUDED.role,
+       linked_student_id = EXCLUDED.linked_student_id`,
+    ["user_parent_demo", "parent@e16.local", credential.hash, credential.salt || null, "Parent Demo", "user_student", new Date().toISOString()]
+  );
+  await db.query(
+    `INSERT INTO parent_links (id, parent_id, student_id, created_at)
+     VALUES ($1,$2,$3,$4)
+     ON CONFLICT (parent_id, student_id) DO NOTHING`,
+    [generateId("plink"), "user_parent_demo", "user_student", new Date().toISOString()]
+  );
+
   const studentCount = Number((await db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'student'")).rows[0].count);
   const teacherCount = Number((await db.query("SELECT COUNT(*) AS count FROM users WHERE role = 'teacher'")).rows[0].count);
   if (studentCount >= 300 && teacherCount >= 20) return;

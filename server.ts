@@ -9,6 +9,7 @@ import { hashPassword, verifyPassword } from "./src/authHash";
 import { LMSDataStore, StudentProfile, User } from "./src/types";
 import { runMigrations } from "./src/dbMigrations";
 import { pool } from "./src/server/db";
+import { redis, safeRedis } from "./src/server/redis";
 import { generateId } from "./src/server/ids";
 import { DbUserRow, toPublicUser } from "./src/server/mappers";
 import { validateBody, schemas } from "./src/server/validation";
@@ -22,23 +23,34 @@ import { financeRepository } from "./src/server/repositories/finance";
 import { academicsRepository } from "./src/server/repositories/academics";
 import { auditRepository } from "./src/server/repositories/audit";
 import { limitStoreForRole, storeSnapshotFromDb } from "./src/server/repositories/storeSnapshot";
+import { advisorsRepository } from "./src/server/repositories/advisors";
+import { parentRepository } from "./src/server/repositories/parent";
+import { courseRegistrationsRepository } from "./src/server/repositories/courseRegistrations";
+import { gradeAppealsRepository } from "./src/server/repositories/gradeAppeals";
+import { leaveRequestsRepository } from "./src/server/repositories/leaveRequests";
+import { graduationRepository } from "./src/server/repositories/graduation";
+import { scholarshipsRepository } from "./src/server/repositories/scholarships";
+import { notificationsRepository } from "./src/server/repositories/notifications";
+import { registerEventHandlers } from "./src/server/eventHandlers";
+import { startScheduler } from "./src/server/scheduler";
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === "production" ? "" : "dev-only-e16-lms-secret");
-const revokedTokens = new Set<string>();
-const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("FATAL: JWT_SECRET environment variable is required in production.");
+  }
+  console.warn("JWT_SECRET not set - using insecure dev default. Never deploy this.");
+}
+const JWT_SECRET_VALUE = JWT_SECRET || "dev-only-e16-lms-secret-do-not-use-in-prod";
 const csrfSafeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 
 app.use(express.json({ limit: "10mb" }));
 
-if (process.env.NODE_ENV === "production" && !JWT_SECRET) {
-  throw new Error("JWT_SECRET is required in production.");
-}
-
-type AuthRequest = express.Request & { user?: User };
+type AuthRequest = express.Request & { user?: User; linkedStudentId?: string };
 type AsyncRoute = (req: AuthRequest, res: express.Response, next: express.NextFunction) => Promise<unknown>;
 
 function asyncHandler(handler: AsyncRoute) {
@@ -60,16 +72,16 @@ function signToken(user: User): string {
     exp: Math.floor(Date.now() / 1000) + 60 * 60 * 8
   }));
   const unsigned = `${header}.${payload}`;
-  const signature = crypto.createHmac("sha256", JWT_SECRET).update(unsigned).digest("base64url");
+  const signature = crypto.createHmac("sha256", JWT_SECRET_VALUE).update(unsigned).digest("base64url");
   return `${unsigned}.${signature}`;
 }
 
-function verifyToken(token: string): { sub: string } | null {
-  if (revokedTokens.has(token)) return null;
+async function verifyToken(token: string): Promise<{ sub: string } | null> {
+  if (await safeRedis(() => redis.exists(`revoked:${token}`), 0) === 1) return null;
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [header, payload, signature] = parts;
-  const expected = crypto.createHmac("sha256", JWT_SECRET).update(`${header}.${payload}`).digest("base64url");
+  const expected = crypto.createHmac("sha256", JWT_SECRET_VALUE).update(`${header}.${payload}`).digest("base64url");
   if (signature.length !== expected.length) return null;
   if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
   const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
@@ -107,23 +119,22 @@ function extractCookie(req: express.Request, name: string): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-function rateLimitLogin(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (process.env.NODE_ENV !== "production") return next();
-  const key = req.ip || req.socket.remoteAddress || "unknown";
-  const now = Date.now();
-  const windowMs = 15 * 60 * 1000;
-  const maxAttempts = 10;
-  const entry = loginAttempts.get(key);
-  if (!entry || entry.resetAt <= now) {
-    loginAttempts.set(key, { count: 1, resetAt: now + windowMs });
-    return next();
-  }
-  if (entry.count >= maxAttempts) {
-    const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
-    res.setHeader("Retry-After", String(retryAfter));
+async function rateLimitLogin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (process.env.DISABLE_RATE_LIMIT === "true") return next();
+  const key = `ratelimit:login:${req.ip || req.socket.remoteAddress || "unknown"}`;
+  const max = 10;
+  const windowSec = 15 * 60;
+  const current = await safeRedis(async () => {
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, windowSec);
+    return count;
+  }, 1);
+
+  if (current > max) {
+    const ttl = await safeRedis(() => redis.ttl(key), windowSec);
+    res.setHeader("Retry-After", String(ttl));
     return res.status(429).json({ error: "Too many login attempts. Please try again later." });
   }
-  entry.count += 1;
   next();
 }
 
@@ -142,7 +153,7 @@ async function requireAuth(req: AuthRequest, res: express.Response, next: expres
   try {
     const token = extractBearerToken(req);
     if (!token) return res.status(401).json({ error: "Missing session." });
-    const payload = verifyToken(token);
+    const payload = await verifyToken(token);
     if (!payload) return res.status(401).json({ error: "Invalid or expired session." });
     const user = await usersRepository.findById(pool, payload.sub);
     if (!user || !user.isActive) return res.status(401).json({ error: "User is not available." });
@@ -158,6 +169,13 @@ function requireRole(roles: Array<User["role"]>) {
     if (!req.user || !roles.includes(req.user.role)) return res.status(403).json({ error: "Permission denied." });
     next();
   };
+}
+
+async function resolveLinkedStudent(req: AuthRequest, res: express.Response, next: express.NextFunction) {
+  const linkedStudentId = await parentRepository.getLinkedStudent(pool, req.user!.id);
+  if (!linkedStudentId) return res.status(403).json({ error: "No linked student found for this parent account." });
+  req.linkedStudentId = linkedStudentId;
+  next();
 }
 
 async function audit(req: AuthRequest, action: string, target: string, detail: string) {
@@ -268,13 +286,6 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       );
     }
 
-    await client.query(`
-      DELETE FROM audit_logs WHERE user_id IN (SELECT id FROM users WHERE role = 'parent');
-      DELETE FROM notifications WHERE user_id IN (SELECT id FROM users WHERE role = 'parent');
-      DELETE FROM users WHERE role = 'parent';
-      UPDATE student_profiles SET guardian_name = NULL, guardian_phone = NULL, guardian_email = NULL;
-    `);
-
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -325,6 +336,9 @@ async function initializeDatabase() {
   await usersRepository.normalizeLegacyRoles(pool);
   await seedAuthUsers(pool);
   await seedCoreLearningData(pool);
+  await usersRepository.normalizeSystemUsers(pool);
+  registerEventHandlers();
+  startScheduler();
 }
 
 const apiKey = process.env.GEMINI_API_KEY;
@@ -377,7 +391,7 @@ app.post("/api/auth/login", rateLimitLogin, validateBody(schemas.login), asyncHa
 
 app.post("/api/auth/logout", requireAuth, asyncHandler(async (req, res) => {
   const token = extractBearerToken(req);
-  if (token) revokedTokens.add(token);
+  if (token) await safeRedis(() => redis.set(`revoked:${token}`, "1", "EX", 60 * 60 * 8), "OK");
   await audit(req, "authentication_logout", "security", "Session closed.");
   clearAuthCookie(res);
   res.status(204).send();
@@ -393,12 +407,12 @@ app.get("/api/dashboard/admin", requireAuth, requireRole(["admin", "super_admin"
 app.get("/api/dashboard/teacher", requireAuth, requireRole(["teacher"]), asyncHandler(async (req, res) => res.json(dashboardFromStore(await storeSnapshotFromDb(pool), req.user!))));
 app.get("/api/dashboard/student", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => res.json(dashboardFromStore(await storeSnapshotFromDb(pool), req.user!))));
 app.get("/api/dashboard/finance", requireAuth, requireRole(["finance", "admin", "super_admin"]), asyncHandler(async (_req, res) => res.json(await financeRepository.getDashboard(pool))));
-app.get("/api/dashboard/academic", requireAuth, requireRole(["academic", "admin", "super_admin"]), asyncHandler(async (req, res) => res.json({ ...dashboardFromStore(await storeSnapshotFromDb(pool), req.user!), warnings: await academicsRepository.listWarnings(pool) })));
-app.get("/api/dashboard/advisor", requireAuth, requireRole(["advisor", "admin", "super_admin"]), asyncHandler(async (req, res) => res.json({ ...limitStoreForRole(await storeSnapshotFromDb(pool), req.user!), advisorNotes: await academicsRepository.getAdvisorNotes(pool, req.user!.id) })));
-app.get("/api/dashboard/parent", requireAuth, requireRole(["parent"]), asyncHandler(async (req, res) => res.json(limitStoreForRole(await storeSnapshotFromDb(pool), req.user!))));
+app.get("/api/dashboard/academic", requireAuth, requireRole(["academic_admin", "admin", "super_admin"]), asyncHandler(async (req, res) => res.json({ ...dashboardFromStore(await storeSnapshotFromDb(pool), req.user!), warnings: await academicsRepository.listWarnings(pool) })));
+app.get("/api/dashboard/advisor", requireAuth, requireRole(["advisor"]), asyncHandler(async (req, res) => res.json(await advisorsRepository.getDashboard(pool, req.user!.id))));
+app.get("/api/dashboard/parent", requireAuth, requireRole(["parent"]), resolveLinkedStudent, asyncHandler(async (req, res) => res.json(await parentRepository.getDashboard(pool, req.linkedStudentId!))));
 
 app.get("/api/courses", requireAuth, asyncHandler(async (_req, res) => res.json(await coursesRepository.list(pool))));
-app.post("/api/courses", requireAuth, requireRole(["teacher", "admin", "super_admin", "academic"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
+app.post("/api/courses", requireAuth, requireRole(["teacher", "admin", "super_admin", "academic_admin"]), validateBody(schemas.createCourse), asyncHandler(async (req, res) => {
   const body = req.body;
   const course = await coursesRepository.create(pool, {
     title: body.title,
@@ -414,20 +428,20 @@ app.post("/api/courses", requireAuth, requireRole(["teacher", "admin", "super_ad
   await audit(req, "create_course", course.id, course.title);
   res.status(201).json(course);
 }));
-app.post("/api/courses/:id/submit", requireAuth, requireRole(["teacher", "admin", "super_admin", "academic"]), asyncHandler(async (req, res) => {
+app.post("/api/courses/:id/submit", requireAuth, requireRole(["teacher", "admin", "super_admin", "academic_admin"]), asyncHandler(async (req, res) => {
   if (req.user!.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user!.id, req.params.id)) return res.status(403).json({ error: "Permission denied." });
   const course = await coursesRepository.setStatus(pool, req.params.id, "pending");
   if (!course) return res.status(404).json({ error: "Course not found." });
   await audit(req, "submit_course_approval", course.id, course.title);
   res.json(course);
 }));
-app.post("/api/courses/:id/publish", requireAuth, requireRole(["admin", "super_admin", "academic"]), asyncHandler(async (req, res) => {
+app.post("/api/courses/:id/publish", requireAuth, requireRole(["admin", "super_admin", "academic_admin"]), asyncHandler(async (req, res) => {
   const course = await coursesRepository.setStatus(pool, req.params.id, "published");
   if (!course) return res.status(404).json({ error: "Course not found." });
   await audit(req, "approve_course", course.id, course.title);
   res.json(course);
 }));
-app.post("/api/courses/:id/reject", requireAuth, requireRole(["admin", "super_admin", "academic"]), validateBody(schemas.rejectCourse), asyncHandler(async (req, res) => {
+app.post("/api/courses/:id/reject", requireAuth, requireRole(["admin", "super_admin", "academic_admin"]), validateBody(schemas.rejectCourse), asyncHandler(async (req, res) => {
   const course = await coursesRepository.setStatus(pool, req.params.id, "rejected", req.body.rejectionReason);
   if (!course) return res.status(404).json({ error: "Course not found." });
   await audit(req, "reject_course", course.id, req.body.rejectionReason);
@@ -532,24 +546,136 @@ app.patch("/api/admin/users/:id/status", requireAuth, requireRole(["admin", "sup
 }));
 
 app.get("/api/academics/warnings", requireAuth, asyncHandler(async (req, res) => {
-  const canViewAll = ["admin", "super_admin", "academic", "advisor"].includes(req.user!.role);
+  const canViewAll = ["admin", "super_admin", "academic_admin", "advisor"].includes(req.user!.role);
   res.json(await academicsRepository.listWarnings(pool, canViewAll ? undefined : req.user!.id));
 }));
-app.post("/api/academics/warnings", requireAuth, requireRole(["academic", "advisor", "admin", "super_admin"]), validateBody(schemas.createWarning), asyncHandler(async (req, res) => {
+app.post("/api/academics/warnings", requireAuth, requireRole(["academic_admin", "advisor", "admin", "super_admin"]), validateBody(schemas.createWarning), asyncHandler(async (req, res) => {
   const warning = await academicsRepository.createWarning(pool, req.body);
   await audit(req, "create_academic_warning", warning.studentId, warning.message);
   res.status(201).json(warning);
 }));
-app.post("/api/academics/warnings/:id/resolve", requireAuth, requireRole(["academic", "advisor", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+app.post("/api/academics/warnings/:id/resolve", requireAuth, requireRole(["academic_admin", "advisor", "admin", "super_admin"]), asyncHandler(async (req, res) => {
   const warning = await academicsRepository.resolveWarning(pool, req.params.id);
   if (!warning) return res.status(404).json({ error: "Warning not found." });
   await audit(req, "resolve_academic_warning", warning.id, warning.studentId);
   res.json(warning);
 }));
-app.post("/api/advisor/notes", requireAuth, requireRole(["advisor", "admin", "super_admin"]), validateBody(schemas.addAdvisorNote), asyncHandler(async (req, res) => {
-  const note = await academicsRepository.addAdvisorNote(pool, req.user!.id, req.body.studentId, req.body.content, req.body.type);
-  await audit(req, "add_advisor_note", note.studentId, note.type);
+app.get("/api/advisor/students", requireAuth, requireRole(["advisor"]), asyncHandler(async (req, res) => res.json(await advisorsRepository.getAssignments(pool, req.user!.id))));
+app.get("/api/advisor/at-risk", requireAuth, requireRole(["advisor"]), asyncHandler(async (req, res) => res.json(await advisorsRepository.getAtRiskStudents(pool, req.user!.id))));
+app.get("/api/advisor/notes/:studentId", requireAuth, requireRole(["advisor", "academic_admin", "admin", "super_admin"]), asyncHandler(async (req, res) => res.json(await advisorsRepository.getNotes(pool, req.params.studentId))));
+app.post("/api/advisor/notes", requireAuth, requireRole(["advisor"]), validateBody(schemas.advisorNote), asyncHandler(async (req, res) => {
+  const note = await advisorsRepository.createNote(pool, { advisorId: req.user!.id, ...req.body });
+  await audit(req, "add_advisor_note", note.student_id, note.type);
   res.status(201).json(note);
+}));
+app.post("/api/advisor/assignments", requireAuth, requireRole(["academic_admin", "admin", "super_admin"]), validateBody(schemas.advisorAssignment), asyncHandler(async (req, res) => {
+  const assignment = await advisorsRepository.assignStudent(pool, req.body.advisorId, req.body.studentId, req.body.semesterId);
+  res.status(assignment ? 201 : 409).json(assignment || { error: "Advisor assignment already exists." });
+}));
+app.delete("/api/advisor/assignments/:id", requireAuth, requireRole(["academic_admin", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  const assignment = await advisorsRepository.unassignStudent(pool, req.params.id);
+  if (!assignment) return res.status(404).json({ error: "Advisor assignment not found." });
+  res.json(assignment);
+}));
+
+app.get("/api/parent/grades", requireAuth, requireRole(["parent"]), resolveLinkedStudent, asyncHandler(async (req, res) => res.json(await parentRepository.getGrades(pool, req.linkedStudentId!))));
+app.get("/api/parent/attendance", requireAuth, requireRole(["parent"]), resolveLinkedStudent, asyncHandler(async (req, res) => res.json(await parentRepository.getAttendance(pool, req.linkedStudentId!))));
+app.get("/api/parent/tuition", requireAuth, requireRole(["parent"]), resolveLinkedStudent, asyncHandler(async (req, res) => res.json(await parentRepository.getTuition(pool, req.linkedStudentId!))));
+app.get("/api/parent/warnings", requireAuth, requireRole(["parent"]), resolveLinkedStudent, asyncHandler(async (req, res) => res.json(await parentRepository.getWarnings(pool, req.linkedStudentId!))));
+app.get("/api/parent/notifications", requireAuth, requireRole(["parent"]), asyncHandler(async (req, res) => res.json(await parentRepository.getNotifications(pool, req.user!.id))));
+
+app.get("/api/notifications", requireAuth, asyncHandler(async (req, res) => res.json(await notificationsRepository.listForUser(pool, req.user!.id, req.query.unreadOnly === "true"))));
+app.patch("/api/notifications/:id/read", requireAuth, asyncHandler(async (req, res) => {
+  await notificationsRepository.markRead(pool, req.params.id, req.user!.id);
+  res.status(204).send();
+}));
+app.patch("/api/notifications/read-all", requireAuth, asyncHandler(async (req, res) => {
+  await notificationsRepository.markAllRead(pool, req.user!.id);
+  res.status(204).send();
+}));
+
+app.post("/api/course-registrations", requireAuth, requireRole(["student"]), validateBody(schemas.courseRegistration), asyncHandler(async (req, res) => {
+  const result = await courseRegistrationsRepository.register(pool, req.user!.id, req.body.sectionId);
+  if ("error" in result) return res.status(result.status).json({ error: result.error });
+  res.status(201).json(result.row);
+}));
+app.patch("/api/course-registrations/:id/drop", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
+  const registration = await courseRegistrationsRepository.drop(pool, req.params.id, req.user!.id);
+  if (!registration) return res.status(404).json({ error: "Course registration not found." });
+  res.json(registration);
+}));
+
+app.post("/api/grade-appeals", requireAuth, requireRole(["student"]), validateBody(schemas.gradeAppeal), asyncHandler(async (req, res) => {
+  const result = await gradeAppealsRepository.create(pool, req.user!.id, req.body);
+  if ("error" in result) return res.status(result.status).json({ error: result.error });
+  res.status(201).json(result.row);
+}));
+app.get("/api/grade-appeals", requireAuth, asyncHandler(async (req, res) => res.json(await gradeAppealsRepository.list(pool, req.user!))));
+app.patch("/api/grade-appeals/:id/review", requireAuth, requireRole(["teacher"]), validateBody(schemas.gradeAppealReview), asyncHandler(async (req, res) => {
+  const appeal = await gradeAppealsRepository.review(pool, req.params.id, req.body.revisedGrade);
+  if (!appeal) return res.status(404).json({ error: "Grade appeal not found." });
+  res.json(appeal);
+}));
+app.patch("/api/grade-appeals/:id/resolve", requireAuth, requireRole(["academic_admin"]), validateBody(schemas.gradeAppealResolve), asyncHandler(async (req, res) => {
+  const appeal = await gradeAppealsRepository.resolve(pool, req.params.id, req.user!.id, req.body.status, req.body.resolutionNote);
+  if (!appeal) return res.status(404).json({ error: "Grade appeal not found." });
+  res.json(appeal);
+}));
+app.patch("/api/grade-appeals/:id/escalate", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => {
+  const appeal = await gradeAppealsRepository.escalate(pool, req.params.id, req.user!.id);
+  if (!appeal) return res.status(404).json({ error: "Rejected appeal not found or already escalated." });
+  res.json(appeal);
+}));
+
+app.post("/api/leave-requests", requireAuth, requireRole(["student"]), validateBody(schemas.leaveRequest), asyncHandler(async (req, res) => res.status(201).json(await leaveRequestsRepository.create(pool, req.user!.id, req.body))));
+app.get("/api/leave-requests", requireAuth, asyncHandler(async (req, res) => res.json(await leaveRequestsRepository.list(pool, req.user!))));
+app.patch("/api/leave-requests/:id/approve", requireAuth, requireRole(["academic_admin"]), validateBody(schemas.reviewNote), asyncHandler(async (req, res) => {
+  const request = await leaveRequestsRepository.approve(pool, req.params.id, req.user!.id, req.body.reviewNote);
+  if (!request) return res.status(404).json({ error: "Leave request not found." });
+  res.json(request);
+}));
+app.patch("/api/leave-requests/:id/reject", requireAuth, requireRole(["academic_admin"]), validateBody(schemas.reviewNote), asyncHandler(async (req, res) => {
+  const request = await leaveRequestsRepository.reject(pool, req.params.id, req.user!.id, req.body.reviewNote);
+  if (!request) return res.status(404).json({ error: "Leave request not found." });
+  res.json(request);
+}));
+
+app.post("/api/graduation-applications", requireAuth, requireRole(["student"]), asyncHandler(async (req, res) => res.status(201).json(await graduationRepository.create(pool, req.user!.id))));
+app.get("/api/graduation-applications", requireAuth, asyncHandler(async (req, res) => res.json(await graduationRepository.list(pool, req.user!))));
+app.patch("/api/graduation-applications/:id/approve", requireAuth, requireRole(["academic_admin"]), validateBody(schemas.graduationApplicationReview), asyncHandler(async (req, res) => {
+  const application = await graduationRepository.approve(pool, req.params.id, req.user!.id, req.body.note);
+  if (!application) return res.status(404).json({ error: "Graduation application not found." });
+  res.json(application);
+}));
+app.patch("/api/graduation-applications/:id/reject", requireAuth, requireRole(["academic_admin"]), validateBody(schemas.graduationApplicationReview), asyncHandler(async (req, res) => {
+  const application = await graduationRepository.reject(pool, req.params.id, req.user!.id, req.body.note);
+  if (!application) return res.status(404).json({ error: "Graduation application not found." });
+  res.json(application);
+}));
+
+app.get("/api/scholarships", requireAuth, asyncHandler(async (_req, res) => res.json(await scholarshipsRepository.list(pool))));
+app.post("/api/scholarships", requireAuth, requireRole(["finance", "admin", "super_admin"]), validateBody(schemas.scholarship), asyncHandler(async (req, res) => res.status(201).json(await scholarshipsRepository.create(pool, req.body))));
+app.get("/api/scholarship-applications", requireAuth, asyncHandler(async (req, res) => res.json(await scholarshipsRepository.listApplications(pool, req.user!))));
+app.post("/api/scholarship-applications", requireAuth, requireRole(["student"]), validateBody(schemas.scholarshipApplication), asyncHandler(async (req, res) => res.status(201).json(await scholarshipsRepository.apply(pool, req.user!.id, req.body))));
+app.patch("/api/scholarship-applications/:id/approve", requireAuth, requireRole(["finance"]), validateBody(schemas.reviewNote), asyncHandler(async (req, res) => {
+  const application = await scholarshipsRepository.approve(pool, req.params.id, req.user!.id, req.body.reviewNote);
+  if (!application) return res.status(404).json({ error: "Scholarship application not found." });
+  res.json(application);
+}));
+app.patch("/api/scholarship-applications/:id/reject", requireAuth, requireRole(["finance"]), validateBody(schemas.reviewNote), asyncHandler(async (req, res) => {
+  const application = await scholarshipsRepository.reject(pool, req.params.id, req.user!.id, req.body.reviewNote);
+  if (!application) return res.status(404).json({ error: "Scholarship application not found." });
+  res.json(application);
+}));
+
+app.get("/api/academic-warnings", requireAuth, asyncHandler(async (req, res) => {
+  const studentId = req.user!.role === "student" ? req.user!.id : typeof req.query.studentId === "string" ? req.query.studentId : undefined;
+  res.json(await academicsRepository.listWarnings(pool, studentId));
+}));
+app.patch("/api/academic-warnings/:id/resolve", requireAuth, requireRole(["advisor", "academic_admin"]), asyncHandler(async (req, res) => {
+  const warning = await academicsRepository.resolveWarning(pool, req.params.id, req.user!.id);
+  if (!warning) return res.status(404).json({ error: "Warning not found." });
+  res.json(warning);
 }));
 
 app.post("/api/tuition/pay", requireAuth, requireRole(["finance", "admin", "super_admin"]), validateBody(schemas.payTuition), asyncHandler(async (req, res) => {
@@ -560,7 +686,7 @@ app.post("/api/tuition/pay", requireAuth, requireRole(["finance", "admin", "supe
 }));
 
 app.post("/api/store/sync", requireAuth, asyncHandler(async (req, res) => {
-  if (!["admin", "super_admin", "academic", "finance"].includes(req.user!.role)) {
+  if (!["admin", "super_admin", "academic_admin", "finance"].includes(req.user!.role)) {
     return res.status(403).json({ error: "Permission denied." });
   }
   await syncClientStoreToDb(req.body || {});
