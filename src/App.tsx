@@ -18,7 +18,9 @@ import {
   X,
   Lock,
   Download,
-  Fingerprint
+  Fingerprint,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { User, LMSDataStore } from "./types";
 import { AppStore } from "./store";
@@ -52,6 +54,9 @@ function AppShell() {
 
   // Mobile sidebar navigation visibility
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Desktop sidebar collapse state
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const roleLabel = (role: User["role"]) => {
     if (role === "admin" || role === "super_admin") return "Ban Quản Trị";
@@ -274,54 +279,91 @@ function AppShell() {
         <div className="min-h-screen flex flex-col md:flex-row relative">
           
           {/* DESKTOP SIDEBAR NAV BAR */}
-          <aside className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-white/10 p-6 space-y-8 flex-shrink-0 relative z-40 backdrop-blur-xl">
-            <div className="flex items-center space-x-3 pb-6 border-b border-white/5">
-              <div className="w-9 h-9 bg-indigo-500 border border-white/20 rounded-xl flex items-center justify-center">
-                <GraduationCap className="h-5 w-5 text-white" />
+          <aside className={`hidden md:flex flex-col bg-slate-900 border-r border-white/10 p-6 flex-shrink-0 relative z-40 backdrop-blur-xl transition-all duration-300 ${
+            isSidebarCollapsed ? "w-20 items-center px-3" : "w-64"
+          }`}>
+            <div className={`flex items-center justify-between pb-6 border-b border-white/5 w-full ${
+              isSidebarCollapsed ? "flex-col gap-4" : ""
+            }`}>
+              <div className="flex items-center space-x-3">
+                <div className="w-9 h-9 bg-indigo-500 border border-white/20 rounded-xl flex items-center justify-center shrink-0">
+                  <GraduationCap className="h-5 w-5 text-white" />
+                </div>
+                {!isSidebarCollapsed && (
+                  <div>
+                    <h1 className="text-base font-display font-black tracking-widest text-white uppercase">E16 LMS</h1>
+                    <p className="text-[10px] text-white/40 uppercase tracking-tighter">Academic suite v1.1</p>
+                  </div>
+                )}
               </div>
-              <div>
-                <h1 className="text-base font-display font-black tracking-widest text-white uppercase">E16 LMS</h1>
-                <p className="text-[10px] text-white/40 uppercase tracking-tighter">Academic suite v1.1</p>
-              </div>
+              
+              {/* Collapse/Expand Toggle Button */}
+              <button
+                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                className={`p-1 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition duration-150 cursor-pointer ${
+                  isSidebarCollapsed ? "mt-2" : ""
+                }`}
+                title={isSidebarCollapsed ? "Mở rộng thanh menu" : "Thu gọn thanh menu"}
+              >
+                {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              </button>
             </div>
 
             {/* Profile badge summaries */}
-            <div className="bg-white/5 border border-white/5 rounded-2xl p-4 space-y-2">
-              <div className="flex items-center gap-1.5 text-xs text-indigo-300 font-mono">
-                <Fingerprint className="h-3.5 w-3.5" />
-                <span className="uppercase font-bold tracking-wider">
-                  {roleLabel(currentUser.role)}
-                </span>
+            <div className={`bg-white/5 border border-white/5 rounded-2xl p-4 w-full ${
+              isSidebarCollapsed ? "flex flex-col items-center justify-center p-3 space-y-0" : "space-y-2"
+            }`}>
+              <div className="flex items-center gap-1.5 text-xs text-indigo-300 font-mono justify-center w-full" title={roleLabel(currentUser.role)}>
+                <Fingerprint className="h-3.5 w-3.5 shrink-0" />
+                {!isSidebarCollapsed && (
+                  <span className="uppercase font-bold tracking-wider truncate max-w-[130px]">
+                    {roleLabel(currentUser.role)}
+                  </span>
+                )}
               </div>
-              <h5 className="text-xs font-bold text-white truncate">{currentUser.name}</h5>
-              <p className="text-[10px] text-white/40 truncate font-mono">{currentUser.email}</p>
+              {!isSidebarCollapsed && (
+                <>
+                  <h5 className="text-xs font-bold text-white truncate" title={currentUser.name}>{currentUser.name}</h5>
+                  <p className="text-[10px] text-white/40 truncate font-mono" title={currentUser.email}>{currentUser.email}</p>
+                </>
+              )}
             </div>
 
             {/* General instructions instructions */}
-            <div className="text-[11px] text-white/50 space-y-4">
-              <span className="text-[9px] font-mono tracking-widest text-white/40 block uppercase border-b border-white/5 pb-1">Chỉ dẫn Hệ thống</span>
-              <p className="leading-relaxed">
-                Phiên đăng nhập được xác thực qua cookie bảo mật; dữ liệu học tập chính được đồng bộ từ server.
-              </p>
-            </div>
+            {!isSidebarCollapsed && (
+              <div className="text-[11px] text-white/50 space-y-4">
+                <span className="text-[9px] font-mono tracking-widest text-white/40 block uppercase border-b border-white/5 pb-1">Chỉ dẫn Hệ thống</span>
+                <p className="leading-relaxed">
+                  Phiên đăng nhập được xác thực qua cookie bảo mật; dữ liệu học tập chính được đồng bộ từ server.
+                </p>
+              </div>
+            )}
 
             {/* Standalone Action buttons inside desktop view */}
-            <div className="pt-2">
+            <div className="pt-2 w-full flex justify-center">
               <button
                 onClick={handleExportStandaloneHTMLFile}
-                className="w-full text-left py-2 px-3 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition duration-150 rounded-xl flex items-center gap-1.5 shadow cursor-pointer"
+                className={`w-full text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition duration-150 rounded-xl flex items-center justify-center gap-1.5 shadow cursor-pointer ${
+                  isSidebarCollapsed ? "p-3 h-10 w-10 bg-indigo-600/80 hover:bg-indigo-600" : "py-2 px-3 text-[10px]"
+                }`}
+                title="Tải tệp tin Standalone HTML"
               >
-                <Download className="h-3.5 w-3.5" /> Tải tệp tin Standalone HTML
+                <Download className="h-4 w-4 shrink-0" />
+                {!isSidebarCollapsed && <span>Tải tệp tin Standalone HTML</span>}
               </button>
             </div>
 
             {/* Logout control anchor */}
-            <div className="pt-8 border-t border-white/5 mt-auto">
+            <div className="pt-8 border-t border-white/5 mt-auto w-full flex justify-center">
               <button
                 onClick={handleLogout}
-                className="w-full text-left py-2 px-3 text-xs font-semibold text-red-400 hover:text-white hover:bg-red-500/10 transition duration-150 rounded-xl flex items-center gap-2 cursor-pointer"
+                className={`w-full text-xs font-semibold text-red-400 hover:text-white hover:bg-red-500/10 transition duration-150 rounded-xl flex items-center justify-center gap-2 cursor-pointer ${
+                  isSidebarCollapsed ? "p-3 h-10 w-10 bg-red-500/5 hover:bg-red-500/10" : "py-2 px-3"
+                }`}
+                title="Đăng xuất phiên làm việc"
               >
-                <LogOut className="h-4 w-4" /> Đăng xuất phiên làm việc
+                <LogOut className="h-4 w-4 shrink-0" />
+                {!isSidebarCollapsed && <span>Đăng xuất phiên làm việc</span>}
               </button>
             </div>
           </aside>
