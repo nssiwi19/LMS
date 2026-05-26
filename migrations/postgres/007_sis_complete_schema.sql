@@ -2,21 +2,27 @@
 -- Complete SIS migration adding missing tables, indexes, constraints, and robustly standardizing boolean columns.
 
 -- 1. Standardize existing columns to PostgreSQL BOOLEAN robustly
+ALTER TABLE users ALTER COLUMN is_active DROP DEFAULT;
 ALTER TABLE users ALTER COLUMN is_active TYPE BOOLEAN USING (CASE WHEN is_active::text IN ('1', 'true', 't') THEN true ELSE false END);
 ALTER TABLE users ALTER COLUMN is_active SET DEFAULT TRUE;
 
+ALTER TABLE academic_years ALTER COLUMN is_current DROP DEFAULT;
 ALTER TABLE academic_years ALTER COLUMN is_current TYPE BOOLEAN USING (CASE WHEN is_current::text IN ('1', 'true', 't') THEN true ELSE false END);
 ALTER TABLE academic_years ALTER COLUMN is_current SET DEFAULT FALSE;
 
+ALTER TABLE academic_warnings ALTER COLUMN is_resolved DROP DEFAULT;
 ALTER TABLE academic_warnings ALTER COLUMN is_resolved TYPE BOOLEAN USING (CASE WHEN is_resolved::text IN ('1', 'true', 't') THEN true ELSE false END);
 ALTER TABLE academic_warnings ALTER COLUMN is_resolved SET DEFAULT FALSE;
 
+ALTER TABLE notifications ALTER COLUMN is_read DROP DEFAULT;
 ALTER TABLE notifications ALTER COLUMN is_read TYPE BOOLEAN USING (CASE WHEN is_read::text IN ('1', 'true', 't') THEN true ELSE false END);
 ALTER TABLE notifications ALTER COLUMN is_read SET DEFAULT FALSE;
 
+ALTER TABLE lesson_progress ALTER COLUMN completed DROP DEFAULT;
 ALTER TABLE lesson_progress ALTER COLUMN completed TYPE BOOLEAN USING (CASE WHEN completed::text IN ('1', 'true', 't') THEN true ELSE false END);
 ALTER TABLE lesson_progress ALTER COLUMN completed SET DEFAULT FALSE;
 
+ALTER TABLE quiz_attempts ALTER COLUMN passed DROP DEFAULT;
 ALTER TABLE quiz_attempts ALTER COLUMN passed TYPE BOOLEAN USING (CASE WHEN passed::text IN ('1', 'true', 't') THEN true ELSE false END);
 ALTER TABLE quiz_attempts ALTER COLUMN passed SET DEFAULT FALSE;
 
