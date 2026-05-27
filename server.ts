@@ -860,20 +860,20 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       }
       for (const qst of clientQuestions) {
         await client.query(
-          `INSERT INTO questions (id, quiz_id, text, type, options, correct_answer)
+          `INSERT INTO questions (id, quiz_id, text, type, options_json, correct_answer)
            VALUES ($1, $2, $3, $4, $5, $6)
            ON CONFLICT (id) DO UPDATE SET
              quiz_id = EXCLUDED.quiz_id,
              text = EXCLUDED.text,
              type = EXCLUDED.type,
-             options = EXCLUDED.options,
+             options_json = EXCLUDED.options_json,
              correct_answer = EXCLUDED.correct_answer`,
           [
             qst.id,
             qst.quizId,
             qst.text,
             qst.type,
-            qst.options || [],
+            JSON.stringify(qst.options || []),
             qst.correctAnswer
           ]
         );
@@ -1235,6 +1235,29 @@ app.post("/api/quizzes/:id/questions", requireAuth, requireRole(["teacher", "adm
   await audit(req, "add_quiz_question", question.id, quiz.id);
   res.status(201).json(question);
 }));
+
+app.put("/api/questions/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.addQuestion), asyncHandler(async (req, res) => {
+  const question = (await pool.query("SELECT quiz_id FROM questions WHERE id = $1", [req.params.id])).rows[0];
+  if (!question) return res.status(404).json({ error: "Question not found." });
+  const quiz = await quizzesRepository.findById(pool, question.quiz_id);
+  if (!quiz) return res.status(404).json({ error: "Quiz not found." });
+  if (req.user!.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user!.id, quiz.courseId)) return res.status(403).json({ error: "Permission denied." });
+  const updated = await quizzesRepository.updateQuestion(pool, req.params.id, req.body);
+  await audit(req, "update_quiz_question", req.params.id, quiz.id);
+  res.json(updated);
+}));
+
+app.delete("/api/questions/:id", requireAuth, requireRole(["teacher", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  const question = (await pool.query("SELECT quiz_id FROM questions WHERE id = $1", [req.params.id])).rows[0];
+  if (!question) return res.status(404).json({ error: "Question not found." });
+  const quiz = await quizzesRepository.findById(pool, question.quiz_id);
+  if (!quiz) return res.status(404).json({ error: "Quiz not found." });
+  if (req.user!.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user!.id, quiz.courseId)) return res.status(403).json({ error: "Permission denied." });
+  await quizzesRepository.deleteQuestion(pool, req.params.id);
+  await audit(req, "delete_quiz_question", req.params.id, quiz.id);
+  res.status(204).end();
+}));
+
 app.post("/api/quizzes/submit", requireAuth, requireRole(["student"]), validateBody(schemas.submitQuiz), asyncHandler(async (req, res) => {
   const result = await quizzesRepository.submitAttempt(pool, req.body.quizId, req.user!.id, req.body.answers, req.body.startedAt);
   if (!result) return res.status(404).json({ error: "Quiz not found." });
@@ -1265,7 +1288,10 @@ app.post("/api/assignments/grade", requireAuth, requireRole(["teacher", "admin",
   res.json(result);
 }));
 
-app.post("/api/admin/users", requireAuth, requireRole(["admin", "super_admin"]), validateBody(schemas.createUser), asyncHandler(async (req, res) => {
+app.post("/api/admin/users", requireAuth, requireRole(["admin", "super_admin", "le_tan"]), validateBody(schemas.createUser), asyncHandler(async (req, res) => {
+  if (req.user!.role === "le_tan" && req.body.role !== "student") {
+    return res.status(403).json({ error: "Lễ tân chỉ có quyền đăng ký học viên (student)." });
+  }
   const credential = hashPassword(req.body.password);
   const user: User = {
     id: generateId("user"),
@@ -1280,8 +1306,43 @@ app.post("/api/admin/users", requireAuth, requireRole(["admin", "super_admin"]),
     createdAt: new Date().toISOString()
   };
   const created = await usersRepository.create(pool, user);
+  if (created.role === "student") {
+    // Auto-create default student profile
+    await pool.query(
+      "INSERT INTO student_profiles (id, user_id, student_code, program_id, department_id, academic_year, enrollment_date, expected_graduation, status, gpa, total_credits_earned) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+      [
+        "profile_" + created.id,
+        created.id,
+        "SV2025" + created.id.slice(-4).toUpperCase(),
+        "prog_se",
+        "dept_cs",
+        1,
+        new Date().toISOString().slice(0, 10),
+        "2029-06-30",
+        "active",
+        0.0,
+        0
+      ]
+    );
+  }
   await audit(req, "create_user", created.id, created.email);
   res.status(201).json(created);
+}));
+
+app.post("/api/admin/users/:id/reset-password", requireAuth, requireRole(["admin", "super_admin", "le_tan"]), asyncHandler(async (req, res) => {
+  const user = await usersRepository.findById(pool, req.params.id);
+  if (!user) return res.status(404).json({ error: "User not found." });
+  if (req.user!.role === "le_tan" && user.role !== "student") {
+    return res.status(403).json({ error: "Lễ tân chỉ có quyền reset mật khẩu học viên." });
+  }
+  const defaultNewPass = "studente16";
+  const credential = hashPassword(defaultNewPass);
+  await pool.query(
+    "UPDATE users SET password_hash = $1, password_salt = $2 WHERE id = $3",
+    [credential.hash, credential.salt, req.params.id]
+  );
+  await audit(req, "reception_reset_password", req.params.id, `Reset password for student: ${user.email}`);
+  res.json({ ok: true, message: `Mật khẩu đã được đặt lại thành công về mặc định: ${defaultNewPass}` });
 }));
 app.patch("/api/admin/users/:id/status", requireAuth, requireRole(["admin", "super_admin"]), validateBody(schemas.setUserActive), asyncHandler(async (req, res) => {
   const user = await usersRepository.setActive(pool, req.params.id, req.body.isActive);
@@ -1443,7 +1504,7 @@ app.patch("/api/academic-warnings/:id/resolve", requireAuth, requireRole(["advis
   res.json(warning);
 }));
 
-app.post("/api/tuition/pay", requireAuth, requireRole(["finance", "admin", "super_admin"]), validateBody(schemas.payTuition), asyncHandler(async (req, res) => {
+app.post("/api/tuition/pay", requireAuth, requireRole(["finance", "admin", "super_admin", "student"]), validateBody(schemas.payTuition), asyncHandler(async (req, res) => {
   const result = await financeRepository.payTuition(pool, req.body.feeId, req.body.paidAmount);
   if (!result) return res.status(404).json({ error: "Tuition fee not found." });
   await audit(req, "record_tuition_payment", req.body.feeId, `Paid amount ${req.body.paidAmount}.`);

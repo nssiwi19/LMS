@@ -83,6 +83,89 @@ export default function StudentAcademics(props: ComponentProps) {
     handleMarkNotificationRead
   } = props;
 
+  // Dynamic GPA and Credits calculation
+  const enrollmentsByCourse: Record<string, any[]> = {};
+  myEnrollments.forEach((enroll: any) => {
+    if (!enrollmentsByCourse[enroll.courseId]) {
+      enrollmentsByCourse[enroll.courseId] = [];
+    }
+    enrollmentsByCourse[enroll.courseId].push(enroll);
+  });
+
+  const uniqueCourseGrades = Object.entries(enrollmentsByCourse).map(([courseId, enrolls]) => {
+    const course = store.courses.find((c: any) => c.id === courseId);
+    if (!course) return null;
+
+    let maxGradeNum = 0;
+    let isCompleted = false;
+
+    enrolls.forEach((enroll: any) => {
+      if (enroll.status === "completed") {
+        isCompleted = true;
+      }
+      const enrolledAssignments = store.assignments.filter((a: any) => a.courseId === courseId);
+      const assignmentSubmissions = store.submissions.filter((s: any) => 
+        s.studentId === currentUser.id && 
+        enrolledAssignments.some((ea: any) => ea.id === s.assignmentId)
+      );
+
+      let finalGradeNum = 0;
+      const earnedAttempts = assignmentSubmissions.filter((s: any) => s.score !== undefined);
+      if (earnedAttempts.length > 0) {
+        const sumScore = earnedAttempts.reduce((sum: number, s: any) => sum + (s.score || 0), 0);
+        const maxScore = earnedAttempts.reduce((sum: number, s: any) => {
+          const eaObj = enrolledAssignments.find((ea: any) => ea.id === s.assignmentId);
+          return sum + (eaObj ? eaObj.maxScore : 100);
+        }, 0);
+        finalGradeNum = Math.round((sumScore / (maxScore || 1)) * 100);
+      } else {
+        finalGradeNum = enroll.status === "completed" ? 85 : 0;
+      }
+
+      if (finalGradeNum > maxGradeNum) {
+        maxGradeNum = finalGradeNum;
+      }
+    });
+
+    let scale4Val = 0;
+    let letterGrade = "F";
+    if (maxGradeNum >= 85) { scale4Val = 4.0; letterGrade = "A"; }
+    else if (maxGradeNum >= 75) { scale4Val = 3.0; letterGrade = "B"; }
+    else if (maxGradeNum >= 60) { scale4Val = 2.0; letterGrade = "C"; }
+    else if (maxGradeNum >= 50) { scale4Val = 1.0; letterGrade = "D"; }
+    else { scale4Val = 0.0; letterGrade = "F"; }
+
+    return {
+      courseId,
+      course,
+      grade: maxGradeNum,
+      scale4Val,
+      letterGrade,
+      isCompleted,
+      credits: 3
+    };
+  }).filter(Boolean) as Array<{
+    courseId: string;
+    course: any;
+    grade: number;
+    scale4Val: number;
+    letterGrade: string;
+    isCompleted: boolean;
+    credits: number;
+  }>;
+
+  const calculatedCredits = uniqueCourseGrades.reduce((sum, c) => {
+    if (c.isCompleted || c.grade >= 50) {
+      return sum + c.credits;
+    }
+    return sum;
+  }, 0);
+
+  const gradedCourses = uniqueCourseGrades.filter(c => c.isCompleted || c.grade > 0);
+  const calculatedGpa = gradedCourses.length > 0 
+    ? gradedCourses.reduce((sum, c) => sum + (c.scale4Val * c.credits), 0) / gradedCourses.reduce((sum, c) => sum + c.credits, 0)
+    : 0.0;
+
   return (
     <>
         {activeSubTab === "profile" && (
@@ -351,12 +434,12 @@ export default function StudentAcademics(props: ComponentProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white/3 border border-white/5 p-4 rounded-2xl text-center">
                 <span className="text-[10px] text-white/40 block uppercase font-bold">Điểm GPA Tích lũy</span>
-                <span className="text-3xl font-mono font-black text-amber-400 mt-1 block">{myProfile.gpa?.toFixed(2) || "0.00"}</span>
+                <span className="text-3xl font-mono font-black text-amber-400 mt-1 block">{calculatedGpa.toFixed(2)}</span>
                 <span className="text-[10px] text-white/30 font-serif italic mt-0.5 block">Hệ số 4.0 chuẩn hóa</span>
               </div>
               <div className="bg-white/3 border border-white/5 p-4 rounded-2xl text-center">
                 <span className="text-[10px] text-white/40 block uppercase font-bold">Tích lũy Tín chỉ</span>
-                <span className="text-3xl font-mono font-black text-indigo-300 mt-1 block">{myProfile.totalCreditsEarned || "0"} Tín</span>
+                <span className="text-3xl font-mono font-black text-indigo-300 mt-1 block">{calculatedCredits} Tín</span>
                 <span className="text-[10px] text-white/30 italic mt-0.5 block">Tối thiểu tốt nghiệp: 120 Tín</span>
               </div>
               <div className="bg-white/3 border border-white/5 p-4 rounded-2xl flex flex-col justify-center items-center">
@@ -539,6 +622,21 @@ export default function StudentAcademics(props: ComponentProps) {
                         <div className="flex-1 space-y-1.5 text-xs text-white/70">
                           <p className="font-bold text-white font-sans text-xs">Cổng chuyển khoản nộp trực tuyến an toàn:</p>
                           <p className="leading-relaxed font-sans text-[11.5px]">Quét mã VietQR nộp trực tuyến dưới đây, kế toán sẽ đối soát và cập nhật tình trạng phê duyệt học viện tự động.</p>
+                          <button
+                            onClick={async () => {
+                              try {
+                                await api.payTuition({ feeId: fee.id, paidAmount: remaining });
+                                triggerToast("✅ Hệ thống đã ghi nhận yêu cầu chuyển khoản và tự động phê duyệt hóa đơn học phí!");
+                                onRefreshData();
+                              } catch (err: any) {
+                                console.error(err);
+                                triggerToast("❗ Giao dịch thất bại: " + err.message);
+                              }
+                            }}
+                            className="mt-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition cursor-pointer flex items-center gap-1 text-[11px] w-fit"
+                          >
+                            Tôi đã chuyển khoản (Giả lập test)
+                          </button>
                         </div>
                         <div className="flex-shrink-0 p-3 bg-white rounded-xl border border-white/10 w-28 h-28 flex items-center justify-center">
                           <img
@@ -598,67 +696,31 @@ export default function StudentAcademics(props: ComponentProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-xs text-white/85">
-                    {myEnrollments.map(enroll => {
-                      const course = store.courses.find(c => c.id === enroll.courseId);
-                      if (!course) return null;
-
-                      // Calculate student grade from completed assignments
-                      const enrolledAssignments = store.assignments.filter(a => a.courseId === course.id);
-                      const assignmentSubmissions = store.submissions.filter(s => 
-                        s.studentId === currentUser.id && 
-                        enrolledAssignments.some(ea => ea.id === s.assignmentId)
-                      );
-
-                      let finalGradeNum = 0;
-                      let earnedAttempts = assignmentSubmissions.filter(s => s.score !== undefined);
-                      if (earnedAttempts.length > 0) {
-                        const sumScore = earnedAttempts.reduce((sum, s) => sum + (s.score || 0), 0);
-                        const maxScore = earnedAttempts.reduce((sum, s) => {
-                          const eaObj = enrolledAssignments.find(ea => ea.id === s.assignmentId);
-                          return sum + (eaObj ? eaObj.maxScore : 100);
-                        }, 0);
-                        finalGradeNum = Math.round((sumScore / (maxScore || 1)) * 100);
-                      } else {
-                        // Fallback numeric score
-                        finalGradeNum = enroll.status === "completed" ? 85 : 0;
-                      }
-
-                      // Convert to letter / scale 4.0
-                      let scale4Val = 0;
-                      let letterGrade = "F";
-                      
-                      if (finalGradeNum >= 85) { scale4Val = 4.0; letterGrade = "A"; }
-                      else if (finalGradeNum >= 75) { scale4Val = 3.0; letterGrade = "B"; }
-                      else if (finalGradeNum >= 60) { scale4Val = 2.0; letterGrade = "C"; }
-                      else if (finalGradeNum >= 50) { scale4Val = 1.0; letterGrade = "D"; }
-                      else { scale4Val = 0.0; letterGrade = "F"; }
-
-                      return (
-                        <tr key={enroll.id}>
-                          <td className="py-3 font-bold text-white">{course.title}</td>
-                          <td className="py-3 text-center font-mono font-bold text-indigo-300">3 Tín</td>
-                          <td className="py-3 text-center font-mono font-bold text-white/70">{finalGradeNum}</td>
-                          <td className="py-3 text-center font-mono font-bold text-amber-400">{scale4Val.toFixed(1)}</td>
-                          <td className="py-3 text-right font-black font-mono">
-                            <span className={`px-2.5 py-0.5 rounded text-[10px] ${
-                              letterGrade === "A" ? "bg-emerald-500/10 text-emerald-400" :
-                              letterGrade === "B" ? "bg-blue-500/10 text-blue-400" :
-                              letterGrade === "C" ? "bg-cyan-500/10 text-cyan-400" :
-                              letterGrade === "D" ? "bg-yellow-500/10 text-yellow-500" : "bg-red-500/10 text-red-500"
-                            }`}>
-                              Xếp loại {letterGrade}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {uniqueCourseGrades.map(g => (
+                      <tr key={g.courseId}>
+                        <td className="py-3 font-bold text-white">{g.course.title}</td>
+                        <td className="py-3 text-center font-mono font-bold text-indigo-300">{g.credits} Tín</td>
+                        <td className="py-3 text-center font-mono font-bold text-white/70">{g.grade}</td>
+                        <td className="py-3 text-center font-mono font-bold text-amber-400">{g.scale4Val.toFixed(1)}</td>
+                        <td className="py-3 text-right font-black font-mono">
+                          <span className={`px-2.5 py-0.5 rounded text-[10px] ${
+                            g.letterGrade === "A" ? "bg-emerald-500/10 text-emerald-400" :
+                            g.letterGrade === "B" ? "bg-blue-500/10 text-blue-400" :
+                            g.letterGrade === "C" ? "bg-cyan-500/10 text-cyan-400" :
+                            g.letterGrade === "D" ? "bg-yellow-500/10 text-yellow-500" : "bg-red-500/10 text-red-500"
+                          }`}>
+                            Xếp loại {g.letterGrade}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
 
               <div className="border-t border-white/5 pt-4 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-mono text-white/50">
-                <span>Tổng số tín chỉ tích lũy: <strong className="text-white">{myProfile.totalCreditsEarned} Tín</strong></span>
-                <span>GPA Trung bình Tích Lũy cuối đợt: <strong className="text-amber-400 text-sm">{myProfile.gpa?.toFixed(2) || "0.00"}</strong></span>
+                <span>Tổng số tín chỉ tích lũy: <strong className="text-white">{calculatedCredits} Tín</strong></span>
+                <span>GPA Trung bình Tích Lũy cuối đợt: <strong className="text-amber-400 text-sm">{calculatedGpa.toFixed(2)}</strong></span>
               </div>
             </div>
 
@@ -669,7 +731,7 @@ export default function StudentAcademics(props: ComponentProps) {
           </div>
         )}
       {showPrintTranscript && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto rounded-3xl">
           <div className="bg-white text-slate-900 w-full max-w-2xl rounded-3xl p-8 relative shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto print:p-0 print:border-none print:shadow-none print:rounded-none">
             <button 
               onClick={() => setShowPrintTranscript(false)}
@@ -711,26 +773,22 @@ export default function StudentAcademics(props: ComponentProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {myEnrollments.map((enroll, i) => {
-                    const course = store.courses.find(c => c.id === enroll.courseId);
-                    if (!course) return null;
-                    return (
-                      <tr key={i} className="text-slate-950">
-                        <td className="py-2.5 px-3 font-semibold">{course.title}</td>
-                        <td className="py-2.5 px-3 text-center">3 Tín</td>
-                        <td className="py-2.5 px-3 text-center">85</td>
-                        <td className="py-2.5 px-3 text-center">3.5</td>
-                        <td className="py-2.5 px-3 text-right font-bold">Học Khá (B+)</td>
-                      </tr>
-                    );
-                  })}
+                  {uniqueCourseGrades.map((g, i) => (
+                    <tr key={i} className="text-slate-950">
+                      <td className="py-2.5 px-3 font-semibold">{g.course.title}</td>
+                      <td className="py-2.5 px-3 text-center">{g.credits} Tín</td>
+                      <td className="py-2.5 px-3 text-center">{g.grade}</td>
+                      <td className="py-2.5 px-3 text-center">{g.scale4Val.toFixed(1)}</td>
+                      <td className="py-2.5 px-3 text-right font-bold">Xếp loại {g.letterGrade}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
 
             <div className="flex justify-between items-center border-t border-slate-300 pt-4 font-serif text-xs">
-              <span>Tổng số Tín chỉ Tích lũy: <strong>{myProfile.totalCreditsEarned} Tín chỉ</strong></span>
-              <span>Điểm trung bình GPA chung: <strong className="text-slate-900 text-sm font-mono font-black">{myProfile.gpa?.toFixed(2) || "0.00"}</strong></span>
+              <span>Tổng số Tín chỉ Tích lũy: <strong>{calculatedCredits} Tín chỉ</strong></span>
+              <span>Điểm trung bình GPA chung: <strong className="text-slate-900 text-sm font-mono font-black">{calculatedGpa.toFixed(2)}</strong></span>
             </div>
 
             {/* Simulated seal and signature stamp */}

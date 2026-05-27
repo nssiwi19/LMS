@@ -24,6 +24,19 @@ export const quizzesRepository = {
     return question;
   },
 
+  async updateQuestion(db: Queryable, questionId: string, input: { text: string; type: "single" | "multiple" | "text"; options: string[]; correctAnswer: string }) {
+    await db.query(
+      "UPDATE questions SET text = $1, type = $2, options_json = $3, correct_answer = $4 WHERE id = $5",
+      [input.text, input.type, JSON.stringify(input.options || []), input.correctAnswer, questionId]
+    );
+    return { id: questionId, ...input };
+  },
+
+  async deleteQuestion(db: Queryable, questionId: string) {
+    await db.query("DELETE FROM questions WHERE id = $1", [questionId]);
+    return { id: questionId };
+  },
+
   async findById(db: Queryable, quizId: string) {
     const row = (await db.query("SELECT * FROM quizzes WHERE id = $1", [quizId])).rows[0];
     return row ? quizFromRow(row) : null;

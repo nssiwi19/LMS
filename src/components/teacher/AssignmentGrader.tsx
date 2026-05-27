@@ -168,7 +168,7 @@ export default function AssignmentGrader(props: ComponentProps) {
 
       {/* MODAL 5: CREATE ASSIGNMENT FORM */}
       {showAssignModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 rounded-3xl">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
             <button 
               onClick={() => setShowAssignModal(false)}
@@ -253,7 +253,7 @@ export default function AssignmentGrader(props: ComponentProps) {
 
       {/* MODAL 6: EVALUATE & GRADE FORM */}
       {activeSubmissionId && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 rounded-3xl">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
             <button 
               onClick={() => setActiveSubmissionId(null)}

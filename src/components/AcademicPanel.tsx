@@ -16,6 +16,8 @@ import {
 import { User, Course, Enrollment, Lesson, LessonProgress } from "../types";
 import { AppStore } from "../store";
 import { useApiStore } from "../hooks/apiHooks";
+import AttendanceManager from "./AttendanceManager";
+import WarningAndReports from "./WarningAndReports";
 
 interface AcademicPanelProps {
   currentUser: User;
@@ -27,7 +29,7 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
   const { store, isLoading, isError } = useApiStore();
 
   // Active sub tab navigation
-  const [activeSubTab, setActiveSubTab] = useState<"overview" | "students" | "compare" | "dropouts">("overview");
+  const [activeSubTab, setActiveSubTab] = useState<"overview" | "students" | "compare" | "dropouts" | "attendance" | "warnings" | "reports">("overview");
 
   // Filters state
   const [selectedCourseId, setSelectedCourseId] = useState<string>("all");
@@ -300,10 +302,10 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
       </div>
 
       {/* Main interactive subpanels workspace */}
-      <div className="flex border-b border-white/10 bg-white/5 rounded-2xl p-1 gap-1">
+      <div className="flex flex-wrap border-b border-white/10 bg-white/5 rounded-2xl p-1 gap-1">
         <button
           onClick={() => setActiveSubTab("overview")}
-          className={`flex-1 py-2.5 text-xs font-semibold rounded-xl transition duration-150 cursor-pointer ${
+          className={`flex-1 min-w-[120px] py-2.5 text-xs font-semibold rounded-xl transition duration-150 cursor-pointer ${
             activeSubTab === "overview" ? "bg-white/10 text-white border border-white/15" : "text-white/60 hover:text-white"
           }`}
         >
@@ -311,7 +313,7 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
         </button>
         <button
           onClick={() => setActiveSubTab("students")}
-          className={`flex-1 py-2.5 text-xs font-semibold rounded-xl transition duration-150 cursor-pointer ${
+          className={`flex-1 min-w-[120px] py-2.5 text-xs font-semibold rounded-xl transition duration-150 cursor-pointer ${
             activeSubTab === "students" ? "bg-white/10 text-white border border-white/15" : "text-white/60 hover:text-white"
           }`}
         >
@@ -319,19 +321,43 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
         </button>
         <button
           onClick={() => setActiveSubTab("compare")}
-          className={`flex-1 py-2.5 text-xs font-semibold rounded-xl transition duration-150 cursor-pointer ${
+          className={`flex-1 min-w-[120px] py-2.5 text-xs font-semibold rounded-xl transition duration-150 cursor-pointer ${
             activeSubTab === "compare" ? "bg-white/10 text-white border border-white/15" : "text-white/60 hover:text-white"
           }`}
         >
-          So sánh Hiệu xuất Khóa học
+          So sánh Hiệu suất
         </button>
         <button
           onClick={() => setActiveSubTab("dropouts")}
-          className={`flex-1 py-2.5 text-xs font-semibold rounded-xl transition duration-150 cursor-pointer ${
+          className={`flex-1 min-w-[120px] py-2.5 text-xs font-semibold rounded-xl transition duration-150 cursor-pointer ${
             activeSubTab === "dropouts" ? "bg-white/10 text-white border border-white/15" : "text-white/60 hover:text-white"
           }`}
         >
-          Tỷ lệ Hao hụt & Bỏ dở bài học
+          Hao hụt Bài học
+        </button>
+        <button
+          onClick={() => setActiveSubTab("attendance")}
+          className={`flex-1 min-w-[120px] py-2.5 text-xs font-semibold rounded-xl transition duration-150 cursor-pointer ${
+            activeSubTab === "attendance" ? "bg-white/10 text-white border border-white/15" : "text-white/60 hover:text-white"
+          }`}
+        >
+          Quản lý Điểm danh
+        </button>
+        <button
+          onClick={() => setActiveSubTab("warnings")}
+          className={`flex-1 min-w-[120px] py-2.5 text-xs font-semibold rounded-xl transition duration-150 cursor-pointer ${
+            activeSubTab === "warnings" ? "bg-white/10 text-white border border-white/15" : "text-white/60 hover:text-white"
+          }`}
+        >
+          Cảnh báo Học tập
+        </button>
+        <button
+          onClick={() => setActiveSubTab("reports")}
+          className={`flex-1 min-w-[120px] py-2.5 text-xs font-semibold rounded-xl transition duration-150 cursor-pointer ${
+            activeSubTab === "reports" ? "bg-white/10 text-white border border-white/15" : "text-white/60 hover:text-white"
+          }`}
+        >
+          Báo cáo & Phổ điểm
         </button>
       </div>
 
@@ -491,8 +517,6 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
         {/* Tab 2: Tiến độ từng học viên */}
         {activeSubTab === "students" && (
           <div className="space-y-6">
-      {isLoading && <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">Đang tải dữ liệu...</div>}
-      {isError && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">Không thể tải dữ liệu từ server.</div>}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-4">
               <div>
                 <h4 className="text-base font-display font-semibold text-white">Sổ theo dõi Tiến độ Học tập của Học viên</h4>
@@ -676,6 +700,58 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Tab 5: Quản lý Điểm danh */}
+        {activeSubTab === "attendance" && (
+          <div className="space-y-6">
+            <div className="border-b border-white/5 pb-4">
+              <h4 className="text-base font-display font-semibold text-white">Điểm danh & Chuyên cần Học viên</h4>
+              <p className="text-xs text-white/50">Học vụ hỗ trợ giảng viên điểm danh học phần hoặc điều chỉnh hồ sơ chuyên cần nhanh chóng.</p>
+            </div>
+            <AttendanceManager 
+              store={store} 
+              currentUser={currentUser} 
+              onRefreshData={onRefreshData} 
+              triggerToast={showToast} 
+            />
+          </div>
+        )}
+
+        {/* Tab 6: Cảnh báo học tập */}
+        {activeSubTab === "warnings" && (
+          <div className="space-y-6">
+            <div className="border-b border-white/5 pb-4">
+              <h4 className="text-base font-display font-semibold text-white">Quản lý Cảnh báo Học thuật</h4>
+              <p className="text-xs text-white/50">Gửi cảnh báo rèn luyện chuyên môn, GPA, hoặc học phí quá hạn tới học sinh.</p>
+            </div>
+            <WarningAndReports 
+              store={store} 
+              currentUser={currentUser} 
+              onRefreshData={onRefreshData} 
+              triggerToast={showToast} 
+              onSelectStudentProfile={(userId) => setActiveSubTab("students")}
+              defaultTab="warnings"
+            />
+          </div>
+        )}
+
+        {/* Tab 7: Báo cáo & Phổ điểm GPA */}
+        {activeSubTab === "reports" && (
+          <div className="space-y-6">
+            <div className="border-b border-white/5 pb-4">
+              <h4 className="text-base font-display font-semibold text-white">Báo cáo & Phổ điểm Hệ thống</h4>
+              <p className="text-xs text-white/50">Thống kê biểu đồ phổ điểm GPA toàn trường và hiệu suất thu hồi học phí học kỳ.</p>
+            </div>
+            <WarningAndReports 
+              store={store} 
+              currentUser={currentUser} 
+              onRefreshData={onRefreshData} 
+              triggerToast={showToast} 
+              onSelectStudentProfile={(userId) => setActiveSubTab("students")}
+              defaultTab="reports"
+            />
           </div>
         )}
 

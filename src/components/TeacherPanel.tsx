@@ -394,37 +394,39 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
     e.preventDefault();
     if (!activeSubmissionId) return;
 
-    // Call server API first to persist in PostgreSQL if running on server
     try {
       await api.gradeAssignment({
         submissionId: activeSubmissionId,
         score: Number(gradingScore),
         feedback: gradingFeedback
       });
-    } catch (err) {
-      console.warn("Failed to grade assignment on server, using local store fallback:", err);
+
+      const storeData = AppStore.get();
+      storeData.submissions = storeData.submissions.map(sub => {
+        if (sub.id === activeSubmissionId) {
+          const chal = storeData.assignments.find(a => a.id === sub.assignmentId);
+          const maxScore = chal?.maxScore || 100;
+          AppStore.log(currentUser.id, "grade_assignment", sub.id, `Graded score ${gradingScore} with feedback: ${gradingFeedback}`);
+          AppStore.notify(sub.studentId, "success", `Bài làm của bạn cho bài tập "${chal?.title || "Không tên"}" đã được chấm điểm! Điểm số: ${gradingScore}/${maxScore}. Nhận xét: ${gradingFeedback}`);
+          return {
+            ...sub,
+            score: Number(gradingScore),
+            feedback: gradingFeedback,
+            gradedAt: new Date().toISOString()
+          };
+        }
+        return sub;
+      });
+
+      AppStore.save(storeData);
+      setActiveSubmissionId(null);
+      setGradingFeedback("");
+      onRefreshData();
+      triggerToast("Đã cập nhật điểm số và nhận xét thành công!");
+    } catch (err: any) {
+      console.error("Failed to grade assignment on server:", err);
+      triggerToast(`Lỗi chấm điểm: ${err.message || "Không thể kết nối tới máy chủ."}`);
     }
-
-    const storeData = AppStore.get();
-    storeData.submissions = storeData.submissions.map(sub => {
-      if (sub.id === activeSubmissionId) {
-        AppStore.log(currentUser.id, "grade_assignment", sub.id, `Graded score ${gradingScore} with feedback: ${gradingFeedback}`);
-        AppStore.notify(sub.studentId, "success", `Your assignment has been graded by ${currentUser.name}! Score: ${gradingScore}/${gradingScore}. Check feedback details.`);
-        return {
-          ...sub,
-          score: Number(gradingScore),
-          feedback: gradingFeedback,
-          gradedAt: new Date().toISOString()
-        };
-      }
-      return sub;
-    });
-
-    AppStore.save(storeData);
-    setActiveSubmissionId(null);
-    setGradingFeedback("");
-    onRefreshData();
-    triggerToast("Student assignment grading scorecard finalized.");
   };
 
   // Export Gradebook CSV
@@ -559,7 +561,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
       </div>
 
       {/* Active Panel View Canvas */}
-      <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md">
+      <div className="relative bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md">
 
         <CourseBuilder {...teacherPanelProps} />
         <QuizBuilder {...teacherPanelProps} />

@@ -12,12 +12,17 @@ import {
   Lock,
   Phone,
   Mail,
-  RefreshCw
+  RefreshCw,
+  BookOpen,
+  Clock,
+  Award,
+  X
 } from "lucide-react";
 import { User as UserType, Course } from "../types";
 import { AppStore } from "../store";
 import { generateId } from "../utils";
 import { hashPassword } from "../authHash";
+import { api } from "../api";
 
 interface ReceptionPanelProps {
   currentUser: UserType;
@@ -43,12 +48,15 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
   // Toast notifications
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Curriculum consultation modal state
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleRegisterStudent = (e: React.FormEvent) => {
+  const handleRegisterStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = regEmail.trim().toLowerCase();
 
@@ -57,84 +65,42 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
       return;
     }
 
-    const freshStore = AppStore.get();
-    
-    // Check if email already exists
-    if (freshStore.users.some(u => u.email.toLowerCase() === cleanEmail)) {
-      showToast("Lỗi: Email này đã được đăng ký trong hệ thống!");
+    if (regPassword.length < 8) {
+      showToast("Mật khẩu của học viên phải dài tối thiểu 8 ký tự.");
       return;
     }
 
-    // Create student account
-    const newStudentId = generateId("user");
-    const credential = hashPassword(regPassword);
-    const newStudent: UserType = {
-      id: newStudentId,
-      name: regName.trim(),
-      email: cleanEmail,
-      phone: regPhone.trim() || undefined,
-      passwordHash: credential.hash,
-      passwordSalt: credential.salt,
-      role: "student",
-      isActive: true, // Auto-active or activated link
-      createdAt: new Date().toISOString()
-    };
+    try {
+      await api.createUser({
+        email: cleanEmail,
+        password: regPassword,
+        name: regName.trim(),
+        role: "student",
+        phone: regPhone.trim() || undefined
+      });
 
-    freshStore.users.push(newStudent);
-    AppStore.save(freshStore);
-
-    // Operational Logs
-    AppStore.log(
-      currentUser.id, 
-      "reception_create_student", 
-      newStudentId, 
-      `Lễ tân tạo tài khoản học viên mới: ${newStudent.name} (${newStudent.email})`
-    );
-
-    AppStore.notify(
-      newStudentId, 
-      "success", 
-      "Chào mừng bạn đến với E16 LMS! Tài khoản của bạn được thiết lập bởi bộ phận Lễ Tân."
-    );
-
-    showToast("Đã tạo tài khoản học viên thành công!");
-    
-    // Reset fields
-    setRegName("");
-    setRegEmail("");
-    setRegPhone("");
-    setRegPassword("studente16");
-    onRefreshData();
-    setActiveTab("search");
+      showToast("Đã tạo tài khoản học viên thành công!");
+      
+      // Reset fields
+      setRegName("");
+      setRegEmail("");
+      setRegPhone("");
+      setRegPassword("studente16");
+      onRefreshData();
+      setActiveTab("search");
+    } catch (err: any) {
+      showToast(err.message || "Lỗi khi đăng ký tài khoản học viên!");
+    }
   };
 
-  const handleResetPassword = (studentId: string) => {
-    const freshStore = AppStore.get();
-    const student = freshStore.users.find(u => u.id === studentId);
-    if (!student) return;
-
-    // Standard reset pass to 'studente16'
-    const defaultNewPass = "studente16";
-    const credential = hashPassword(defaultNewPass);
-    student.passwordHash = credential.hash;
-    student.passwordSalt = credential.salt;
-    AppStore.save(freshStore);
-
-    AppStore.log(
-      currentUser.id, 
-      "reception_reset_password", 
-      studentId, 
-      `Lễ tân hỗ trợ đặt lại mật khẩu cho học viên: ${student.email}`
-    );
-
-    AppStore.notify(
-      studentId,
-      "warning",
-      "Mật khẩu của bạn đã được đặt lại về mặc định bởi phòng Lễ Tân. Vui lòng đổi mật khẩu sau khi đăng nhập."
-    );
-
-    showToast(`Mật khẩu đã được đặt lại thành công về: "${defaultNewPass}"!`);
-    onRefreshData();
+  const handleResetPassword = async (studentId: string) => {
+    try {
+      const res = await api.resetPassword(studentId) as { message?: string };
+      showToast(res.message || "Mật khẩu đã được đặt lại thành công về mặc định: studente16!");
+      onRefreshData();
+    } catch (err: any) {
+      showToast(err.message || "Lỗi khi đặt lại mật khẩu học viên!");
+    }
   };
 
   // Search through all students
@@ -146,8 +112,12 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
            (u.phone && u.phone.includes(cleanQuery));
   });
 
+  const selectedCourse = selectedCourseId ? store.courses.find(c => c.id === selectedCourseId) : null;
+  const selectedLessons = selectedCourseId ? store.lessons.filter(l => l.courseId === selectedCourseId).sort((a, b) => a.order - b.order) : [];
+  const selectedQuizzes = selectedCourseId ? store.quizzes.filter(q => q.courseId === selectedCourseId) : [];
+
   return (
-    <div className="space-y-8 text-white/90">
+    <div className="relative space-y-8 text-white/90">
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#2563eb] text-white font-medium text-xs px-4 py-3 rounded-2xl shadow-2xl border border-white/10 animate-fade-in">
           {toastMessage}
@@ -389,7 +359,7 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
                 const formatFee = (p?: number) => p ? new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(p) : "Miễn phí";
 
                 return (
-                  <div key={course.id} className="bg-slate-900 border border-white/10 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+                  <div key={course.id} className="bg-slate-900/60 border border-white/10 rounded-2xl p-5 flex flex-col justify-between space-y-4 hover:border-indigo-500/30 transition duration-300">
                     <div className="space-y-2">
                       <div className="flex justify-between items-start">
                         <span className="text-[10px] uppercase font-mono tracking-wider font-semibold text-indigo-300">
@@ -404,9 +374,17 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
                       <p className="text-xs text-white/60 line-clamp-3 leading-relaxed font-sans">{course.description}</p>
                     </div>
 
-                    <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-white/50">
-                      <span>GV: <strong>{teacherObj?.name || "Giảng viên E16"}</strong></span>
-                      <span>Sĩ số: <strong className="text-indigo-300">{enrollmentCount} học viên</strong></span>
+                    <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-white/50 gap-2">
+                      <div className="flex flex-col">
+                        <span>GV: <strong className="text-white/85">{teacherObj?.name || "Giảng viên E16"}</strong></span>
+                        <span>Sĩ số: <strong className="text-indigo-300">{enrollmentCount} học viên</strong></span>
+                      </div>
+                      <button
+                        onClick={() => setSelectedCourseId(course.id)}
+                        className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/20 hover:border-transparent rounded-lg font-semibold transition cursor-pointer"
+                      >
+                        Xem chi tiết
+                      </button>
                     </div>
                   </div>
                 );
@@ -415,6 +393,103 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
           </div>
         )}
       </div>
+
+      {/* Curriculum detailed consultation modal */}
+      {selectedCourseId && selectedCourse && (
+        <div className="absolute inset-0 rounded-3xl z-50 bg-slate-950/95 overflow-y-auto p-8 border border-white/10 backdrop-blur-xl animate-fade-in flex flex-col justify-between">
+          <div className="space-y-6">
+            <div className="flex justify-between items-start border-b border-white/10 pb-4">
+              <div>
+                <span className="text-[10px] uppercase font-mono font-semibold tracking-wider text-indigo-300 bg-indigo-500/10 px-2.5 py-0.5 rounded border border-indigo-500/20">
+                  {selectedCourse.category}
+                </span>
+                <h3 className="text-xl font-display font-bold text-white mt-2">{selectedCourse.title}</h3>
+                <p className="text-xs text-indigo-400 mt-1">Giảng viên phụ trách: {store.users.find(u => u.id === selectedCourse.teacherId)?.name || "Giảng viên E16"}</p>
+              </div>
+              <button 
+                onClick={() => setSelectedCourseId(null)}
+                className="p-1.5 bg-white/5 hover:bg-white/15 text-white/60 hover:text-white rounded-lg border border-white/10 cursor-pointer transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-4">
+                <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-indigo-400" />
+                  Nội dung chương trình đào tạo ({selectedLessons.length} bài học)
+                </h4>
+                
+                {selectedLessons.length > 0 ? (
+                  <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
+                    {selectedLessons.map((lesson, idx) => (
+                      <div key={lesson.id} className="p-4 bg-white/5 border border-white/5 hover:border-indigo-500/25 rounded-2xl transition duration-150">
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-xs font-mono font-bold text-indigo-300">Bài {idx + 1}</span>
+                          <span className="text-[10px] font-mono text-white/40 flex items-center gap-1">
+                            <Clock className="h-3 w-3" /> {lesson.duration}
+                          </span>
+                        </div>
+                        <h5 className="font-semibold text-xs text-white mt-1">{lesson.title}</h5>
+                        <p className="text-xs text-white/50 mt-1 leading-relaxed">{lesson.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-10 bg-white/5 rounded-2xl text-white/40 text-xs italic">
+                    Chưa cập nhật nội dung bài học cho khóa học này.
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Award className="h-4 w-4 text-emerald-400" />
+                  Bài kiểm tra & đánh giá ({selectedQuizzes.length})
+                </h4>
+
+                {selectedQuizzes.length > 0 ? (
+                  <div className="space-y-3">
+                    {selectedQuizzes.map(quiz => {
+                      const questionCount = store.questions.filter(q => q.quizId === quiz.id).length;
+                      return (
+                        <div key={quiz.id} className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+                          <h5 className="font-semibold text-xs text-emerald-400">{quiz.title}</h5>
+                          <div className="grid grid-cols-2 gap-2 mt-2 text-[10px] font-mono text-white/60">
+                            <div>Thời gian: <strong>{quiz.timeLimit} phút</strong></div>
+                            <div>Đạt tối thiểu: <strong>{quiz.passingScore}%</strong></div>
+                            <div>Lượt thi tối đa: <strong>{quiz.maxAttempts} lần</strong></div>
+                            <div>Số câu hỏi: <strong>{questionCount} câu</strong></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-10 bg-emerald-500/5 rounded-2xl text-emerald-400/40 text-xs italic">
+                    Không có bài kiểm tra trắc nghiệm cho khóa học này.
+                  </div>
+                )}
+
+                <div className="bg-slate-900 border border-white/5 rounded-2xl p-4 space-y-2 mt-4">
+                  <span className="text-[10px] uppercase font-mono tracking-widest text-indigo-400 block font-bold">Mô tả chương trình</span>
+                  <p className="text-[11px] text-white/70 leading-relaxed font-sans">{selectedCourse.description}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-4 border-t border-white/10 mt-6">
+            <button
+              onClick={() => setSelectedCourseId(null)}
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white hover:text-slate-950 text-xs font-bold rounded-xl transition cursor-pointer"
+            >
+              Đóng tư vấn chi tiết
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Constraints note */}
       <div className="bg-[#2563eb]/10 border border-[#2563eb]/20 rounded-2xl p-4 flex gap-3 text-xs">
