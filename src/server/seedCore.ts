@@ -157,6 +157,95 @@ export async function seedCoreLearningData(db: Queryable) {
     }
   }
 
+  // Seed SIS section data used by course registration workflows.
+  if (Number((await db.query("SELECT COUNT(*) AS count FROM course_sections")).rows[0].count) === 0) {
+    for (const section of store.courseSections || []) {
+      await db.query(
+        `INSERT INTO course_sections (id, course_id, semester_id, teacher_id, section_code, max_students, schedule, status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          section.id,
+          section.courseId,
+          section.semesterId,
+          section.teacherId,
+          section.sectionCode,
+          section.maxStudents,
+          JSON.stringify(section.schedule || []),
+          section.status
+        ]
+      );
+    }
+  }
+
+  if (Number((await db.query("SELECT COUNT(*) AS count FROM section_schedules")).rows[0].count) === 0) {
+    const fallbackDays = [2, 4, 3, 6];
+    for (const section of store.courseSections || []) {
+      for (const [index, slot] of (section.schedule || []).entries()) {
+        await db.query(
+          `INSERT INTO section_schedules (id, section_id, day_of_week, start_time, end_time, room)
+           VALUES ($1,$2,$3,$4,$5,$6)
+           ON CONFLICT (id) DO NOTHING`,
+          [
+            `sched_${section.id}_${index}`,
+            section.id,
+            fallbackDays[index % fallbackDays.length],
+            slot.startTime,
+            slot.endTime,
+            slot.room || null
+          ]
+        );
+      }
+    }
+  }
+
+  if (Number((await db.query("SELECT COUNT(*) AS count FROM registration_periods")).rows[0].count) === 0) {
+    for (const period of store.registrationPeriods || []) {
+      await db.query(
+        `INSERT INTO registration_periods (id, semester_id, name, start_date, end_date, allowed_years, is_open)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          period.id,
+          period.semesterId,
+          period.name,
+          period.startDate,
+          period.endDate,
+          period.allowedYears || [1, 2, 3, 4],
+          period.isOpen
+        ]
+      );
+    }
+  }
+
+  if (Number((await db.query("SELECT COUNT(*) AS count FROM course_registrations")).rows[0].count) === 0) {
+    for (const registration of store.courseRegistrations || []) {
+      await db.query(
+        `INSERT INTO course_registrations (
+          id, student_id, section_id, semester_id, status, registered_at, dropped_at,
+          grade, letter_grade, grade_point, credits, is_retake, exam_ban, grade_posted_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        ON CONFLICT (id) DO NOTHING`,
+        [
+          registration.id,
+          registration.studentId,
+          registration.sectionId,
+          registration.semesterId,
+          registration.status,
+          registration.registeredAt,
+          registration.droppedAt || null,
+          registration.grade || null,
+          registration.letterGrade || null,
+          registration.gradePoint ?? null,
+          registration.credits,
+          Boolean(registration.isRetake),
+          Boolean(registration.examBan),
+          registration.gradePostedAt || null
+        ]
+      );
+    }
+  }
+
   // 6. Seed Lesson Progress
   if (Number((await db.query("SELECT COUNT(*) AS count FROM lesson_progress")).rows[0].count) === 0) {
     for (const p of store.lessonProgress) {
@@ -226,6 +315,58 @@ export async function seedCoreLearningData(db: Queryable) {
       await db.query(
         "INSERT INTO tuition_fees (id, student_id, semester_id, amount, due_date, status, paid_amount, paid_at, receipt_code) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO NOTHING",
         [f.id, f.studentId, f.semesterId || null, f.amount, f.dueDate, f.status, f.paidAmount, f.paidAt || null, f.receiptCode || null]
+      );
+    }
+  }
+
+  if (Number((await db.query("SELECT COUNT(*) AS count FROM scholarships")).rows[0].count) === 0) {
+    for (const scholarship of store.scholarships || []) {
+      await db.query(
+        `INSERT INTO scholarships (id, name, type, amount, discount_percent, semester_id, conditions)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          scholarship.id,
+          scholarship.name,
+          scholarship.type,
+          scholarship.amount ?? null,
+          scholarship.discountPercent ?? null,
+          scholarship.semesterId || null,
+          scholarship.conditions || null
+        ]
+      );
+    }
+  }
+
+  if (Number((await db.query("SELECT COUNT(*) AS count FROM attendance_sessions")).rows[0].count) === 0) {
+    for (const session of store.attendanceSessions || []) {
+      await db.query(
+        `INSERT INTO attendance_sessions (id, course_id, semester_id, teacher_id, session_date, date, topic)
+         VALUES ($1,$2,$3,$4,$5::date,$5::text,$6)
+         ON CONFLICT (id) DO NOTHING`,
+        [session.id, session.courseId, session.semesterId, session.teacherId, session.date, session.topic]
+      );
+    }
+  }
+
+  if (Number((await db.query("SELECT COUNT(*) AS count FROM attendance_records")).rows[0].count) === 0) {
+    for (const record of store.attendanceRecords || []) {
+      await db.query(
+        `INSERT INTO attendance_records (id, session_id, student_id, status, note)
+         VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (id) DO NOTHING`,
+        [record.id, record.sessionId, record.studentId, record.status, record.note || null]
+      ).catch(() => undefined);
+    }
+  }
+
+  if (Number((await db.query("SELECT COUNT(*) AS count FROM advisor_assignments")).rows[0].count) === 0) {
+    for (const assignment of store.advisorAssignments || []) {
+      await db.query(
+        `INSERT INTO advisor_assignments (id, advisor_id, student_id, semester_id, assigned_at)
+         VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (id) DO NOTHING`,
+        [assignment.id, assignment.advisorId, assignment.studentId, assignment.semesterId || null, assignment.assignedAt]
       );
     }
   }

@@ -31,17 +31,30 @@ export const scholarshipsRepository = {
         [user.id]
       )).rows;
     }
+    if (!["admin", "super_admin", "finance", "academic_admin"].includes(user.role)) return [];
     return (await db.query("SELECT * FROM scholarship_applications ORDER BY applied_at DESC")).rows;
   },
 
   async apply(db: Queryable, studentId: string, input: { scholarshipId: string; semesterId: string }) {
+    const scholarship = (await db.query("SELECT id FROM scholarships WHERE id = $1", [input.scholarshipId])).rows[0];
+    if (!scholarship) return { error: "Scholarship not found.", status: 404 };
+
+    const semester = (await db.query("SELECT id FROM semesters WHERE id = $1", [input.semesterId])).rows[0];
+    if (!semester) return { error: "Semester not found.", status: 404 };
+
+    const existing = (await db.query(
+      "SELECT * FROM scholarship_applications WHERE student_id = $1 AND scholarship_id = $2 AND semester_id = $3",
+      [studentId, input.scholarshipId, input.semesterId]
+    )).rows[0];
+    if (existing) return { error: "Scholarship application already exists.", status: 409 };
+
     const row = (await db.query(
       `INSERT INTO scholarship_applications (id, student_id, scholarship_id, semester_id, status, applied_at)
        VALUES ($1,$2,$3,$4,'pending',$5)
        RETURNING *`,
       [generateId("sch_app"), studentId, input.scholarshipId, input.semesterId, new Date().toISOString()]
     )).rows[0];
-    return row;
+    return { row };
   },
 
   async approve(db: Queryable, id: string, reviewerId: string, reviewNote?: string) {

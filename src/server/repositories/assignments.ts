@@ -15,12 +15,21 @@ export const assignmentsRepository = {
   },
 
   async submit(db: Queryable, studentId: string, assignmentId: string, content: string) {
+    const assignment = (await db.query("SELECT course_id FROM assignments WHERE id = $1", [assignmentId])).rows[0];
+    if (!assignment) return { error: "Assignment not found.", status: 404 };
+
+    const enrollment = (await db.query(
+      "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('active', 'completed')",
+      [studentId, assignment.course_id]
+    )).rows[0];
+    if (!enrollment) return { error: "Active enrollment required to submit this assignment.", status: 403 };
+
     const submission: Submission = { id: generateId("sub"), assignmentId, studentId, content, submittedAt: new Date().toISOString() };
     await db.query(
       "INSERT INTO submissions (id, assignment_id, student_id, content, submitted_at) VALUES ($1,$2,$3,$4,$5)",
       [submission.id, assignmentId, studentId, content, submission.submittedAt]
     );
-    return submission;
+    return { row: submission };
   },
 
   async findSubmissionForGrading(db: Queryable, submissionId: string) {

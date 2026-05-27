@@ -8,10 +8,17 @@ export const gradeAppealsRepository = {
   async create(db: Queryable, studentId: string, input: { courseRegistrationId: string; reason: string }) {
     const reg = (await db.query("SELECT * FROM course_registrations WHERE id = $1 AND student_id = $2", [input.courseRegistrationId, studentId])).rows[0];
     if (!reg) return { error: "Course registration not found.", status: 404 };
-    if (reg.grade_posted_at) {
-      const posted = new Date(reg.grade_posted_at).getTime();
-      if (Date.now() - posted > 7 * 24 * 60 * 60 * 1000) return { error: "Grade appeal window has closed.", status: 400 };
-    }
+    if (!reg.grade_posted_at || (!reg.grade && !reg.letter_grade)) return { error: "No posted grade is available for appeal.", status: 400 };
+
+    const posted = new Date(reg.grade_posted_at).getTime();
+    if (Date.now() - posted > 7 * 24 * 60 * 60 * 1000) return { error: "Grade appeal window has closed.", status: 400 };
+
+    const existing = (await db.query(
+      "SELECT id FROM grade_appeals WHERE student_id = $1 AND course_registration_id = $2 AND status IN ('pending', 'under_review')",
+      [studentId, input.courseRegistrationId]
+    )).rows[0];
+    if (existing) return { error: "A grade appeal is already in progress for this registration.", status: 409 };
+
     const row = (await db.query(
       `INSERT INTO grade_appeals (id, student_id, course_registration_id, reason, status, original_grade, submitted_at)
        VALUES ($1,$2,$3,$4,'pending',$5,$6)
@@ -36,13 +43,21 @@ export const gradeAppealsRepository = {
         [user.id]
       )).rows;
     }
+    if (!["admin", "super_admin", "academic_admin"].includes(user.role)) return [];
     return (await db.query("SELECT * FROM grade_appeals ORDER BY submitted_at DESC")).rows;
   },
 
-  async review(db: Queryable, appealId: string, revisedGrade?: string) {
+  async review(db: Queryable, appealId: string, teacherId: string, revisedGrade?: string) {
     const row = (await db.query(
-      "UPDATE grade_appeals SET status = 'under_review', revised_grade = COALESCE($2, revised_grade) WHERE id = $1 RETURNING *",
-      [appealId, revisedGrade || null]
+      `UPDATE grade_appeals ga
+       SET status = 'under_review', revised_grade = COALESCE($3, ga.revised_grade)
+       FROM course_registrations cr
+       JOIN course_sections cs ON cs.id = cr.section_id
+       WHERE ga.id = $1
+         AND ga.course_registration_id = cr.id
+         AND cs.teacher_id = $2
+       RETURNING ga.*`,
+      [appealId, teacherId, revisedGrade || null]
     )).rows[0];
     return row || null;
   },

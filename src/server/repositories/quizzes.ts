@@ -36,6 +36,13 @@ export const quizzesRepository = {
   async submitAttempt(db: Queryable, quizId: string, studentId: string, answers: Record<string, string>, startedAt?: string) {
     const quiz = await this.findById(db, quizId);
     if (!quiz) return null;
+
+    const enrollment = (await db.query(
+      "SELECT id FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('active', 'completed')",
+      [studentId, quiz.courseId]
+    )).rows[0];
+    if (!enrollment) return { error: "Active enrollment required to submit this quiz.", status: 403 };
+
     const questions = await this.listQuestions(db, quizId);
     let correctCount = 0;
     for (const question of questions) {
@@ -51,6 +58,6 @@ export const quizzesRepository = {
       [attempt.id, quizId, studentId, JSON.stringify(answers), score, passed ? 1 : 0, attempt.startedAt, attempt.submittedAt]
     );
     await eventBus.emit("grade.saved", { studentId, grade: score }, pool);
-    return { ...attempt, correctAnswers: correctCount, total: questions.length };
+    return { row: { ...attempt, correctAnswers: correctCount, total: questions.length } };
   }
 };

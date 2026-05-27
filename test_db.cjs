@@ -4,20 +4,22 @@ dotenv.config();
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL.includes("supabase.co") ? { rejectUnauthorized: false } : undefined
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes("supabase.co") ? { rejectUnauthorized: false } : undefined
 });
 
+const { notificationsRepository } = require('./src/server/repositories/notifications');
+
 async function main() {
-  console.log('Attempting to change role of user_le_tan...');
-  try {
-    const res = await pool.query("UPDATE users SET role = 'finance' WHERE id = 'user_le_tan' RETURNING *");
-    console.log('Update success:', res.rows[0]);
-    // Reset back to le_tan
-    await pool.query("UPDATE users SET role = 'le_tan' WHERE id = 'user_le_tan'");
-    console.log('Reset back successfully');
-  } catch (e) {
-    console.error('Update failed:', e.message);
-  }
+  console.log('Before marking all as read:');
+  const before = await pool.query("SELECT id, user_id, message, is_read FROM notifications WHERE user_id = 'user_student'");
+  console.log(before.rows);
+
+  console.log('Running markAllRead...');
+  await notificationsRepository.markAllRead(pool, 'user_student');
+
+  console.log('After marking all as read:');
+  const after = await pool.query("SELECT id, user_id, message, is_read FROM notifications WHERE user_id = 'user_student'");
+  console.log(after.rows);
 }
 
 main().catch(console.error).finally(() => pool.end());

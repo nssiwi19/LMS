@@ -51,6 +51,7 @@ function AppShell() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
+  const [sessionConflict, setSessionConflict] = useState(false);
 
   // Mobile sidebar navigation visibility
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -83,6 +84,12 @@ function AppShell() {
   };
 
   useEffect(() => {
+    // Only auto-restore session if this tab originally logged in (has active session marker)
+    const isActiveTab = sessionStorage.getItem("e16_lms_active_session") === "true";
+    if (!isActiveTab) {
+      setCurrentUser(null);
+      return;
+    }
     fetch("/api/auth/me", {
       credentials: "include"
     })
@@ -96,6 +103,7 @@ function AppShell() {
       })
       .catch(() => {
         setCurrentUser(null);
+        sessionStorage.removeItem("e16_lms_active_session");
       });
   }, []);
 
@@ -142,6 +150,7 @@ function AppShell() {
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
+    setSessionConflict(false);
 
     const emailClean = loginEmail.trim().toLowerCase();
     try {
@@ -153,12 +162,16 @@ function AppShell() {
       });
       const data = await response.json();
       if (!response.ok) {
+        if (data.code === "SESSION_CONFLICT") {
+          setSessionConflict(true);
+        }
         setAuthError(data.error || "Incorrect password credentials.");
         return;
       }
 
       setCurrentUser(data.user);
       setCsrfToken(data.csrfToken || null);
+      sessionStorage.setItem("e16_lms_active_session", "true");
       await refreshStoreDataFromServer();
       AppStore.log(data.user.id, "authentication_login", "security", `Successfully authenticated into profile desk role: ${data.user.role}`);
       setLoginEmail("");
@@ -180,6 +193,18 @@ function AppShell() {
     }).catch(() => undefined);
     setCurrentUser(null);
     setCsrfToken(null);
+    sessionStorage.removeItem("e16_lms_active_session");
+  };
+
+  // Force logout the other active session from the login screen (no auth required)
+  const handleForceLogoutOtherSession = async () => {
+    // Clear the session cookie by calling a lightweight logout that doesn't require auth
+    await fetch("/api/auth/force-logout", {
+      method: "POST",
+      credentials: "include"
+    }).catch(() => undefined);
+    setAuthError(null);
+    setSessionConflict(false);
   };
 
   const handleInstantDemoLogin = (email: string, pass: string) => {
@@ -599,9 +624,21 @@ function AppShell() {
               </div>
 
               {authError && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-3 rounded-xl text-xs flex items-center gap-2">
-                  <Lock className="h-4 w-4 stroke-[2.5]" />
-                  <span>{authError}</span>
+                <div className="bg-red-500/10 border border-red-500/20 text-red-300 p-3 rounded-xl text-xs space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Lock className="h-4 w-4 stroke-[2.5] shrink-0" />
+                    <span>{authError}</span>
+                  </div>
+                  {sessionConflict && (
+                    <button
+                      type="button"
+                      onClick={handleForceLogoutOtherSession}
+                      className="w-full py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-200 font-bold rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      Đăng xuất tài khoản đang chạy
+                    </button>
+                  )}
                 </div>
               )}
 

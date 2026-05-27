@@ -9,6 +9,12 @@ export const courseRegistrationsRepository = {
     const section = (await db.query("SELECT * FROM course_sections WHERE id = $1", [sectionId])).rows[0];
     if (!section) return { error: "Section not found.", status: 404 };
 
+    const existing = (await db.query(
+      "SELECT * FROM course_registrations WHERE student_id = $1 AND section_id = $2 AND status IN ('registered', 'waitlisted')",
+      [studentId, sectionId]
+    )).rows[0];
+    if (existing) return { error: "Student is already registered or waitlisted for this section.", status: 409 };
+
     const profile = (await db.query("SELECT fee_hold FROM student_profiles WHERE user_id = $1", [studentId])).rows[0];
     if (profile?.fee_hold) return { error: "Clear outstanding fees before registering for courses.", status: 403 };
 

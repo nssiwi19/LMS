@@ -17,6 +17,7 @@ export const leaveRequestsRepository = {
 
   async list(db: Queryable, user: { id: string; role: string }) {
     if (user.role === "student") return (await db.query("SELECT * FROM leave_requests WHERE student_id = $1 ORDER BY requested_at DESC", [user.id])).rows;
+    if (!["admin", "super_admin", "academic_admin"].includes(user.role)) return [];
     return (await db.query("SELECT * FROM leave_requests ORDER BY requested_at DESC")).rows;
   },
 
