@@ -34,6 +34,8 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
   const [activePaymentFeeId, setActivePaymentFeeId] = useState<string | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
 
+  const [searchQuery, setSearchQuery] = useState("");
+
   const students = store.studentProfiles || [];
   const systemSemesters = store.semesters || [];
   const activeSemester = systemSemesters.find(s => s.id === selectedSemesterId);
@@ -53,7 +55,10 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
     const matchesSemester = fee.semesterId === selectedSemesterId;
     const matchesStatus = filterStatus === "all" || fee.status === filterStatus;
     const matchesOverdue = !filterOverdueOnly || fee.isOverdue;
-    return matchesSemester && matchesStatus && matchesOverdue;
+    const matchesSearch = !searchQuery.trim() || 
+      fee.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      fee.studentCode.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSemester && matchesStatus && matchesOverdue && matchesSearch;
   });
 
   // Calculate Aggregates for current semester
@@ -117,8 +122,8 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
   const handleRecordPaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activePaymentFeeId) return;
-    if (paymentAmount <= 0) {
-      triggerToast("Số tiền thanh toán phải lớn hơn 0 VND.");
+    if (paymentAmount < 0) {
+      triggerToast("Số tiền thanh toán không được âm.");
       return;
     }
 
@@ -266,6 +271,17 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
       {/* Main filter bars */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/3 border border-white/5 p-4 rounded-xl text-xs">
         <div className="flex flex-wrap items-center gap-3">
+          <div className="space-y-0.5">
+            <span className="text-[10px] text-white/50 block">Tìm kiếm học sinh</span>
+            <input
+              type="text"
+              placeholder="Nhập tên hoặc mã SV..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="px-2.5 py-1 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-lg focus:outline-none w-44"
+            />
+          </div>
+
           <div className="space-y-0.5">
             <span className="text-[10px] text-white/50 block">Chọn Kỳ Học</span>
             <select

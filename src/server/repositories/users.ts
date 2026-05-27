@@ -1,5 +1,5 @@
 import { Queryable } from "../db";
-import { DbUserRow, normalizeRole, toPublicUser } from "../mappers";
+import { DbUserRow, normalizeRole, denormalizeRole, toPublicUser } from "../mappers";
 import { User } from "../../types";
 
 export const usersRepository = {
@@ -47,7 +47,7 @@ export const usersRepository = {
     await db.query(
       `INSERT INTO users (id, email, password_hash, password_salt, name, role, is_active, phone, linked_student_id, created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [user.id, user.email.toLowerCase(), user.passwordHash, user.passwordSalt || null, user.name, normalizeRole(user.role), user.isActive, user.phone || null, user.linkedStudentId || null, user.createdAt]
+      [user.id, user.email.toLowerCase(), user.passwordHash, user.passwordSalt || null, user.name, denormalizeRole(user.role), user.isActive, user.phone || null, user.linkedStudentId || null, user.createdAt]
     );
     return { ...user, passwordHash: "" };
   },
@@ -58,7 +58,7 @@ export const usersRepository = {
         `INSERT INTO users (id, email, password_hash, password_salt, name, role, is_active, phone, linked_student_id, created_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
          ON CONFLICT (id) DO NOTHING`,
-        [user.id, user.email.toLowerCase(), user.passwordHash, user.passwordSalt || null, user.name, normalizeRole(user.role), user.isActive, user.phone || null, user.linkedStudentId || null, user.createdAt]
+        [user.id, user.email.toLowerCase(), user.passwordHash, user.passwordSalt || null, user.name, denormalizeRole(user.role), user.isActive, user.phone || null, user.linkedStudentId || null, user.createdAt]
       );
     }
   },

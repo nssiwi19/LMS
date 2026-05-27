@@ -793,6 +793,7 @@ export function recomputeAndPersistAllGpas(store: LMSDataStore) {
 
 export class AppStore {
   private static storeInstance: LMSDataStore | null = null;
+  public static syncPromise: Promise<any> | null = null;
 
   public static hydrate(store: LMSDataStore): void {
     normalizeLegacyRoles(store);
@@ -905,7 +906,7 @@ export class AppStore {
 
     if (typeof fetch !== "undefined") {
       const csrfToken = sessionStorage.getItem("e16_lms_csrf");
-      fetch("/api/store/sync", {
+      this.syncPromise = fetch("/api/store/sync", {
         method: "POST",
         credentials: "include",
         headers: { 
@@ -913,7 +914,15 @@ export class AppStore {
           ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {})
         },
         body: JSON.stringify(store)
-      }).catch(() => undefined);
+      })
+      .then(async (res) => {
+        this.syncPromise = null;
+        return res.json();
+      })
+      .catch(() => {
+        this.syncPromise = null;
+        return undefined;
+      });
     }
   }
 

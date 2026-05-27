@@ -19,6 +19,11 @@ export function normalizeRole(role: string): UserRole {
   return role as UserRole;
 }
 
+export function denormalizeRole(role: string): string {
+  if (role === "academic" || role === "quan_ly_hoc_vu") return "academic_admin";
+  return role;
+}
+
 export function toPublicUser(row: DbUserRow): User {
   return {
     id: row.id,

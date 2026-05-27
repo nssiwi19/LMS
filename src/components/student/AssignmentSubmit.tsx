@@ -92,16 +92,10 @@ export default function AssignmentSubmit(props: ComponentProps) {
     if (hasFile) {
       finalContent += (finalContent ? "\n\n" : "") + `[Tệp đính kèm: ${submissionFile!.name} (${(submissionFile!.size / 1024).toFixed(1)} KB)]`;
     }
-    // Temporarily override submissionCodeText via a synthetic event trick
-    // by calling the handler with the composed content
-    const syntheticContent = finalContent;
-    setSubmissionCodeText(syntheticContent);
+    
     setSubmissionFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    // Defer to next tick so state update is applied before submit
-    setTimeout(() => {
-      handleSendAssignmentSubmit(e);
-    }, 0);
+    handleSendAssignmentSubmit(e, finalContent);
   };
 
   return (

@@ -426,9 +426,10 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
   };
 
   // Send assignment files
-  const handleSendAssignmentSubmit = (e: React.FormEvent) => {
+  const handleSendAssignmentSubmit = (e: React.FormEvent, overrideContent?: string) => {
     e.preventDefault();
-    if (!submittingAssignmentId || !submissionCodeText.trim()) {
+    const contentToUse = overrideContent !== undefined ? overrideContent : submissionCodeText;
+    if (!submittingAssignmentId || !contentToUse.trim()) {
       triggerToast("Please provide submission content deliverables.");
       return;
     }
@@ -444,7 +445,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
       id: generateId("submit"),
       assignmentId: submittingAssignmentId,
       studentId: currentUser.id,
-      content: submissionCodeText,
+      content: contentToUse,
       submittedAt: new Date().toISOString()
     };
 
@@ -460,7 +461,11 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
   };
 
   const handleMarkNotificationRead = async (id: string) => {
-    // Optimistically update local store
+    // Await the API call first to avoid race conditions with refetching
+    try {
+      await api.markNotificationRead(id);
+    } catch (_) { /* silent fail */ }
+
     const storeData = AppStore.get();
     storeData.notifications = storeData.notifications.map(n => {
       if (n.id === id) return { ...n, isRead: true };
@@ -468,13 +473,14 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
     });
     AppStore.save(storeData);
     onRefreshData();
-    // Also persist to server so React Query refetch doesn't revert
-    try {
-      await api.markNotificationRead(id);
-    } catch (_) { /* silent fail - local state already updated */ }
   };
 
   const handleMarkAllNotificationsRead = async () => {
+    // Await the API call first to avoid race conditions with refetching
+    try {
+      await api.markAllNotificationsRead();
+    } catch (_) { /* silent fail */ }
+
     const storeData = AppStore.get();
     storeData.notifications = storeData.notifications.map(n => {
       if (n.userId === currentUser.id) return { ...n, isRead: true };
@@ -482,10 +488,6 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
     });
     AppStore.save(storeData);
     onRefreshData();
-    // Persist to server
-    try {
-      await api.markAllNotificationsRead();
-    } catch (_) { /* silent fail */ }
   };
 
   const myNotifications = store.notifications.filter(n => n.userId === currentUser.id);
@@ -964,7 +966,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
                   <div className="space-y-1 text-xs flex-1 min-w-0">
                     <p className="leading-relaxed font-sans">{note.message}</p>
                     <span className="text-[10px] text-white/30 block font-mono">
-                      {new Date(note.createdAt).toLocaleDateString("vi-VN")}
+                      {new Date(note.createdAt).toLocaleDateString("vi-VN")} - {new Date(note.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
                     </span>
                   </div>
                   {!note.isRead && (

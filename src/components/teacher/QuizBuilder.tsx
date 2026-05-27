@@ -1,11 +1,15 @@
-import React from "react";
+import React, { useState } from "react";
 import { BookOpen, HelpCircle, FileText, Plus, Eye, Edit, Check, Award, Settings, Download, Tv, Trash, ChevronRight, TrendingUp, BarChart, Users, Clock, Search, MessageSquare, X, PlusCircle, FolderPlus } from "lucide-react";
+import { AppStore } from "../../store";
+import { generateId } from "../../utils";
+import { Question } from "../../types";
 
 interface ComponentProps {
   [key: string]: any;
 }
 
 export default function QuizBuilder(props: ComponentProps) {
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const {
     activeSubTab,
     setActiveSubTab,
@@ -95,8 +99,79 @@ export default function QuizBuilder(props: ComponentProps) {
     courseQuizzes,
     courseAssignments,
     myAssignments,
-    studentSubmissionsRaw
+    studentSubmissionsRaw,
+    onRefreshData,
+    triggerToast
   } = props;
+
+  const handleStartEditQuestion = (qst: Question) => {
+    setEditingQuestionId(qst.id);
+    setQText(qst.text);
+    setQType(qst.type);
+    setQOptions(qst.options.length > 0 ? [...qst.options] : ["", "", ""]);
+    setQCorrect(qst.correctAnswer);
+    setShowQuestionModal(true);
+  };
+
+  const handleDeleteQuestion = (qstId: string) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa câu hỏi này khỏi đề thi không?")) return;
+    const storeData = AppStore.get();
+    storeData.questions = storeData.questions.filter(q => q.id !== qstId);
+    AppStore.save(storeData);
+    onRefreshData();
+    triggerToast("Đã xóa câu hỏi thành công.");
+  };
+
+  const handleQuestionFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedQuizId) return;
+    if (!qText.trim()) {
+      triggerToast("Vui lòng nhập nội dung câu hỏi.");
+      return;
+    }
+
+    const storeData = AppStore.get();
+    const cleanedOptions = qType !== "text" ? qOptions.filter((o: string) => o.trim() !== "") : [];
+
+    if (editingQuestionId) {
+      // Edit mode
+      storeData.questions = storeData.questions.map(q => {
+        if (q.id === editingQuestionId) {
+          return {
+            ...q,
+            text: qText,
+            type: qType,
+            options: cleanedOptions,
+            correctAnswer: qCorrect
+          };
+        }
+        return q;
+      });
+      AppStore.log(currentUser.id, "edit_quiz_question", qText, `Edited question ID: ${editingQuestionId} inside quiz: ${selectedQuizId}`);
+      triggerToast("Đã cập nhật câu hỏi thành công.");
+    } else {
+      // Create mode
+      const newQuestion: Question = {
+        id: generateId("question"),
+        quizId: selectedQuizId,
+        text: qText,
+        type: qType,
+        options: cleanedOptions,
+        correctAnswer: qCorrect
+      };
+      storeData.questions.push(newQuestion);
+      AppStore.log(currentUser.id, "add_quiz_question", newQuestion.text, `Added question mapping inside quiz ID: ${selectedQuizId}`);
+      triggerToast("Đã thêm câu hỏi mới thành công.");
+    }
+
+    AppStore.save(storeData);
+    setQText("");
+    setQOptions(["", "", ""]);
+    setQCorrect("0");
+    setEditingQuestionId(null);
+    setShowQuestionModal(false);
+    onRefreshData();
+  };
 
   return (
     <>
@@ -142,8 +217,8 @@ export default function QuizBuilder(props: ComponentProps) {
                       </div>
                       
                       <button
-                        onClick={() => setShowQuestionModal(true)}
-                        className="p-1 px-2.5 bg-[#2563eb] text-white font-bold text-xs rounded-xl hover:bg-opacity-90 flex items-center gap-1"
+                        onClick={() => { setEditingQuestionId(null); setQText(""); setQOptions(["", "", ""]); setQCorrect("0"); setShowQuestionModal(true); }}
+                        className="p-1 px-2.5 bg-[#2563eb] text-white font-bold text-xs rounded-xl hover:bg-opacity-90 flex items-center gap-1 cursor-pointer"
                       >
                         <PlusCircle className="h-4 w-4 inline" /> Thêm Câu hỏi
                       </button>
@@ -153,10 +228,28 @@ export default function QuizBuilder(props: ComponentProps) {
                       {store.questions.filter(qst => qst.quizId === selectedQuizId).map((qst, n) => (
                         <div key={qst.id} className="bg-white/5 border border-white/10 rounded-2xl p-4.5 space-y-3 relative">
                           <div className="flex justify-between items-start gap-3">
-                            <span className="text-xs font-bold text-white flex-1">{n+1}. {qst.text}</span>
+                            <span className="text-xs font-bold text-white flex-1 pr-14">{n+1}. {qst.text}</span>
                             <span className="text-[10px] uppercase tracking-wider font-mono text-indigo-300 bg-white/5 py-0.5 px-2 rounded-full border border-white/10 text-right">
                               {qst.type === "single" ? "Một đáp án" : qst.type === "multiple" ? "Nhiều đáp án" : "Tự điền từ"}
                             </span>
+                          </div>
+
+                          {/* Edit / Delete Actions */}
+                          <div className="absolute top-4 right-20 flex items-center gap-1.5 z-10">
+                            <button
+                              onClick={() => handleStartEditQuestion(qst)}
+                              className="p-1 text-white/40 hover:text-white rounded-lg hover:bg-white/10 transition cursor-pointer"
+                              title="Chỉnh sửa câu hỏi"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteQuestion(qst.id)}
+                              className="p-1 text-red-400/60 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition cursor-pointer"
+                              title="Xóa câu hỏi"
+                            >
+                              <Trash className="h-3.5 w-3.5" />
+                            </button>
                           </div>
 
                           {qst.options.length > 0 && (
@@ -294,17 +387,17 @@ export default function QuizBuilder(props: ComponentProps) {
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative">
             <button 
-              onClick={() => setShowQuestionModal(false)}
+              onClick={() => { setShowQuestionModal(false); setEditingQuestionId(null); }}
               className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10 text-white/60"
             >
               <X className="h-5 w-5" />
             </button>
 
             <h3 className="text-lg font-display font-medium text-white mb-2 flex items-center gap-1.5 border-b border-white/10 pb-3">
-              <PlusCircle className="h-5 w-5 text-indigo-400" /> Tạo câu hỏi trắc nghiệm mới
+              <PlusCircle className="h-5 w-5 text-indigo-400" /> {editingQuestionId ? "Chỉnh sửa câu hỏi trắc nghiệm" : "Tạo câu hỏi trắc nghiệm mới"}
             </h3>
 
-            <form onSubmit={handleAddQuestionSubmit} className="space-y-4 text-xs">
+            <form onSubmit={handleQuestionFormSubmit} className="space-y-4 text-xs">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-white/70">Nội dung câu hỏi</label>
                 <input
@@ -370,7 +463,7 @@ export default function QuizBuilder(props: ComponentProps) {
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowQuestionModal(false)}
+                  onClick={() => { setShowQuestionModal(false); setEditingQuestionId(null); }}
                   className="px-4 py-2 bg-transparent text-white/60 hover:text-white transition cursor-pointer"
                 >
                   Hủy bỏ
@@ -379,7 +472,7 @@ export default function QuizBuilder(props: ComponentProps) {
                   type="submit"
                   className="px-4.5 py-2 bg-white text-indigo-950 font-bold rounded-xl transition cursor-pointer"
                 >
-                  Thêm Câu hỏi
+                  {editingQuestionId ? "Cập nhật câu hỏi" : "Thêm Câu hỏi"}
                 </button>
               </div>
             </form>

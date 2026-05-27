@@ -42,7 +42,7 @@ export const notificationsRepository = {
         notification.userId,
         notification.type,
         notification.message,
-        notification.isRead,
+        Boolean(notification.isRead),
         notification.createdAt,
         input.relatedEntityType || null,
         input.relatedEntityId || null

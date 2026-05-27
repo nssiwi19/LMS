@@ -4,10 +4,11 @@
   --font-sans: "Inter", "Segoe UI", Arial, ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, SFMono-Regular, monospace;
   --font-display: "Inter", "Segoe UI", Arial, ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Inter", "Segoe UI", Arial, ui-sans-serif, system-ui, sans-serif;
 }
 
-html {
-  font-family: var(--font-sans);
+html, body, button, input, select, textarea, #root {
+  font-family: "Inter", "Segoe UI", Arial, ui-sans-serif, system-ui, sans-serif;
   text-rendering: geometricPrecision;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

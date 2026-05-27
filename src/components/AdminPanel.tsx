@@ -32,6 +32,7 @@ import { AppStore } from "../store";
 import { generateId } from "../utils";
 import { hashPassword } from "../authHash";
 import { useApiStore } from "../hooks/apiHooks";
+import { api } from "../api";
 
 // Import modular sub-components
 import AcademicManager from "./AcademicManager";
@@ -306,6 +307,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
       }
       return c;
     });
+    api.publishCourse(courseId).catch(err => console.warn("Failed to publish course on server:", err));
     AppStore.save(storeData);
     onRefreshData();
     triggerToast("Đã phê duyệt và phát hành khóa học.");
@@ -332,6 +334,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
       }
       return c;
     });
+    api.rejectCourse(rejectingCourseId, rejectReason).catch(err => console.warn("Failed to reject course on server:", err));
     AppStore.save(storeData);
     setRejectingCourseId(null);
     onRefreshData();
@@ -363,10 +366,11 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
     const matchesStatus = filterStatus === "all" || 
       (filterStatus === "active" && u.isActive) || 
       (filterStatus === "inactive" && !u.isActive);
-    const matchesDirectory =
+    const matchesDirectory = filterRole !== "all" ? true : (
       userDirTab === "student" ? u.role === "student" :
       userDirTab === "teacher" ? u.role === "teacher" :
-      !["student", "teacher", "parent"].includes(u.role);
+      !["student", "teacher", "parent"].includes(u.role)
+    );
 
     return matchesSearch && matchesRole && matchesStatus && matchesDirectory;
   });
@@ -393,7 +397,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
       )}
 
       {/* Main Administrative Header Area */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-9e0">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-transparent">
         <div>
           <span className="text-xs font-mono font-semibold tracking-widest text-[#2563eb] bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20 uppercase">
             CỔNG THÔNG TIN QUẢN TRỊ VIÊN & PHÒNG ĐÀO TẠO (SIS-LMS)

@@ -11,7 +11,7 @@ import { runMigrations } from "./src/dbMigrations";
 import { pool } from "./src/server/db";
 import { redis, safeRedis } from "./src/server/redis";
 import { generateId } from "./src/server/ids";
-import { DbUserRow, toPublicUser } from "./src/server/mappers";
+import { DbUserRow, toPublicUser, denormalizeRole } from "./src/server/mappers";
 import { validateBody, schemas } from "./src/server/validation";
 import { seedAuthUsers, seedCoreLearningData } from "./src/server/seedCore";
 import { usersRepository } from "./src/server/repositories/users";
@@ -218,12 +218,13 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
         
         const dbUser = dbUsersMap.get(user.id);
         const emailLower = user.email.toLowerCase();
+        const clientRoleDenorm = denormalizeRole(user.role);
         
         // Determine if dirty
         const isDirty = !dbUser || 
           dbUser.email !== emailLower ||
           dbUser.name !== user.name ||
-          dbUser.role !== user.role ||
+          dbUser.role !== clientRoleDenorm ||
           Boolean(dbUser.is_active) !== Boolean(user.isActive) ||
           (dbUser.phone || null) !== (user.phone || null) ||
           (dbUser.linked_student_id || null) !== (user.linkedStudentId || null) ||
@@ -249,7 +250,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
               user.passwordHash || "",
               user.passwordSalt || null,
               user.name,
-              user.role,
+              clientRoleDenorm,
               user.isActive ? 1 : 0,
               user.phone || null,
               user.linkedStudentId || null,
@@ -692,6 +693,188 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
           t.processedAt || null,
           t.processedBy || null,
           t.notes || null
+        ]
+      );
+    }
+
+    // Sync tuitionFees
+    const clientTuition = store.tuitionFees || [];
+    const clientTuitionIds = clientTuition.map(tf => tf.id);
+    if (clientTuitionIds.length > 0) {
+      await client.query(
+        "DELETE FROM tuition_fees WHERE id NOT IN (" + 
+        clientTuitionIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientTuitionIds
+      );
+    } else {
+      await client.query("DELETE FROM tuition_fees");
+    }
+
+    for (const tf of clientTuition) {
+      await client.query(
+        `INSERT INTO tuition_fees (id, student_id, semester_id, amount, due_date, status, paid_amount, paid_at, receipt_code)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (id) DO UPDATE SET
+           student_id = EXCLUDED.student_id,
+           semester_id = EXCLUDED.semester_id,
+           amount = EXCLUDED.amount,
+           due_date = EXCLUDED.due_date,
+           status = EXCLUDED.status,
+           paid_amount = EXCLUDED.paid_amount,
+           paid_at = EXCLUDED.paid_at,
+           receipt_code = EXCLUDED.receipt_code`,
+        [
+          tf.id,
+          tf.studentId,
+          tf.semesterId || null,
+          Number(tf.amount) || 0,
+          tf.dueDate,
+          tf.status,
+          Number(tf.paidAmount) || 0,
+          tf.paidAt || null,
+          tf.receiptCode || null
+        ]
+      );
+    }
+
+    // Sync advisorNotes
+    const clientNotesAdvisor = store.advisorNotes || [];
+    const clientNotesAdvisorIds = clientNotesAdvisor.map(n => n.id);
+    if (clientNotesAdvisorIds.length > 0) {
+      await client.query(
+        "DELETE FROM advisor_notes WHERE id NOT IN (" + 
+        clientNotesAdvisorIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientNotesAdvisorIds
+      );
+    } else {
+      await client.query("DELETE FROM advisor_notes");
+    }
+
+    for (const n of clientNotesAdvisor) {
+      await client.query(
+        `INSERT INTO advisor_notes (id, advisor_id, student_id, content, type, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO UPDATE SET
+           advisor_id = EXCLUDED.advisor_id,
+           student_id = EXCLUDED.student_id,
+           content = EXCLUDED.content,
+           type = EXCLUDED.type,
+           created_at = EXCLUDED.created_at`,
+        [
+          n.id,
+          n.advisorId || null,
+          n.studentId,
+           n.content,
+          n.type,
+          n.createdAt
+        ]
+      );
+    }
+
+    // Sync quizzes
+    const clientQuizzes = store.quizzes || [];
+    const clientQuizIds = clientQuizzes.map(q => q.id);
+    if (clientQuizIds.length > 0) {
+      await client.query(
+        "DELETE FROM quizzes WHERE id NOT IN (" + 
+        clientQuizIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientQuizIds
+      );
+    } else {
+      await client.query("DELETE FROM quizzes");
+    }
+
+    for (const q of clientQuizzes) {
+      await client.query(
+        `INSERT INTO quizzes (id, course_id, lesson_id, title, passing_score, time_limit, max_attempts)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (id) DO UPDATE SET
+           course_id = EXCLUDED.course_id,
+           lesson_id = EXCLUDED.lesson_id,
+           title = EXCLUDED.title,
+           passing_score = EXCLUDED.passing_score,
+           time_limit = EXCLUDED.time_limit,
+           max_attempts = EXCLUDED.max_attempts`,
+        [
+          q.id,
+          q.courseId,
+          q.lessonId || null,
+          q.title,
+          Number(q.passingScore) || 70,
+          Number(q.timeLimit) || 15,
+          Number(q.maxAttempts) || 3
+        ]
+      );
+    }
+
+    // Sync questions
+    const clientQuestions = store.questions || [];
+    const clientQuestionIds = clientQuestions.map(qst => qst.id);
+    if (clientQuestionIds.length > 0) {
+      await client.query(
+        "DELETE FROM questions WHERE id NOT IN (" + 
+        clientQuestionIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientQuestionIds
+      );
+    } else {
+      await client.query("DELETE FROM questions");
+    }
+
+    for (const qst of clientQuestions) {
+      await client.query(
+        `INSERT INTO questions (id, quiz_id, text, type, options, correct_answer)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (id) DO UPDATE SET
+           quiz_id = EXCLUDED.quiz_id,
+           text = EXCLUDED.text,
+           type = EXCLUDED.type,
+           options = EXCLUDED.options,
+           correct_answer = EXCLUDED.correct_answer`,
+        [
+          qst.id,
+          qst.quizId,
+          qst.text,
+          qst.type,
+          qst.options || [],
+          qst.correctAnswer
+        ]
+      );
+    }
+
+    // Sync submissions
+    const clientSubmissions = store.submissions || [];
+    const clientSubmissionIds = clientSubmissions.map(s => s.id);
+    if (clientSubmissionIds.length > 0) {
+      await client.query(
+        "DELETE FROM submissions WHERE id NOT IN (" + 
+        clientSubmissionIds.map((_, i) => `$${i + 1}`).join(",") + ")",
+        clientSubmissionIds
+      );
+    } else {
+      await client.query("DELETE FROM submissions");
+    }
+
+    for (const sub of clientSubmissions) {
+      await client.query(
+        `INSERT INTO submissions (id, assignment_id, student_id, content, score, feedback, submitted_at, graded_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (id) DO UPDATE SET
+           assignment_id = EXCLUDED.assignment_id,
+           student_id = EXCLUDED.student_id,
+           content = EXCLUDED.content,
+           score = EXCLUDED.score,
+           feedback = EXCLUDED.feedback,
+           submitted_at = EXCLUDED.submitted_at,
+           graded_at = EXCLUDED.graded_at`,
+        [
+          sub.id,
+          sub.assignmentId,
+          sub.studentId,
+          sub.content,
+          sub.score === undefined || sub.score === null ? null : Number(sub.score),
+          sub.feedback || null,
+          sub.submittedAt,
+          sub.gradedAt || null
         ]
       );
     }

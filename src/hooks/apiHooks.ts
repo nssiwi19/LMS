@@ -23,7 +23,16 @@ export function useCurrentUser() {
 export function useStoreSnapshot(enabled = true) {
   return useQuery({
     queryKey: ["store"],
-    queryFn: async () => hydrateStore(await api.getStore()),
+    queryFn: async () => {
+      if (AppStore.syncPromise) {
+        try {
+          await AppStore.syncPromise;
+        } catch (e) {
+          // ignore
+        }
+      }
+      return hydrateStore(await api.getStore());
+    },
     enabled,
     staleTime: 20_000
   });
