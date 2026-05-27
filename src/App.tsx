@@ -325,7 +325,7 @@ function AppShell() {
         <div className="min-h-screen flex flex-col md:flex-row relative">
           
           {/* DESKTOP SIDEBAR NAV BAR */}
-          <aside className={`hidden md:flex flex-col bg-slate-900 border-r border-white/10 p-4 flex-shrink-0 relative z-40 backdrop-blur-xl transition-all duration-300 ${
+          <aside className={`hidden md:flex flex-col bg-slate-900 border-r border-white/10 p-4 flex-shrink-0 sticky top-0 h-screen z-40 backdrop-blur-xl transition-all duration-300 ${
             isSidebarCollapsed ? "w-20 items-center px-2" : "w-64"
           }`}>
             {/* Top Logo and Toggle */}
