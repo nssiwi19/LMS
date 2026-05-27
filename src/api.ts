@@ -46,6 +46,8 @@ export const api = {
   toggleProgress: (payload: { enrollmentId: string; lessonId: string }) => apiFetch("/api/progress/toggle", { method: "POST", body: JSON.stringify(payload) }),
   createQuiz: (payload: unknown) => apiFetch("/api/quizzes", { method: "POST", body: JSON.stringify(payload) }),
   addQuestion: (quizId: string, payload: unknown) => apiFetch(`/api/quizzes/${quizId}/questions`, { method: "POST", body: JSON.stringify(payload) }),
+  updateQuestion: (questionId: string, payload: unknown) => apiFetch(`/api/questions/${questionId}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteQuestion: (questionId: string) => apiFetch(`/api/questions/${questionId}`, { method: "DELETE" }),
   submitQuiz: (payload: { quizId: string; answers: Record<string, string>; startedAt?: string }) => apiFetch("/api/quizzes/submit", { method: "POST", body: JSON.stringify(payload) }),
   createAssignment: (payload: unknown) => apiFetch("/api/assignments", { method: "POST", body: JSON.stringify(payload) }),
   submitAssignment: (payload: { assignmentId: string; content: string }) => apiFetch("/api/assignments/submit", { method: "POST", body: JSON.stringify(payload) }),
@@ -60,5 +62,6 @@ export const api = {
   updateStudentProfile: (payload: unknown) => apiFetch("/api/student/profile", { method: "PATCH", body: JSON.stringify(payload) }),
   updateStudentNotes: (studentId: string, notes: string) => apiFetch(`/api/advisor/student-profile/${studentId}`, { method: "PATCH", body: JSON.stringify({ notes }) }),
   markNotificationRead: (id: string) => apiFetch(`/api/notifications/${id}/read`, { method: "PATCH" }),
-  markAllNotificationsRead: () => apiFetch("/api/notifications/read-all", { method: "PATCH" })
+  markAllNotificationsRead: () => apiFetch("/api/notifications/read-all", { method: "PATCH" }),
+  resetPassword: (userId: string) => apiFetch(`/api/admin/users/${userId}/reset-password`, { method: "POST" })
 };

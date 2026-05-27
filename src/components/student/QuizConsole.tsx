@@ -80,7 +80,7 @@ export default function QuizConsole(props: ComponentProps) {
         const currentQuestionObj = questions[currentQuestionIndex];
 
         return (
-          <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 z-50">
+          <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4 z-50 rounded-3xl">
             <div className="bg-slate-900 border border-white/15 rounded-3xl p-6.5 w-full max-w-2xl shadow-2xl relative">
               
               {!quizFinishedState ? (

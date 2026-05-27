@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   ShieldAlert, 
   Check, 
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { LMSDataStore, AcademicWarning, User, StudentProfile } from "../types";
 import { AppStore } from "../store";
+import { api } from "../api";
 
 interface WarningAndReportsProps {
   store: LMSDataStore;
@@ -22,6 +23,7 @@ interface WarningAndReportsProps {
   onRefreshData: () => void;
   triggerToast: (msg: string) => void;
   onSelectStudentProfile: (userId: string) => void; // allow linking directly to Student Detail in student registry!
+  defaultTab?: "warnings" | "reports";
 }
 
 export default function WarningAndReports({ 
@@ -29,10 +31,44 @@ export default function WarningAndReports({
   currentUser, 
   onRefreshData, 
   triggerToast,
-  onSelectStudentProfile 
+  onSelectStudentProfile,
+  defaultTab = "warnings"
 }: WarningAndReportsProps) {
-  const [activeTab, setActiveTab] = useState<"warnings" | "reports">("warnings");
+  const [activeTab, setActiveTab] = useState<"warnings" | "reports">(defaultTab);
+
+  useEffect(() => {
+    setActiveTab(defaultTab);
+  }, [defaultTab]);
   const [filterWarningType, setFilterWarningType] = useState("all");
+
+  // Create warning modal states
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [selectedWarningType, setSelectedWarningType] = useState<"low_gpa" | "low_attendance" | "unpaid_fee" | "exam_ban" | "overdue_assignment">("low_gpa");
+  const [warningMessage, setWarningMessage] = useState("");
+
+  const studentUsers = store.users.filter(u => u.role === "student");
+
+  const handleCreateWarningSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudentId || !warningMessage.trim()) {
+      triggerToast("Vui lòng nhập đầy đủ thông tin bắt buộc.");
+      return;
+    }
+
+    try {
+      await api.createWarning({
+        studentId: selectedStudentId,
+        type: selectedWarningType,
+        message: warningMessage.trim()
+      });
+      triggerToast("Đã gửi cảnh báo học tập thành công!");
+      setIsCreateModalOpen(false);
+      onRefreshData();
+    } catch (err: any) {
+      triggerToast(err.message || "Lỗi khi gửi cảnh báo học tập.");
+    }
+  };
 
   const warnings = store.academicWarnings || [];
   const students = store.studentProfiles || [];
@@ -64,21 +100,14 @@ export default function WarningAndReports({
   });
 
   // Resolve warning
-  const handleResolveWarning = (id: string) => {
-    const storeData = AppStore.get();
-    storeData.academicWarnings = storeData.academicWarnings.map(w => {
-      if (w.id === id) {
-        AppStore.log(currentUser.id, "resolve_warning", w.studentId, `Khắc phục thành công cảnh báo học tập phân loại: ${w.type}`);
-        return {
-          ...w,
-          isResolved: true
-        };
-      }
-      return w;
-    });
-    AppStore.save(storeData);
-    onRefreshData();
-    triggerToast("Cảnh báo học tập đã được đánh dấu giải quyết khắc phục.");
+  const handleResolveWarning = async (id: string) => {
+    try {
+      await api.resolveWarning(id);
+      onRefreshData();
+      triggerToast("Cảnh báo học tập đã được đánh dấu giải quyết khắc phục.");
+    } catch (err: any) {
+      triggerToast(err.message || "Lỗi khi giải quyết cảnh báo học tập.");
+    }
   };
 
   // --- STATISTICS COMPUTATIONS FOR REPORTS ---
@@ -180,7 +209,93 @@ export default function WarningAndReports({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
+      {/* Create Warning Modal Overlay */}
+      {isCreateModalOpen && (
+        <div className="absolute inset-0 rounded-3xl z-50 bg-slate-950/95 overflow-y-auto p-8 border border-white/10 backdrop-blur-xl animate-fade-in flex flex-col justify-between">
+          <div className="space-y-6">
+            <div className="flex justify-between items-start border-b border-white/10 pb-4">
+              <div>
+                <h3 className="text-lg font-display font-bold text-white flex items-center gap-2">
+                  <ShieldAlert className="h-5 w-5 text-red-500" />
+                  Gửi Cảnh báo Học thuật Mới
+                </h3>
+                <p className="text-xs text-white/50 mt-1">Cảnh báo sẽ được lưu vào hệ thống và hiển thị trực tiếp trên trang chủ của học sinh và phụ huynh.</p>
+              </div>
+              <button 
+                onClick={() => setIsCreateModalOpen(false)}
+                className="p-1.5 bg-white/5 hover:bg-white/15 text-white/60 hover:text-white rounded-lg border border-white/10 cursor-pointer transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateWarningSubmit} className="space-y-4 text-xs font-sans">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-white/70 block">Chọn Học sinh nhận cảnh báo <span className="text-red-400">*</span></label>
+                  <select
+                    value={selectedStudentId}
+                    onChange={(e) => setSelectedStudentId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 h-10"
+                    required
+                  >
+                    <option value="" disabled className="bg-slate-900">-- Chọn học sinh --</option>
+                    {studentUsers.map(st => (
+                      <option key={st.id} value={st.id} className="bg-slate-900">
+                        {st.name} ({st.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-white/70 block">Loại Cảnh báo <span className="text-red-400">*</span></label>
+                  <select
+                    value={selectedWarningType}
+                    onChange={(e) => setSelectedWarningType(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 h-10"
+                    required
+                  >
+                    <option value="low_gpa" className="bg-slate-900">GPA Thấp (Dưới 2.0)</option>
+                    <option value="low_attendance" className="bg-slate-900">Nghỉ chuyên cần nhiều</option>
+                    <option value="unpaid_fee" className="bg-slate-900">Trễ nợ học phí</option>
+                    <option value="exam_ban" className="bg-slate-900">Đình chỉ thi học kỳ</option>
+                    <option value="overdue_assignment" className="bg-slate-900">Trễ hạn nộp bài tập</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-white/70 block">Nội dung chi tiết cảnh báo và hướng dẫn xử lý <span className="text-red-400">*</span></label>
+                <textarea
+                  value={warningMessage}
+                  onChange={(e) => setWarningMessage(e.target.value)}
+                  placeholder="Ví dụ: GPA học kỳ hiện tại là 1.85, dưới mức tối thiểu 2.0. Vui lòng liên hệ Văn phòng Học vụ trước ngày 15/06 để đăng ký học cải thiện..."
+                  className="w-full px-3.5 py-2.5 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 placeholder-white/20 min-h-[120px] font-sans leading-relaxed"
+                  required
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateModalOpen(false)}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white border border-white/10 text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white hover:text-slate-950 text-xs font-bold rounded-xl transition cursor-pointer shadow-lg tracking-wider"
+                >
+                  Gửi Cảnh báo ngay
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       
       {/* Selector tab bars */}
       <div className="flex border-b border-white/10 pb-2 gap-4">
@@ -221,7 +336,22 @@ export default function WarningAndReports({
               </select>
             </div>
             
-            <span className="text-[10.5px] text-white/40">Thống kê thấy {formattedWarnings.length} lệnh cảnh báo phù hợp.</span>
+            <div className="flex items-center gap-4">
+              <span className="text-[10.5px] text-white/40">Thống kê thấy {formattedWarnings.length} lệnh cảnh báo phù hợp.</span>
+              <button
+                onClick={() => {
+                  if (studentUsers.length > 0) {
+                    setSelectedStudentId(studentUsers[0].id);
+                  }
+                  setSelectedWarningType("low_gpa");
+                  setWarningMessage("");
+                  setIsCreateModalOpen(true);
+                }}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition duration-150 cursor-pointer shadow shadow-red-700/50"
+              >
+                + Gửi cảnh báo mới
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

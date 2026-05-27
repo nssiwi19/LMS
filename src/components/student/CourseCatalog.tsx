@@ -299,7 +299,7 @@ export default function CourseCatalog(props: ComponentProps) {
       {paymentGuideTx && (() => {
         const matchingCourse = store.courses.find(c => c.id === paymentGuideTx.courseId);
         return (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 rounded-3xl">
             <div className="bg-slate-900 border border-white/15 w-full max-w-md rounded-3xl p-6 space-y-4.5 shadow-2xl relative animate-in zoom-in-95 duration-150 text-white leading-relaxed">
               <button 
                 onClick={() => setPaymentGuideTx(null)}

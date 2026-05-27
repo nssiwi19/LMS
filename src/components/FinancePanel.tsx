@@ -17,6 +17,7 @@ import { User, Transaction, Course } from "../types";
 import { AppStore } from "../store";
 import { generateId } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
+import TuitionManager from "./TuitionManager";
 
 interface FinancePanelProps {
   currentUser: User;
@@ -34,6 +35,33 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
   const [rejectionNotes, setRejectionNotes] = useState("");
   const [rejectingTxId, setRejectingTxId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"transactions" | "salaries" | "tuition">("transactions");
+
+  // Dynamic salary computation for teachers
+  const teachers = store ? store.users.filter(u => u.role === "teacher") : [];
+  const teacherSalaries = teachers.map(t => {
+    const tCourses = store.courses.filter(c => c.teacherId === t.id);
+    const totalBase = tCourses.length * 3000000; // 3M VND per course base
+    let totalCommission = 0;
+    let totalStudents = 0;
+    const totalValue = tCourses.reduce((sum, c) => sum + (c.price || 0), 0);
+
+    tCourses.forEach(c => {
+      const studentsCount = store.enrollments.filter(e => e.courseId === c.id && e.status === "active").length;
+      totalStudents += studentsCount;
+      totalCommission += (c.price || 0) * studentsCount * 0.15; // 15% commission
+    });
+
+    return {
+      teacher: t,
+      coursesCount: tCourses.length,
+      totalStudents,
+      totalValue,
+      baseSalary: totalBase,
+      commission: totalCommission,
+      totalSalary: totalBase + totalCommission
+    };
+  });
 
 
 
@@ -241,214 +269,322 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
         </div>
       </div>
 
-      {/* Main workspace workspace */}
-      <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/5 pb-4">
-          <div>
-            <h4 className="text-base font-display font-semibold text-white">Đối soát Thanh toán & Sổ thu chi</h4>
-            <p className="text-xs text-white/50">Phê duyệt chuyển khoản của học viên để kích hoạt quyền tham gia khóa học tức thời.</p>
-          </div>
-
-          {/* Sổ thu chi Filters and Search */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-white/40" />
-              <input
-                type="text"
-                placeholder="Tìm mã, học viên, khóa học..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-4 py-2 text-xs bg-black/25 text-white placeholder-white/40 border border-white/10 rounded-xl focus:outline-none focus:border-white/20 w-56"
-              />
-            </div>
-
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as any)}
-              className="p-2 py-1.5 text-xs bg-slate-900 border border-white/10 text-white/80 rounded-xl focus:outline-none"
-            >
-              <option value="all">Tất cả trạng thái</option>
-              <option value="pending">Chờ đối soát</option>
-              <option value="approved">Đã phê duyệt</option>
-              <option value="rejected">Bị từ chối</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Date Range & CSV Export */}
-        <div className="bg-black/20 p-4 rounded-2xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs">
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="text-white/40 font-mono uppercase tracking-wider block font-bold">Lọc ngày thu chi:</span>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-3.5 w-3.5 text-white/40" />
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="p-1.5 bg-black/30 border border-white/10 rounded-lg focus:outline-none text-white font-mono text-xs cursor-pointer"
-              />
-              <span className="text-white/40">đến</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="p-1.5 bg-black/30 border border-white/10 rounded-lg focus:outline-none text-white font-mono text-xs cursor-pointer"
-              />
-              {(startDate || endDate) && (
-                <button 
-                  onClick={() => { setStartDate(""); setEndDate(""); }}
-                  className="p-1 px-2 hover:bg-white/10 text-white/50 hover:text-white rounded-lg cursor-pointer"
-                >
-                  Xoá lọc ngày
-                </button>
-              )}
-            </div>
-          </div>
-
-          <button
-            onClick={handleExportCSV}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition text-white shadow shadow-emerald-700/50 cursor-pointer"
-          >
-            <Download className="h-3.5 w-3.5" /> Xuất báo cáo tài chính (CSV)
-          </button>
-        </div>
-
-        {/* Transactions list */}
-        <div className="overflow-x-auto rounded-xl border border-white/5">
-          <table className="w-full text-xs text-left border-collapse">
-            <thead>
-              <tr className="bg-white/5 border-b border-white/10 text-white/50 uppercase font-mono tracking-wider font-bold">
-                <th className="p-4">Mã giao dịch</th>
-                <th className="p-4">Học viên</th>
-                <th className="p-4">Khóa học</th>
-                <th className="p-4">Học phí (VND)</th>
-                <th className="p-4">Phương thức</th>
-                <th className="p-4">Thời gian</th>
-                <th className="p-4">Trạng thái</th>
-                <th className="p-4 text-right">Thao tác nghiệp vụ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {filteredTransactions.map(tx => {
-                const studentUser = store.users.find(u => u.id === tx.studentId);
-                const courseObj = store.courses.find(c => c.id === tx.courseId);
-
-                return (
-                  <tr key={tx.id} className="hover:bg-white/5 transition duration-150">
-                    <td className="p-4 font-mono font-bold text-white/75">{tx.id}</td>
-                    <td className="p-4">
-                      <div className="font-bold text-white">{studentUser?.name || "Không xác định"}</div>
-                      <div className="text-[10px] text-white/40 font-mono">{studentUser?.email}</div>
-                    </td>
-                    <td className="p-4">
-                      <div className="font-semibold text-white/80 max-w-xs truncate">{courseObj?.title || "Không xác định"}</div>
-                      <div className="text-[10px] text-white/40 font-mono uppercase">{courseObj?.category}</div>
-                    </td>
-                    <td className="p-4 font-semibold text-emerald-400 font-mono text-sm">
-                      {formatVND(tx.amount)}
-                    </td>
-                    <td className="p-4 text-white/60">{tx.paymentMethod}</td>
-                    <td className="p-4 text-white/40 font-mono">{new Date(tx.createdAt).toLocaleString("vi-VN")}</td>
-                    <td className="p-4">
-                      {tx.status === "pending" && (
-                        <span className="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full font-bold text-[9px] uppercase tracking-wider font-mono">
-                          Chờ đối soát
-                        </span>
-                      )}
-                      {tx.status === "approved" && (
-                        <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full font-bold text-[9px] uppercase tracking-wider font-mono">
-                          Đã Duyệt
-                        </span>
-                      )}
-                      {tx.status === "rejected" && (
-                        <span className="px-2.5 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full font-bold text-[9px] uppercase tracking-wider font-mono">
-                          Bị Từ Chối
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right">
-                      {tx.status === "pending" ? (
-                        <div className="flex justify-end gap-2">
-                          <button
-                            onClick={() => handleApprove(tx)}
-                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[10px] uppercase transition cursor-pointer shadow"
-                          >
-                            Phê duyệt
-                          </button>
-                          <button
-                            onClick={() => setRejectingTxId(tx.id)}
-                            className="px-2.5 py-1.5 bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white font-bold rounded-lg text-[10px] uppercase border border-red-500/20 transition cursor-pointer"
-                          >
-                            Từ chối
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="text-[10px] text-white/30 font-mono italic max-w-[170px] ml-auto">
-                          Đã xử lý bởi {store.users.find(u => u.id === tx.processedBy)?.name} lúc {tx.processedAt && new Date(tx.processedAt).toLocaleDateString("vi-VN")}
-                          {tx.notes && <span className="block text-[9px] truncate" title={tx.notes}>({tx.notes})</span>}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-
-              {filteredTransactions.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="text-center py-16 text-white/45">
-                    Không tìm thấy dữ liệu thu chi giao dịch khớp điều kiện lọc.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* Tab Switching Segmented Control */}
+      <div className="flex border-b border-white/10 pb-px mb-6 text-xs bg-white/3 rounded-xl p-1 gap-1">
+        <button
+          onClick={() => setActiveTab("transactions")}
+          className={`flex-1 py-3 text-xs font-semibold rounded-lg transition cursor-pointer ${
+            activeTab === "transactions"
+              ? "bg-white/10 text-white border border-white/10 font-bold shadow-lg"
+              : "text-white/50 hover:text-white"
+          }`}
+        >
+          Đối soát & Giao dịch
+        </button>
+        <button
+          onClick={() => setActiveTab("salaries")}
+          className={`flex-1 py-3 text-xs font-semibold rounded-lg transition cursor-pointer ${
+            activeTab === "salaries"
+              ? "bg-white/10 text-white border border-white/10 font-bold shadow-lg"
+              : "text-white/50 hover:text-white"
+          }`}
+        >
+          Bảng lương Giảng viên
+        </button>
+        <button
+          onClick={() => setActiveTab("tuition")}
+          className={`flex-1 py-3 text-xs font-semibold rounded-lg transition cursor-pointer ${
+            activeTab === "tuition"
+              ? "bg-white/10 text-white border border-white/10 font-bold shadow-lg"
+              : "text-white/50 hover:text-white"
+          }`}
+        >
+          Quản lý Học phí & Công nợ
+        </button>
       </div>
 
-      {/* Rejecting Transaction Modal dialog box */}
-      {rejectingTxId && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-white/10 w-full max-w-md rounded-2xl p-6 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center pb-2 border-b border-white/5">
-              <h4 className="text-sm font-bold text-red-400 font-display">Từ chối giao dịch học phí</h4>
-              <button 
-                onClick={() => { setRejectingTxId(null); setRejectionNotes(""); }} 
-                className="p-1 hover:bg-white/10 rounded"
+      {activeTab === "transactions" && (
+        <>
+          {/* Main workspace workspace */}
+          <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md space-y-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/5 pb-4">
+              <div>
+                <h4 className="text-base font-display font-semibold text-white">Đối soát Thanh toán & Sổ thu chi</h4>
+                <p className="text-xs text-white/50">Phêu duyệt chuyển khoản của học viên để kích hoạt quyền tham gia khóa học tức thời.</p>
+              </div>
+
+              {/* Sổ thu chi Filters and Search */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-white/40" />
+                  <input
+                    type="text"
+                    placeholder="Tìm mã, học viên, khóa học..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-9 pr-4 py-2 text-xs bg-black/25 text-white placeholder-white/40 border border-white/10 rounded-xl focus:outline-none focus:border-white/20 w-56"
+                  />
+                </div>
+
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value as any)}
+                  className="p-2 py-1.5 text-xs bg-slate-900 border border-white/10 text-white/80 rounded-xl focus:outline-none"
+                >
+                  <option value="all">Tất cả trạng thái</option>
+                  <option value="pending">Chờ đối soát</option>
+                  <option value="approved">Đã phê duyệt</option>
+                  <option value="rejected">Bị từ chối</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Date Range & CSV Export */}
+            <div className="bg-black/20 p-4 rounded-2xl border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs">
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="text-white/40 font-mono uppercase tracking-wider block font-bold">Lọc ngày thu chi:</span>
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-3.5 w-3.5 text-white/40" />
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="p-1.5 bg-black/30 border border-white/10 rounded-lg focus:outline-none text-white font-mono text-xs cursor-pointer"
+                  />
+                  <span className="text-white/40">đến</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="p-1.5 bg-black/30 border border-white/10 rounded-lg focus:outline-none text-white font-mono text-xs cursor-pointer"
+                  />
+                  {(startDate || endDate) && (
+                    <button 
+                      onClick={() => { setStartDate(""); setEndDate(""); }}
+                      className="p-1 px-2 hover:bg-white/10 text-white/50 hover:text-white rounded-lg cursor-pointer"
+                    >
+                      Xoá lọc ngày
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={handleExportCSV}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition text-white shadow shadow-emerald-700/50 cursor-pointer"
               >
-                <XCircle className="h-4 w-4 text-white/50" />
+                <Download className="h-3.5 w-3.5" /> Xuất báo cáo tài chính (CSV)
               </button>
             </div>
 
-            <form onSubmit={handleRejectSubmit} className="space-y-4">
-              <div className="space-y-1 text-xs">
-                <label className="text-white/70 block">Lý do từ chối (Gửi thông báo học viên)</label>
-                <textarea
-                  required
-                  rows={3}
-                  placeholder="Ví dụ: Số tiền chuyển khoản chưa đủ, hoặc nội dung chuyển khoản sai cú pháp..."
-                  value={rejectionNotes}
-                  onChange={(e) => setRejectionNotes(e.target.value)}
-                  className="w-full p-2.5 bg-black/25 border border-white/10 text-white rounded-xl focus:outline-none focus:border-red-500 text-xs"
-                />
-              </div>
+            {/* Transactions list */}
+            <div className="overflow-x-auto rounded-xl border border-white/5">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-white/5 border-b border-white/10 text-white/50 uppercase font-mono tracking-wider font-bold">
+                    <th className="p-4">Mã giao dịch</th>
+                    <th className="p-4">Học viên</th>
+                    <th className="p-4">Khóa học</th>
+                    <th className="p-4">Học phí (VND)</th>
+                    <th className="p-4">Phương thức</th>
+                    <th className="p-4">Thời gian</th>
+                    <th className="p-4">Trạng thái</th>
+                    <th className="p-4 text-right">Thao tác nghiệp vụ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {filteredTransactions.map(tx => {
+                    const studentUser = store.users.find(u => u.id === tx.studentId);
+                    const courseObj = store.courses.find(c => c.id === tx.courseId);
 
-              <div className="flex justify-end gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => { setRejectingTxId(null); setRejectionNotes(""); }}
-                  className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl"
-                >
-                  Huỷ bỏ
-                </button>
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow"
-                >
-                  Xác nhận Từ chối
-                </button>
-              </div>
-            </form>
+                    return (
+                      <tr key={tx.id} className="hover:bg-white/5 transition duration-150">
+                        <td className="p-4 font-mono font-bold text-white/75">{tx.id}</td>
+                        <td className="p-4">
+                          <div className="font-bold text-white">{studentUser?.name || "Không xác định"}</div>
+                          <div className="text-[10px] text-white/40 font-mono">{studentUser?.email}</div>
+                        </td>
+                        <td className="p-4">
+                          <div className="font-semibold text-white/80 max-w-xs truncate">{courseObj?.title || "Không xác định"}</div>
+                          <div className="text-[10px] text-white/40 font-mono uppercase">{courseObj?.category}</div>
+                        </td>
+                        <td className="p-4 font-semibold text-emerald-400 font-mono text-sm">
+                          {formatVND(tx.amount)}
+                        </td>
+                        <td className="p-4 text-white/60">{tx.paymentMethod}</td>
+                        <td className="p-4 text-white/40 font-mono">{new Date(tx.createdAt).toLocaleString("vi-VN")}</td>
+                        <td className="p-4">
+                          {tx.status === "pending" && (
+                            <span className="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full font-bold text-[9px] uppercase tracking-wider font-mono">
+                              Chờ đối soát
+                            </span>
+                          )}
+                          {tx.status === "approved" && (
+                            <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full font-bold text-[9px] uppercase tracking-wider font-mono">
+                              Đã Duyệt
+                            </span>
+                          )}
+                          {tx.status === "rejected" && (
+                            <span className="px-2.5 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full font-bold text-[9px] uppercase tracking-wider font-mono">
+                              Bị Từ Chối
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-4 text-right">
+                          {tx.status === "pending" ? (
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => handleApprove(tx)}
+                                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[10px] uppercase transition cursor-pointer shadow"
+                              >
+                                Phê duyệt
+                              </button>
+                              <button
+                                onClick={() => setRejectingTxId(tx.id)}
+                                className="px-2.5 py-1.5 bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white font-bold rounded-lg text-[10px] uppercase border border-red-500/20 transition cursor-pointer"
+                              >
+                                Từ chối
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-white/30 font-mono italic max-w-[170px] ml-auto">
+                              Đã xử lý bởi {store.users.find(u => u.id === tx.processedBy)?.name} lúc {tx.processedAt && new Date(tx.processedAt).toLocaleDateString("vi-VN")}
+                              {tx.notes && <span className="block text-[9px] truncate" title={tx.notes}>({tx.notes})</span>}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {filteredTransactions.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="text-center py-16 text-white/45">
+                        Không tìm thấy dữ liệu thu chi giao dịch khớp điều kiện lọc.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
+
+          {/* Rejecting Transaction Modal dialog box */}
+          {rejectingTxId && (
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-white/10 w-full max-w-md rounded-2xl p-6 space-y-4 shadow-2xl">
+                <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                  <h4 className="text-sm font-bold text-red-400 font-display">Từ chối giao dịch học phí</h4>
+                  <button 
+                    onClick={() => { setRejectingTxId(null); setRejectionNotes(""); }} 
+                    className="p-1 hover:bg-white/10 rounded"
+                  >
+                    <XCircle className="h-4 w-4 text-white/50" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleRejectSubmit} className="space-y-4">
+                  <div className="space-y-1 text-xs">
+                    <label className="text-white/70 block">Lý do từ chối (Gửi thông báo học viên)</label>
+                    <textarea
+                      required
+                      rows={3}
+                      placeholder="Ví dụ: Số tiền chuyển khoản chưa đủ, hoặc nội dung chuyển khoản sai cú pháp..."
+                      value={rejectionNotes}
+                      onChange={(e) => setRejectionNotes(e.target.value)}
+                      className="w-full p-2.5 bg-black/25 border border-white/10 text-white rounded-xl focus:outline-none focus:border-red-500 text-xs"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => { setRejectingTxId(null); setRejectionNotes(""); }}
+                      className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl"
+                    >
+                      Huỷ bỏ
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow"
+                    >
+                      Xác nhận Từ chối
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === "salaries" && (
+        <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md space-y-6">
+          <div className="border-b border-white/5 pb-4">
+            <h4 className="text-base font-display font-semibold text-white">Bảng tính lương Giảng viên</h4>
+            <p className="text-xs text-white/50">Lương tự động dựa trên số khóa học phụ trách (3.000.000 VND/khóa) và hoa hồng tuyển sinh (15% học phí của khóa).</p>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-white/5">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead>
+                <tr className="bg-white/5 border-b border-white/10 text-white/50 uppercase font-mono tracking-wider font-bold">
+                  <th className="p-4">Giảng viên</th>
+                  <th className="p-4 text-center">Số khóa học</th>
+                  <th className="p-4 text-center">Tổng học viên</th>
+                  <th className="p-4 text-right">Lương cơ bản</th>
+                  <th className="p-4 text-right">Hoa hồng tuyển sinh</th>
+                  <th className="p-4 text-right text-emerald-400">Tổng Thực Nhận</th>
+                  <th className="p-4 text-right">Hành động chi trả</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {teacherSalaries.map(ts => (
+                  <tr key={ts.teacher.id} className="hover:bg-white/5 transition">
+                    <td className="p-4 font-bold text-white">
+                      <div>{ts.teacher.name}</div>
+                      <div className="text-[10px] text-white/40 font-mono">{ts.teacher.email}</div>
+                    </td>
+                    <td className="p-4 text-center font-mono font-bold text-sky-300">{ts.coursesCount} khóa</td>
+                    <td className="p-4 text-center font-mono text-white/60">{ts.totalStudents} học viên active</td>
+                    <td className="p-4 text-right font-mono text-white/70">{formatVND(ts.baseSalary)}</td>
+                    <td className="p-4 text-right font-mono text-white/70">{formatVND(ts.commission)}</td>
+                    <td className="p-4 text-right font-mono font-bold text-emerald-400 text-sm">{formatVND(ts.totalSalary)}</td>
+                    <td className="p-4 text-right">
+                      <button
+                        onClick={() => showToast(`✅ Thanh toán thành công ${formatVND(ts.totalSalary)} cho giảng viên ${ts.teacher.name}!`)}
+                        className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[10px] uppercase transition cursor-pointer shadow"
+                      >
+                        Thanh toán
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {teacherSalaries.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center py-16 text-white/40">
+                      Chưa ghi nhận thông tin giảng viên nào trong hệ thống.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "tuition" && (
+        <div className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md space-y-6">
+          <div className="border-b border-white/5 pb-4">
+            <h4 className="text-base font-display font-semibold text-white">Quản lý Học phí, Công nợ & Thu hồi công nợ</h4>
+            <p className="text-xs text-white/50">Lập học phí đồng loạt cho học kỳ, rà soát nợ xấu quá hạn và ghi thu trực tiếp.</p>
+          </div>
+          <TuitionManager
+            store={store}
+            currentUser={currentUser}
+            onRefreshData={onRefreshData}
+            triggerToast={showToast}
+          />
         </div>
       )}
 

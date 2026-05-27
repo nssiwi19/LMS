@@ -192,7 +192,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
 
       {/* ASSIGNMENT ATTACHMENT MODAL SUBMISSION */}
       {submittingAssignmentId && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 rounded-3xl">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6.5 w-full max-w-lg shadow-2xl relative">
             <button 
               onClick={() => setSubmittingAssignmentId(null)}

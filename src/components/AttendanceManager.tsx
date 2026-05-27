@@ -33,6 +33,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
   const [showCreateSession, setShowCreateSession] = useState(false);
   const [newSessionDate, setNewSessionDate] = useState("");
   const [newSessionTopic, setNewSessionTopic] = useState("");
+  const [newSessionTime, setNewSessionTime] = useState("09:00 - 11:30");
 
   const courses = store.courses || [];
   const enrollments = store.enrollments || [];
@@ -70,12 +71,13 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
     }
 
     const storeData = AppStore.get();
+    const combinedDate = newSessionTime.trim() ? `${newSessionDate} (${newSessionTime.trim()})` : newSessionDate;
     const newSession: AttendanceSession = {
       id: generateId("ats"),
       courseId: selectedCourseId,
       semesterId: curSemesterId,
       teacherId: currentUser.id,
-      date: newSessionDate,
+      date: combinedDate,
       topic: newSessionTopic.trim()
     };
 
@@ -94,11 +96,12 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
       storeData.attendanceRecords.push(rec);
     });
 
-    AppStore.log(currentUser.id, "create_attendance_session", selectedCourseId, `Khởi tạo buổi học ngày ${newSessionDate}`);
+    AppStore.log(currentUser.id, "create_attendance_session", selectedCourseId, `Khởi tạo buổi học ngày ${combinedDate}`);
     AppStore.save(storeData);
     
     setNewSessionDate("");
     setNewSessionTopic("");
+    setNewSessionTime("09:00 - 11:30");
     setShowCreateSession(false);
     setActiveSessionId(newSession.id);
     onRefreshData();
@@ -256,15 +259,24 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
           <div className="lg:col-span-2 space-y-4">
             {activeSessionId ? (
               <div className="space-y-4">
-                <div className="flex justify-between items-center border-b border-white/10 pb-2">
-                  <div>
-                    <h4 className="text-sm font-bold text-white">Chốt danh sách điểm danh buổi học</h4>
-                    <p className="text-xs text-white/40">Dữ liệu được lưu trữ trực tiếp của hệ thống.</p>
-                  </div>
-                  <span className="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-0.5 rounded font-mono font-bold">
-                    ID: {activeSessionId.slice(0, 8)}
-                  </span>
-                </div>
+                {(() => {
+                  const activeSession = sessions.find(s => s.id === activeSessionId);
+                  return (
+                    <div className="flex justify-between items-center border-b border-white/10 pb-2">
+                      <div>
+                        <h4 className="text-sm font-bold text-white">
+                          Chốt danh sách điểm danh: <span className="text-indigo-400 font-mono font-semibold">{activeSession?.date}</span>
+                        </h4>
+                        <p className="text-xs text-white/40">
+                          Chủ đề buổi học: <span className="text-cyan-400 font-semibold">{activeSession?.topic}</span>
+                        </p>
+                      </div>
+                      <span className="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-0.5 rounded font-mono font-bold">
+                        ID: {activeSessionId.slice(0, 8)}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                   <div className="overflow-x-auto">
@@ -417,15 +429,29 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
             </p>
 
             <form onSubmit={handleCreateSessionSubmit} className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="text-white/70 font-semibold block">Ngày tháng học tập</label>
-                <input
-                  type="date"
-                  required
-                  value={newSessionDate}
-                  onChange={(e) => setNewSessionDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-white/70 font-semibold block">Ngày học tập</label>
+                  <input
+                    type="date"
+                    required
+                    value={newSessionDate}
+                    onChange={(e) => setNewSessionDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-white/70 font-semibold block">Giờ học cụ thể</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ví dụ: 09:00 - 11:30"
+                    value={newSessionTime}
+                    onChange={(e) => setNewSessionTime(e.target.value)}
+                    className="w-full px-3 py-2 bg-black/25 text-white border border-white/10 rounded-xl focus:outline-none font-mono"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1">

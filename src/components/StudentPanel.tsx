@@ -426,38 +426,27 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
   };
 
   // Send assignment files
-  const handleSendAssignmentSubmit = (e: React.FormEvent, overrideContent?: string) => {
+  const handleSendAssignmentSubmit = async (e: React.FormEvent, overrideContent?: string) => {
     e.preventDefault();
     const contentToUse = overrideContent !== undefined ? overrideContent : submissionCodeText;
     if (!submittingAssignmentId || !contentToUse.trim()) {
-      triggerToast("Please provide submission content deliverables.");
+      triggerToast("Vui lòng nhập nội dung bài làm hoặc đính kèm tệp.");
       return;
     }
 
-    const storeData = AppStore.get();
-    
-    // Safety remove existing submissions
-    storeData.submissions = storeData.submissions.filter(
-      s => !(s.assignmentId === submittingAssignmentId && s.studentId === currentUser.id)
-    );
-
-    const submission: Submission = {
-      id: generateId("submit"),
-      assignmentId: submittingAssignmentId,
-      studentId: currentUser.id,
-      content: contentToUse,
-      submittedAt: new Date().toISOString()
-    };
-
-    storeData.submissions.push(submission);
-    AppStore.log(currentUser.id, "submit_assignment_draft", submittingAssignmentId, "Sent deliverables for grading desk reviews.");
-    AppStore.notify(currentUser.id, "info", "Assignment submitted. Teachers will evaluate, score and leave feedback.");
-    AppStore.save(storeData);
-
-    setSubmissionCodeText("");
-    setSubmittingAssignmentId(null);
-    onRefreshData();
-    triggerToast("Assignment materials submitted successfully!");
+    try {
+      await api.submitAssignment({
+        assignmentId: submittingAssignmentId,
+        content: contentToUse
+      });
+      triggerToast("Nộp bài làm bài tập tự luận thành công!");
+      setSubmissionCodeText("");
+      setSubmittingAssignmentId(null);
+      onRefreshData();
+    } catch (err: any) {
+      console.error(err);
+      triggerToast(err.message || "Không thể nộp bài tập tự luận lên server.");
+    }
   };
 
   const handleMarkNotificationRead = async (id: string) => {
@@ -871,7 +860,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
         </div>
 
         {/* Right Canvas workspace content bodies */}
-        <div ref={contentRef} className="flex-1 w-full bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6 backdrop-blur-md min-w-0 scroll-mt-4">
+        <div ref={contentRef} className="relative flex-1 w-full bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6 backdrop-blur-md min-w-0 scroll-mt-4">
 
         <CourseCatalog {...studentPanelProps} />
         <MyLearningWorkspace {...studentPanelProps} />

@@ -24,12 +24,26 @@ export const assignmentsRepository = {
     )).rows[0];
     if (!enrollment) return { error: "Active enrollment required to submit this assignment.", status: 403 };
 
-    const submission: Submission = { id: generateId("sub"), assignmentId, studentId, content, submittedAt: new Date().toISOString() };
-    await db.query(
-      "INSERT INTO submissions (id, assignment_id, student_id, content, submitted_at) VALUES ($1,$2,$3,$4,$5)",
-      [submission.id, assignmentId, studentId, content, submission.submittedAt]
-    );
-    return { row: submission };
+    const existing = (await db.query(
+      "SELECT id FROM submissions WHERE student_id = $1 AND assignment_id = $2",
+      [studentId, assignmentId]
+    )).rows[0];
+
+    if (existing) {
+      const submittedAt = new Date().toISOString();
+      await db.query(
+        "UPDATE submissions SET content = $1, submitted_at = $2 WHERE id = $3",
+        [content, submittedAt, existing.id]
+      );
+      return { row: { id: existing.id, assignmentId, studentId, content, submittedAt } };
+    } else {
+      const submission: Submission = { id: generateId("sub"), assignmentId, studentId, content, submittedAt: new Date().toISOString() };
+      await db.query(
+        "INSERT INTO submissions (id, assignment_id, student_id, content, submitted_at) VALUES ($1,$2,$3,$4,$5)",
+        [submission.id, assignmentId, studentId, content, submission.submittedAt]
+      );
+      return { row: submission };
+    }
   },
 
   async findSubmissionForGrading(db: Queryable, submissionId: string) {

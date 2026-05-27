@@ -156,9 +156,15 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
     if (fee.status === "paid") {
       storeData.academicWarnings = storeData.academicWarnings.map(aw => {
         if (aw.studentId === fee.studentId && (aw.type === "unpaid_fee" || aw.type === "unpaid-fee")) {
-          return { ...aw, isResolved: true };
+          return { ...aw, isResolved: true, resolvedBy: currentUser.id, resolvedAt: new Date().toISOString() };
         }
         return aw;
+      });
+      storeData.studentProfiles = storeData.studentProfiles.map(p => {
+        if (p.userId === fee.studentId) {
+          return { ...p, feeHold: false };
+        }
+        return p;
       });
     }
 
