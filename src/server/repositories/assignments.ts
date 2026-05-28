@@ -3,6 +3,7 @@ import { Queryable } from "../db";
 import { pool } from "../db";
 import { eventBus } from "../eventBus";
 import { generateId } from "../ids";
+import { notifyStudent } from "../notify";
 
 export const assignmentsRepository = {
   async create(db: Queryable, input: Omit<Assignment, "id">) {
@@ -52,8 +53,23 @@ export const assignmentsRepository = {
 
   async grade(db: Queryable, submissionId: string, score: number, feedback: string) {
     await db.query("UPDATE submissions SET score = $1, feedback = $2, graded_at = $3 WHERE id = $4", [score, feedback, new Date().toISOString(), submissionId]);
-    const submission = (await db.query("SELECT student_id FROM submissions WHERE id = $1", [submissionId])).rows[0];
-    if (submission) await eventBus.emit("grade.saved", { studentId: submission.student_id, grade: score }, pool);
+    const submission = (await db.query(
+      `SELECT s.student_id, a.title, a.max_score
+       FROM submissions s
+       JOIN assignments a ON a.id = s.assignment_id
+       WHERE s.id = $1`,
+      [submissionId]
+    )).rows[0];
+    if (submission) {
+      await eventBus.emit("grade.saved", { studentId: submission.student_id, grade: score }, pool);
+      const feedbackText = feedback?.trim() ? ` Nhận xét: ${feedback.trim()}` : "";
+      await notifyStudent(
+        db,
+        submission.student_id,
+        `Bài tự luận "${submission.title}" đã được chấm: ${score}/${submission.max_score}.${feedbackText}`,
+        { relatedEntityType: "submission", relatedEntityId: submissionId }
+      );
+    }
     return { id: submissionId, score, feedback };
   }
 };

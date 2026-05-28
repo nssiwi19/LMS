@@ -267,11 +267,33 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
   };
 
   // Create Quiz linked to Course
-  const handleAddQuizSubmit = (e: React.FormEvent) => {
+  const handleAddQuizSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourseId) return;
     if (!quizTitle.trim()) {
       triggerToast("Please provide a valid assessment caption.");
+      return;
+    }
+
+    try {
+      const created = await api.createQuiz({
+        courseId: selectedCourseId,
+        title: quizTitle,
+        passingScore: quizPassing,
+        timeLimit: quizLimit,
+        maxAttempts: quizAttempts
+      }) as Quiz;
+      setSelectedQuizId(created.id);
+      setQuizTitle("");
+      setQuizPassing(70);
+      setQuizLimit(15);
+      setQuizAttempts(3);
+      setShowQuizModal(false);
+      onRefreshData();
+      triggerToast("Course final assessment criteria mapped successfully.");
+      return;
+    } catch (err: any) {
+      triggerToast(err.message || "Failed to create quiz on server.");
       return;
     }
 
@@ -349,11 +371,32 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
   };
 
   // Create Assignment
-  const handleAddAssignmentSubmit = (e: React.FormEvent) => {
+  const handleAddAssignmentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourseId) return;
     if (!assignTitle.trim() || !assignDesc.trim() || !assignDeadline) {
       triggerToast("All fields elements are mandatory.");
+      return;
+    }
+
+    try {
+      await api.createAssignment({
+        courseId: selectedCourseId,
+        title: assignTitle,
+        description: assignDesc,
+        deadline: assignDeadline,
+        maxScore: Number(assignMaxScore)
+      });
+      setAssignTitle("");
+      setAssignDesc("");
+      setAssignDeadline("");
+      setAssignMaxScore(100);
+      setShowAssignModal(false);
+      onRefreshData();
+      triggerToast("Course Assignment challenge configured.");
+      return;
+    } catch (err: any) {
+      triggerToast(err.message || "Failed to create assignment on server.");
       return;
     }
 
@@ -400,6 +443,11 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
         score: Number(gradingScore),
         feedback: gradingFeedback
       });
+      setActiveSubmissionId(null);
+      setGradingFeedback("");
+      onRefreshData();
+      triggerToast("ÄÃ£ cáº­p nháº­t Ä‘iá»ƒm sá»‘ vÃ  nháº­n xÃ©t thÃ nh cÃ´ng!");
+      return;
 
       const storeData = AppStore.get();
       storeData.submissions = storeData.submissions.map(sub => {

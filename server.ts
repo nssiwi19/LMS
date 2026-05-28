@@ -31,6 +31,7 @@ import { leaveRequestsRepository } from "./src/server/repositories/leaveRequests
 import { graduationRepository } from "./src/server/repositories/graduation";
 import { scholarshipsRepository } from "./src/server/repositories/scholarships";
 import { notificationsRepository } from "./src/server/repositories/notifications";
+import { attendanceRepository } from "./src/server/repositories/attendance";
 import { registerEventHandlers } from "./src/server/eventHandlers";
 import { startScheduler } from "./src/server/scheduler";
 
@@ -1509,6 +1510,58 @@ app.post("/api/tuition/pay", requireAuth, requireRole(["finance", "admin", "supe
   if (!result) return res.status(404).json({ error: "Tuition fee not found." });
   await audit(req, "record_tuition_payment", req.body.feeId, `Paid amount ${req.body.paidAmount}.`);
   res.json(result);
+}));
+
+app.patch("/api/finance/transactions/:id/review", requireAuth, requireRole(["finance", "admin", "super_admin"]), validateBody(schemas.reviewTransaction), asyncHandler(async (req, res) => {
+  const result = await financeRepository.reviewTransaction(pool, req.params.id, req.body.status, req.user!.id, req.body.notes);
+  if (!result) return res.status(404).json({ error: "Transaction not found." });
+  if ("error" in result) return res.status(result.status).json({ error: result.error });
+  await audit(req, `finance_transaction_${req.body.status}`, req.params.id, req.body.notes || "");
+  res.json(result);
+}));
+
+app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "academic_admin", "admin", "super_admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
+  const course = await coursesRepository.findById(pool, req.body.courseId);
+  if (!course) return res.status(404).json({ error: "Course not found." });
+  if (req.user!.role === "teacher" && course.teacherId !== req.user!.id) return res.status(403).json({ error: "Permission denied." });
+  const session = {
+    id: generateId("ats"),
+    courseId: req.body.courseId,
+    semesterId: req.body.semesterId || "sem_spring25",
+    teacherId: req.user!.role === "teacher" ? req.user!.id : course.teacherId,
+    date: req.body.date,
+    topic: req.body.topic
+  };
+  const records = (req.body.records || []).map((record: any) => ({
+    id: generateId("atr"),
+    sessionId: session.id,
+    studentId: record.studentId,
+    status: record.status,
+    note: record.note
+  }));
+  await attendanceRepository.saveAttendanceSession(pool, session, records);
+  await audit(req, "create_attendance_session", session.id, session.courseId);
+  res.status(201).json({ session, records });
+}));
+
+app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "academic_admin", "admin", "super_admin"]), validateBody(schemas.attendanceRecord), asyncHandler(async (req, res) => {
+  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [req.body.sessionId])).rows[0];
+  if (!session) return res.status(404).json({ error: "Attendance session not found." });
+  if (req.user!.role === "teacher" && session.teacher_id !== req.user!.id) return res.status(403).json({ error: "Permission denied." });
+  const existing = (await pool.query(
+    "SELECT id FROM attendance_records WHERE session_id = $1 AND student_id = $2",
+    [req.body.sessionId, req.body.studentId]
+  )).rows[0];
+  const record = {
+    id: existing?.id || generateId("atr"),
+    sessionId: req.body.sessionId,
+    studentId: req.body.studentId,
+    status: req.body.status,
+    note: req.body.note
+  };
+  await attendanceRepository.bulkMarkRecords(pool, [record]);
+  await audit(req, "update_attendance_record", record.id, `${record.studentId}:${record.status}`);
+  res.json(record);
 }));
 
 app.post("/api/store/sync", requireAuth, asyncHandler(async (req, res) => {

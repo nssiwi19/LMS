@@ -180,13 +180,13 @@ export default function QuizBuilder(props: ComponentProps) {
         triggerToast("Đã thêm câu hỏi mới thành công.");
       }
 
-      AppStore.save(storeData);
       setQText("");
       setQOptions(["", "", ""]);
       setQCorrect("0");
       setEditingQuestionId(null);
       setShowQuestionModal(false);
       onRefreshData();
+      return;
     } catch (err: any) {
       console.error("Failed to save question:", err);
       triggerToast(`Lỗi lưu câu hỏi: ${err.message || "Không thể kết nối máy chủ."}`);

@@ -17,6 +17,7 @@ import {
 import { LMSDataStore, TuitionFee, User, AcademicWarning } from "../types";
 import { AppStore } from "../store";
 import { generateId } from "../utils";
+import { api } from "../api";
 
 interface TuitionManagerProps {
   store: LMSDataStore;
@@ -119,9 +120,19 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
     setPaymentAmount(fee.amount - fee.paidAmount); // default remaining amount
   };
 
-  const handleRecordPaymentSubmit = (e: React.FormEvent) => {
+  const handleRecordPaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activePaymentFeeId) return;
+    try {
+      await api.payTuition({ feeId: activePaymentFeeId, paidAmount: Number(paymentAmount) });
+      setActivePaymentFeeId(null);
+      onRefreshData();
+      triggerToast("Ghi nháº­n bÃºt toÃ¡n thanh toÃ¡n há»c vá»‹ thÃ nh cÃ´ng.");
+      return;
+    } catch (err: any) {
+      triggerToast(err.message || "KhÃ´ng thá»ƒ ghi nháº­n thanh toÃ¡n.");
+      return;
+    }
     if (paymentAmount < 0) {
       triggerToast("Số tiền thanh toán không được âm.");
       return;

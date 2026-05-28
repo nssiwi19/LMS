@@ -223,6 +223,17 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
     }
 
     const price = courseObj.price || 0;
+    api.registerEnrollment(courseId)
+      .then(() => {
+        onRefreshData();
+        triggerToast("Đã lập yêu cầu đăng ký học thành công!");
+        if (price <= 0) {
+          setViewingCourseId(null);
+          setActiveSubTab("learning");
+        }
+      })
+      .catch((err: any) => triggerToast(err.message || "Không thể đăng ký khóa học."));
+    return;
     
     if (price > 0) {
       // Create Enrollment with "pending_payment"
@@ -370,6 +381,18 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
 
     const finalScore = Math.round((correctCount / (questions.length || 1)) * 100);
     const passed = finalScore >= quiz.passingScore;
+    api.submitQuiz({ quizId: activeQuizId, answers: quizAnswers, startedAt: new Date().toISOString() })
+      .then((result: any) => {
+        setQuizFinishedState({
+          score: result.score,
+          passed: result.passed,
+          correctAnswers: result.correctAnswers,
+          total: result.total
+        });
+        onRefreshData();
+      })
+      .catch((err: any) => triggerToast(err.message || "Không thể nộp bài trắc nghiệm."));
+    return;
 
     // Track attempt logs
     const attemptItem: QuizAttempt = {
