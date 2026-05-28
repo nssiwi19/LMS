@@ -95,6 +95,10 @@ export const schemas = {
     feeId: z.string().trim().min(1),
     paidAmount: z.coerce.number().positive()
   }),
+  confirmTransfer: z.object({
+    feeId: z.string().trim().min(1),
+    amount: z.coerce.number().positive()
+  }),
   reviewTransaction: z.object({
     status: z.enum(["approved", "rejected"]),
     notes: z.string().trim().optional()

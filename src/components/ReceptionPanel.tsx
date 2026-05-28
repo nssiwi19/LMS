@@ -1,14 +1,14 @@
 import React, { useState } from "react";
-import { 
-  UserPlus, 
-  Search, 
-  Key, 
-  Info, 
-  CheckCircle, 
-  Compass, 
-  ShieldAlert, 
-  Bell, 
-  User, 
+import {
+  UserPlus,
+  Search,
+  Key,
+  Info,
+  CheckCircle,
+  Compass,
+  ShieldAlert,
+  Bell,
+  User,
   Lock,
   Phone,
   Mail,
@@ -23,6 +23,7 @@ import { AppStore } from "../store";
 import { generateId } from "../utils";
 import { hashPassword } from "../authHash";
 import { api } from "../api";
+import { useApiStore } from "../hooks/apiHooks";
 
 interface ReceptionPanelProps {
   currentUser: UserType;
@@ -31,25 +32,38 @@ interface ReceptionPanelProps {
 }
 
 export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }: ReceptionPanelProps) {
-  const store = AppStore.get();
-  
+  const { store, isLoading, isError } = useApiStore();
+
   // Tab states
   const [activeTab, setActiveTab] = useState<"search" | "register" | "courses">("search");
-  
+
   // Student registration states
   const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPhone, setRegPhone] = useState("");
   const [regPassword, setRegPassword] = useState("studente16"); // default password per BRD or auto-generated
-  
+
   // Search states
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   // Toast notifications
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Curriculum consultation modal state
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-16 space-y-4 font-sans">
+        <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+        <span className="text-xs text-indigo-300 font-mono tracking-widest uppercase">Đang tải dữ liệu tiếp tân...</span>
+      </div>
+    );
+  }
+
+  if (isError || !store) {
+    return <div className="text-red-500 p-8 text-center font-sans">Không thể kết nối tải thông tin dữ liệu tiếp tân.</div>;
+  }
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -80,7 +94,7 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
       });
 
       showToast("Đã tạo tài khoản học viên thành công!");
-      
+
       // Reset fields
       setRegName("");
       setRegEmail("");
@@ -107,7 +121,7 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
   const filteredStudents = store.users.filter(u => {
     if (u.role !== "student") return false;
     const cleanQuery = searchQuery.toLowerCase();
-    return u.name.toLowerCase().includes(cleanQuery) || 
+    return u.name.toLowerCase().includes(cleanQuery) ||
            u.email.toLowerCase().includes(cleanQuery) ||
            (u.phone && u.phone.includes(cleanQuery));
   });
@@ -207,7 +221,7 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
                 <tbody className="divide-y divide-white/5">
                   {filteredStudents.map(student => {
                     const studentEnrollments = store.enrollments.filter(e => e.studentId === student.id);
-                    
+
                     return (
                       <tr key={student.id} className="hover:bg-white/5 transition duration-150">
                         <td className="p-4">
@@ -396,97 +410,99 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
 
       {/* Curriculum detailed consultation modal */}
       {selectedCourseId && selectedCourse && (
-        <div className="absolute inset-0 rounded-3xl z-50 bg-slate-950/95 overflow-y-auto p-8 border border-white/10 backdrop-blur-xl animate-fade-in flex flex-col justify-between">
-          <div className="space-y-6">
-            <div className="flex justify-between items-start border-b border-white/10 pb-4">
-              <div>
-                <span className="text-[10px] uppercase font-mono font-semibold tracking-wider text-indigo-300 bg-indigo-500/10 px-2.5 py-0.5 rounded border border-indigo-500/20">
-                  {selectedCourse.category}
-                </span>
-                <h3 className="text-xl font-display font-bold text-white mt-2">{selectedCourse.title}</h3>
-                <p className="text-xs text-indigo-400 mt-1">Giảng viên phụ trách: {store.users.find(u => u.id === selectedCourse.teacherId)?.name || "Giảng viên E16"}</p>
-              </div>
-              <button 
-                onClick={() => setSelectedCourseId(null)}
-                className="p-1.5 bg-white/5 hover:bg-white/15 text-white/60 hover:text-white rounded-lg border border-white/10 cursor-pointer transition"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 space-y-4">
-                <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-indigo-400" />
-                  Nội dung chương trình đào tạo ({selectedLessons.length} bài học)
-                </h4>
-                
-                {selectedLessons.length > 0 ? (
-                  <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
-                    {selectedLessons.map((lesson, idx) => (
-                      <div key={lesson.id} className="p-4 bg-white/5 border border-white/5 hover:border-indigo-500/25 rounded-2xl transition duration-150">
-                        <div className="flex items-center justify-between gap-4">
-                          <span className="text-xs font-mono font-bold text-indigo-300">Bài {idx + 1}</span>
-                          <span className="text-[10px] font-mono text-white/40 flex items-center gap-1">
-                            <Clock className="h-3 w-3" /> {lesson.duration}
-                          </span>
-                        </div>
-                        <h5 className="font-semibold text-xs text-white mt-1">{lesson.title}</h5>
-                        <p className="text-xs text-white/50 mt-1 leading-relaxed">{lesson.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-10 bg-white/5 rounded-2xl text-white/40 text-xs italic">
-                    Chưa cập nhật nội dung bài học cho khóa học này.
-                  </div>
-                )}
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+          <div className="bg-slate-900 border border-white/15 w-full max-w-4xl rounded-3xl p-8 space-y-6 shadow-2xl relative animate-in zoom-in-95 duration-150 text-white max-h-[90vh] overflow-y-auto font-sans flex flex-col justify-between">
+            <div className="space-y-6">
+              <div className="flex justify-between items-start border-b border-white/10 pb-4">
+                <div>
+                  <span className="text-[10px] uppercase font-mono font-semibold tracking-wider text-indigo-300 bg-indigo-500/10 px-2.5 py-0.5 rounded border border-indigo-500/20">
+                    {selectedCourse.category}
+                  </span>
+                  <h3 className="text-xl font-display font-bold text-white mt-2">{selectedCourse.title}</h3>
+                  <p className="text-xs text-indigo-400 mt-1">Giảng viên phụ trách: {store.users.find(u => u.id === selectedCourse.teacherId)?.name || "Giảng viên E16"}</p>
+                </div>
+                <button
+                  onClick={() => setSelectedCourseId(null)}
+                  className="p-1.5 bg-white/5 hover:bg-white/15 text-white/60 hover:text-white rounded-lg border border-white/10 cursor-pointer transition"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
 
-              <div className="space-y-4">
-                <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <Award className="h-4 w-4 text-emerald-400" />
-                  Bài kiểm tra & đánh giá ({selectedQuizzes.length})
-                </h4>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-4">
+                  <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-indigo-400" />
+                    Nội dung chương trình đào tạo ({selectedLessons.length} bài học)
+                  </h4>
 
-                {selectedQuizzes.length > 0 ? (
-                  <div className="space-y-3">
-                    {selectedQuizzes.map(quiz => {
-                      const questionCount = store.questions.filter(q => q.quizId === quiz.id).length;
-                      return (
-                        <div key={quiz.id} className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
-                          <h5 className="font-semibold text-xs text-emerald-400">{quiz.title}</h5>
-                          <div className="grid grid-cols-2 gap-2 mt-2 text-[10px] font-mono text-white/60">
-                            <div>Thời gian: <strong>{quiz.timeLimit} phút</strong></div>
-                            <div>Đạt tối thiểu: <strong>{quiz.passingScore}%</strong></div>
-                            <div>Lượt thi tối đa: <strong>{quiz.maxAttempts} lần</strong></div>
-                            <div>Số câu hỏi: <strong>{questionCount} câu</strong></div>
+                  {selectedLessons.length > 0 ? (
+                    <div className="space-y-3 max-h-[350px] overflow-y-auto pr-2">
+                      {selectedLessons.map((lesson, idx) => (
+                        <div key={lesson.id} className="p-4 bg-white/5 border border-white/5 hover:border-indigo-500/25 rounded-2xl transition duration-150">
+                          <div className="flex items-center justify-between gap-4">
+                            <span className="text-xs font-mono font-bold text-indigo-300">Bài {idx + 1}</span>
+                            <span className="text-[10px] font-mono text-white/40 flex items-center gap-1">
+                              <Clock className="h-3 w-3" /> {lesson.duration}
+                            </span>
                           </div>
+                          <h5 className="font-semibold text-xs text-white mt-1">{lesson.title}</h5>
+                          <p className="text-xs text-white/50 mt-1 leading-relaxed">{lesson.content}</p>
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-10 bg-emerald-500/5 rounded-2xl text-emerald-400/40 text-xs italic">
-                    Không có bài kiểm tra trắc nghiệm cho khóa học này.
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 bg-white/5 rounded-2xl text-white/40 text-xs italic">
+                      Chưa cập nhật nội dung bài học cho khóa học này.
+                    </div>
+                  )}
+                </div>
 
-                <div className="bg-slate-900 border border-white/5 rounded-2xl p-4 space-y-2 mt-4">
-                  <span className="text-[10px] uppercase font-mono tracking-widest text-indigo-400 block font-bold">Mô tả chương trình</span>
-                  <p className="text-[11px] text-white/70 leading-relaxed font-sans">{selectedCourse.description}</p>
+                <div className="space-y-4">
+                  <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Award className="h-4 w-4 text-emerald-400" />
+                    Bài kiểm tra & đánh giá ({selectedQuizzes.length})
+                  </h4>
+
+                  {selectedQuizzes.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedQuizzes.map(quiz => {
+                        const questionCount = store.questions.filter(q => q.quizId === quiz.id).length;
+                        return (
+                          <div key={quiz.id} className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+                            <h5 className="font-semibold text-xs text-emerald-400">{quiz.title}</h5>
+                            <div className="grid grid-cols-2 gap-2 mt-2 text-[10px] font-mono text-white/60">
+                              <div>Thời gian: <strong>{quiz.timeLimit} phút</strong></div>
+                              <div>Đạt tối thiểu: <strong>{quiz.passingScore}%</strong></div>
+                              <div>Lượt thi tối đa: <strong>{quiz.maxAttempts} lần</strong></div>
+                              <div>Số câu hỏi: <strong>{questionCount} câu</strong></div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-10 bg-emerald-500/5 rounded-2xl text-emerald-400/40 text-xs italic">
+                      Không có bài kiểm tra trắc nghiệm cho khóa học này.
+                    </div>
+                  )}
+
+                  <div className="bg-slate-900 border border-white/5 rounded-2xl p-4 space-y-2 mt-4">
+                    <span className="text-[10px] uppercase font-mono tracking-widest text-indigo-400 block font-bold">Mô tả chương trình</span>
+                    <p className="text-[11px] text-white/70 leading-relaxed font-sans">{selectedCourse.description}</p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex justify-end pt-4 border-t border-white/10 mt-6">
-            <button
-              onClick={() => setSelectedCourseId(null)}
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white hover:text-slate-950 text-xs font-bold rounded-xl transition cursor-pointer"
-            >
-              Đóng tư vấn chi tiết
-            </button>
+            <div className="flex justify-end pt-4 border-t border-white/10 mt-6">
+              <button
+                onClick={() => setSelectedCourseId(null)}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition cursor-pointer"
+              >
+                Đóng tư vấn chi tiết
+              </button>
+            </div>
           </div>
         </div>
       )}

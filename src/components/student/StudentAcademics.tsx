@@ -99,50 +99,75 @@ export default function StudentAcademics(props: ComponentProps) {
     let maxGradeNum = 0;
     let isCompleted = false;
 
-    enrolls.forEach((enroll: any) => {
-      if (enroll.status === "completed") {
+    // Get credits for course
+    const programCourse = store.programCourses?.find((pc: any) => pc.courseId === courseId);
+    const credits = programCourse ? programCourse.credits : 3;
+
+    // Quizzes in this course
+    const courseQuizzes = store.quizzes.filter((q: any) => q.courseId === courseId);
+    const quizAttempts = store.quizAttempts.filter((qa: any) => qa.studentId === currentUser.id && courseQuizzes.some((q: any) => q.id === qa.quizId));
+    const quizScores = courseQuizzes.map((q: any) => {
+      const attempts = quizAttempts.filter((qa: any) => qa.quizId === q.id);
+      return attempts.length > 0 ? Math.max(...attempts.map((a: any) => a.score)) : null;
+    }).filter((s: any): s is number => s !== null);
+
+    // Assignments in this course
+    const courseAssignments = store.assignments.filter((a: any) => a.courseId === courseId);
+    const assignmentSubmissions = store.submissions.filter((s: any) =>
+      s.studentId === currentUser.id &&
+      courseAssignments.some((ea: any) => ea.id === s.assignmentId) &&
+      s.score !== undefined
+    );
+
+    let finalGradeNum = 0;
+    let compCount = 0;
+
+    if (quizScores.length > 0) {
+      finalGradeNum += quizScores.reduce((sum: number, s: number) => sum + s, 0) / quizScores.length;
+      compCount++;
+    }
+    if (assignmentSubmissions.length > 0) {
+      const avgAssignmentScore = assignmentSubmissions.reduce((sum: number, s: any) => {
+        const chal = store.assignments.find((a: any) => a.id === s.assignmentId);
+        const maxS = chal ? chal.maxScore : 100;
+        return sum + ((s.score || 0) / maxS) * 100;
+      }, 0) / assignmentSubmissions.length;
+      finalGradeNum += avgAssignmentScore;
+      compCount++;
+    }
+
+    if (compCount > 0) {
+      finalGradeNum = Math.round(finalGradeNum / compCount);
+    } else {
+      const hasCompletedEnrollment = enrolls.some((e: any) => e.status === "completed");
+      if (hasCompletedEnrollment) {
+        finalGradeNum = 85;
         isCompleted = true;
-      }
-      const enrolledAssignments = store.assignments.filter((a: any) => a.courseId === courseId);
-      const assignmentSubmissions = store.submissions.filter((s: any) => 
-        s.studentId === currentUser.id && 
-        enrolledAssignments.some((ea: any) => ea.id === s.assignmentId)
-      );
-
-      let finalGradeNum = 0;
-      const earnedAttempts = assignmentSubmissions.filter((s: any) => s.score !== undefined);
-      if (earnedAttempts.length > 0) {
-        const sumScore = earnedAttempts.reduce((sum: number, s: any) => sum + (s.score || 0), 0);
-        const maxScore = earnedAttempts.reduce((sum: number, s: any) => {
-          const eaObj = enrolledAssignments.find((ea: any) => ea.id === s.assignmentId);
-          return sum + (eaObj ? eaObj.maxScore : 100);
-        }, 0);
-        finalGradeNum = Math.round((sumScore / (maxScore || 1)) * 100);
       } else {
-        finalGradeNum = enroll.status === "completed" ? 85 : 0;
+        finalGradeNum = 0;
       }
+    }
 
-      if (finalGradeNum > maxGradeNum) {
-        maxGradeNum = finalGradeNum;
-      }
-    });
+    if (enrolls.some((e: any) => e.status === "completed") || finalGradeNum >= 60) {
+      isCompleted = true;
+    }
 
     let scale4Val = 0;
     let letterGrade = "F";
-    if (maxGradeNum >= 85) { scale4Val = 4.0; letterGrade = "A"; }
-    else if (maxGradeNum >= 75) { scale4Val = 3.0; letterGrade = "B"; }
-    else if (maxGradeNum >= 60) { scale4Val = 2.0; letterGrade = "C"; }
-    else if (maxGradeNum >= 50) { scale4Val = 1.0; letterGrade = "D"; }
+    if (finalGradeNum >= 90) { scale4Val = 4.0; letterGrade = "A"; }
+    else if (finalGradeNum >= 80) { scale4Val = 3.0; letterGrade = "B"; }
+    else if (finalGradeNum >= 70) { scale4Val = 2.0; letterGrade = "C"; }
+    else if (finalGradeNum >= 60) { scale4Val = 1.0; letterGrade = "D"; }
     else { scale4Val = 0.0; letterGrade = "F"; }
 
     return {
       courseId,
       course,
-      grade: maxGradeNum,
+      grade: finalGradeNum,
       scale4Val,
       letterGrade,
       isCompleted,
-      credits: 3
+      credits
     };
   }).filter(Boolean) as Array<{
     courseId: string;
@@ -155,19 +180,48 @@ export default function StudentAcademics(props: ComponentProps) {
   }>;
 
   const calculatedCredits = uniqueCourseGrades.reduce((sum, c) => {
-    if (c.isCompleted || c.grade >= 50) {
+    if (c.isCompleted || c.grade >= 60) {
       return sum + c.credits;
     }
     return sum;
   }, 0);
 
   const gradedCourses = uniqueCourseGrades.filter(c => c.isCompleted || c.grade > 0);
-  const calculatedGpa = gradedCourses.length > 0 
+  const calculatedGpa = gradedCourses.length > 0
     ? gradedCourses.reduce((sum, c) => sum + (c.scale4Val * c.credits), 0) / gradedCourses.reduce((sum, c) => sum + c.credits, 0)
     : 0.0;
 
+  const unresolvedWarnings = (store.academicWarnings || []).filter(
+    (w: any) => w.studentId === currentUser.id && !w.isResolved
+  );
+
   return (
     <>
+      {unresolvedWarnings.length > 0 && (
+        <div className="mb-6 space-y-3">
+          {unresolvedWarnings.map((w: any) => (
+            <div
+              key={w.id}
+              className="p-4 bg-red-500/10 border border-red-500/25 rounded-2xl text-red-400 text-xs flex items-start gap-3.5 leading-relaxed font-sans shadow-lg animate-pulse"
+            >
+              <BadgeAlert className="h-5 w-5 shrink-0 text-red-500 mt-0.5" />
+              <div className="space-y-1">
+                <span className="font-bold text-white block uppercase tracking-wider text-[10px]">
+                  Cảnh báo học tập chưa xử lý: {
+                    w.type === "low_attendance" || w.type === "attendance" ? "Chuyên cần thấp" :
+                    w.type === "low_gpa" || w.type === "low-gpa" ? "GPA thấp" :
+                    w.type === "unpaid_fee" || w.type === "unpaid-fee" ? "Nợ học phí" :
+                    w.type === "exam_ban" ? "Cấm thi" : "Yêu cầu học tập quá hạn"
+                  }
+                </span>
+                <p className="text-red-300/90">{w.message}</p>
+                <span className="text-[10px] text-white/30 mt-1 block">Ngày tạo cảnh báo: {fmtDate(w.createdAt)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
         {activeSubTab === "profile" && (
           <div className="space-y-6">
             <div className="flex justify-between items-center border-b border-white/10 pb-3">
@@ -187,7 +241,7 @@ export default function StudentAcademics(props: ComponentProps) {
 
             {!showProfileEditForm ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
+
                 {/* Visual student card info */}
                 <div className="bg-gradient-to-br from-indigo-950/40 to-slate-900 border border-white/10 p-5 rounded-3xl relative overflow-hidden space-y-4">
                   <div className="flex items-center gap-3">
@@ -254,7 +308,7 @@ export default function StudentAcademics(props: ComponentProps) {
               </div>
             ) : (
               // EDIT PROFILE FORM
-              <form 
+              <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   // Validate phone
@@ -275,7 +329,7 @@ export default function StudentAcademics(props: ComponentProps) {
                     return;
                   }
                   const storeData = AppStore.get();
-                  
+
                   // Call backend API to persist in PostgreSQL database securely
                   api.updateStudentProfile({
                     phone: editPhone || undefined,
@@ -300,7 +354,7 @@ export default function StudentAcademics(props: ComponentProps) {
                       }
                       return p;
                     });
-                    
+
                     // Keep client state in sync
                     AppStore.save(storeData);
                     setShowProfileEditForm(false);
@@ -508,8 +562,8 @@ export default function StudentAcademics(props: ComponentProps) {
 
                 const sessions = (store.attendanceSessions || []).filter(s => s.courseId === course.id);
                 const sessionsCount = sessions.length;
-                
-                const myRecords = (store.attendanceRecords || []).filter(r => 
+
+                const myRecords = (store.attendanceRecords || []).filter(r =>
                   r.studentId === currentUser.id &&
                   sessions.some(s => s.id === r.sessionId)
                 );
@@ -535,7 +589,7 @@ export default function StudentAcademics(props: ComponentProps) {
 
                     {/* Progress tracking display bar */}
                     <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden border border-white/5">
-                      <div 
+                      <div
                         className={`h-full rounded-full transition-all duration-300 ${percentage >= 80 ? "bg-emerald-400" : "bg-red-500"}`}
                         style={{ width: `${percentage}%` }}
                       />
@@ -581,7 +635,7 @@ export default function StudentAcademics(props: ComponentProps) {
                         </span>
                         <h5 className="font-bold text-white text-xs mt-1">Học phí đợt tuyển sinh và hoạt động lý thuyết học viện</h5>
                       </div>
-                      
+
                       <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider font-mono self-start sm:self-auto ${
                         fee.status === "paid" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
                         "bg-red-500/10 text-red-500 border border-red-500/15"
@@ -625,9 +679,9 @@ export default function StudentAcademics(props: ComponentProps) {
                           <button
                             onClick={async () => {
                               try {
-                                await api.payTuition({ feeId: fee.id, paidAmount: remaining });
-                                triggerToast("✅ Hệ thống đã ghi nhận yêu cầu chuyển khoản và tự động phê duyệt hóa đơn học phí!");
-                                onRefreshData();
+                                await api.confirmTransfer({ feeId: fee.id, amount: remaining });
+                                triggerToast("✅ Gửi xác nhận chuyển khoản thành công! Giao dịch đang chờ phòng kế toán đối soát phê duyệt.");
+                                await onRefreshData();
                               } catch (err: any) {
                                 console.error(err);
                                 triggerToast("❗ Giao dịch thất bại: " + err.message);
@@ -731,9 +785,9 @@ export default function StudentAcademics(props: ComponentProps) {
           </div>
         )}
       {showPrintTranscript && (
-        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto rounded-3xl">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-white text-slate-900 w-full max-w-2xl rounded-3xl p-8 relative shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto print:p-0 print:border-none print:shadow-none print:rounded-none">
-            <button 
+            <button
               onClick={() => setShowPrintTranscript(false)}
               className="absolute top-4 right-4 p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer print:hidden"
             >

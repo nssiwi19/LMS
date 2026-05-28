@@ -73,6 +73,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
 
   // Local file state for the submission modal
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+  const [isSubmittingAssignment, setIsSubmittingAssignment] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -95,7 +96,8 @@ export default function AssignmentSubmit(props: ComponentProps) {
     
     setSubmissionFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
-    handleSendAssignmentSubmit(e, finalContent);
+    setIsSubmittingAssignment(true);
+    Promise.resolve(handleSendAssignmentSubmit(e, finalContent)).finally(() => setIsSubmittingAssignment(false));
   };
 
   return (
@@ -192,10 +194,11 @@ export default function AssignmentSubmit(props: ComponentProps) {
 
       {/* ASSIGNMENT ATTACHMENT MODAL SUBMISSION */}
       {submittingAssignmentId && (
-        <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 rounded-3xl">
-          <div className="bg-slate-900 border border-white/20 rounded-3xl p-6.5 w-full max-w-lg shadow-2xl relative">
-            <button 
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+          <div className="bg-slate-900 border border-white/20 rounded-3xl p-6.5 w-full max-w-lg shadow-2xl relative mb-10">
+            <button
               onClick={() => setSubmittingAssignmentId(null)}
+              disabled={isSubmittingAssignment}
               className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10 text-white/60"
             >
               <X className="h-5 w-5" />
@@ -251,15 +254,17 @@ export default function AssignmentSubmit(props: ComponentProps) {
                 <button
                   type="button"
                   onClick={() => { setSubmittingAssignmentId(null); setSubmissionFile(null); }}
-                  className="px-4 py-2 bg-transparent text-white/60 hover:text-white transition cursor-pointer"
+                  disabled={isSubmittingAssignment}
+                  className="px-4 py-2 bg-transparent text-white/60 hover:text-white transition cursor-pointer disabled:opacity-50 disabled:cursor-wait"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="px-4.5 py-2 bg-white text-indigo-950 font-bold rounded-xl transition cursor-pointer"
+                  disabled={isSubmittingAssignment}
+                  className="px-4.5 py-2 bg-white text-indigo-950 font-bold rounded-xl transition cursor-pointer disabled:opacity-60 disabled:cursor-wait"
                 >
-                  Xác nhận Nộp bài
+                  {isSubmittingAssignment ? "Đang gửi..." : "Xác nhận nộp bài"}
                 </button>
               </div>
             </form>

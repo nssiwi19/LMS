@@ -65,6 +65,10 @@ export const financeRepository = {
          WHERE student_id = $1 AND course_id = $2 AND status = 'pending_payment'`,
         [tx.student_id, tx.course_id]
       );
+      if (tx.notes && tx.notes.startsWith("tuition_fee_pay:")) {
+        const feeId = tx.notes.replace("tuition_fee_pay:", "");
+        await this.payTuition(db, feeId, Number(tx.amount));
+      }
     } else {
       await db.query(
         `UPDATE enrollments

@@ -103,7 +103,7 @@ export default function WarningAndReports({
   const handleResolveWarning = async (id: string) => {
     try {
       await api.resolveWarning(id);
-      onRefreshData();
+      await onRefreshData();
       triggerToast("Cảnh báo học tập đã được đánh dấu giải quyết khắc phục.");
     } catch (err: any) {
       triggerToast(err.message || "Lỗi khi giải quyết cảnh báo học tập.");
@@ -212,7 +212,7 @@ export default function WarningAndReports({
     <div className="relative space-y-6">
       {/* Create Warning Modal Overlay */}
       {isCreateModalOpen && (
-        <div className="absolute inset-0 rounded-3xl z-50 bg-slate-950/95 overflow-y-auto p-8 border border-white/10 backdrop-blur-xl animate-fade-in flex flex-col justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-950/95 overflow-y-auto p-4 pt-6 md:pt-10 border border-white/10 backdrop-blur-xl animate-fade-in flex flex-col">
           <div className="space-y-6">
             <div className="flex justify-between items-start border-b border-white/10 pb-4">
               <div>

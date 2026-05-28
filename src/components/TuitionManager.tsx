@@ -422,7 +422,7 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
 
       {/* PAYMENT TRANSACTION DIALOG MODAL */}
       {activePaymentFeeId && currentPaymentRow && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-sm shadow-2xl relative animate-in zoom-in-95 duration-150">
             <button 
               onClick={() => setActivePaymentFeeId(null)}
