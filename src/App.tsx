@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { 
-  Terminal, 
-  Settings, 
-  LogOut, 
-  ShieldAlert, 
-  ArrowRight, 
-  FileCode, 
-  LayoutDashboard, 
+import {
+  Terminal,
+  Settings,
+  LogOut,
+  ShieldAlert,
+  ArrowRight,
+  FileCode,
+  LayoutDashboard,
   Search,
   BookOpen,
   GraduationCap,
@@ -20,7 +20,8 @@ import {
   Download,
   Fingerprint,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ChevronDown
 } from "lucide-react";
 import { User, LMSDataStore } from "./types";
 import { AppStore } from "./store";
@@ -44,7 +45,7 @@ function AppShell() {
   const [storeData, setStoreData] = useState<LMSDataStore>(AppStore.get());
   console.log("APP: storeData initialized:", !!storeData);
 
-  
+
   // Auth states
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -84,12 +85,6 @@ function AppShell() {
   };
 
   useEffect(() => {
-    // Only auto-restore session if this tab originally logged in (has active session marker)
-    const isActiveTab = sessionStorage.getItem("e16_lms_active_session") === "true";
-    if (!isActiveTab) {
-      setCurrentUser(null);
-      return;
-    }
     fetch("/api/auth/me", {
       credentials: "include"
     })
@@ -97,6 +92,9 @@ function AppShell() {
         if (!response.ok) throw new Error("Session expired");
         const data = await response.json();
         setCurrentUser(data.user);
+        const csrfCookie = document.cookie.split("; ").find(item => item.startsWith("e16_lms_csrf="));
+        if (csrfCookie) setCsrfToken(decodeURIComponent(csrfCookie.split("=")[1] || ""));
+        sessionStorage.setItem("e16_lms_active_session", "true");
         const serverStore = await api.getStore();
         AppStore.hydrate(serverStore);
         setStoreData({ ...serverStore });
@@ -119,7 +117,7 @@ function AppShell() {
   const refreshStoreData = () => {
     setStoreData({ ...AppStore.get() });
     queryClient.invalidateQueries();
-    
+
     // Update local currentUser reference
     if (currentUser) {
       const freshStore = AppStore.get();
@@ -136,6 +134,13 @@ function AppShell() {
   };
 
   const refreshStoreDataFromServer = async () => {
+    if (AppStore.syncPromise) {
+      try {
+        await AppStore.syncPromise;
+      } catch (e) {
+        console.error("Sync error in refreshStoreDataFromServer", e);
+      }
+    }
     const serverStore = await api.getStore();
     AppStore.hydrate(serverStore);
     setStoreData({ ...serverStore });
@@ -152,13 +157,16 @@ function AppShell() {
     setAuthError(null);
     setSessionConflict(false);
 
-    const emailClean = loginEmail.trim().toLowerCase();
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const submittedEmail = String(formData.get("email") || loginEmail);
+    const submittedPassword = String(formData.get("password") || loginPassword);
+    const emailClean = submittedEmail.trim().toLowerCase();
     try {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email: emailClean, password: loginPassword })
+        body: JSON.stringify({ email: emailClean, password: submittedPassword })
       });
       const data = await response.json();
       if (!response.ok) {
@@ -216,7 +224,7 @@ function AppShell() {
   // Standalone Single-File download builder
   const handleExportStandaloneHTMLFile = () => {
     const rawStoreJson = JSON.stringify({ ...AppStore.get(), users: [] });
-    
+
     const htmlTemplate = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -239,7 +247,7 @@ function AppShell() {
   <style>
     body {
       background-color: #0f172a;
-      background-image: 
+      background-image:
         radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.15) 0px, transparent 50%),
         radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.1) 0px, transparent 50%);
       color: rgba(255, 255, 255, 0.9);
@@ -259,7 +267,7 @@ function AppShell() {
   </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-6">
-  
+
   <div class="w-full max-w-6xl bg-white/5 border border-white/10 rounded-3xl p-10 backdrop-blur-2xl shadow-2xl text-center space-y-6">
     <div class="inline-flex p-4 bg-indigo-500/10 border border-indigo-400/20 text-indigo-400 rounded-2xl">
       <svg class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -295,7 +303,7 @@ function AppShell() {
     if (!localStorage.getItem("e16_lms_data")) {
       localStorage.setItem("e16_lms_data", JSON.stringify(SEEDED_DUMP));
     }
-    
+
     function launchInteractiveWorkspace() {
       // Direct redirection to the full active preview layout in this local file directory
       alert("Local standalone workspace successfully initialized! You can interact with all standard features directly in this tab container.");
@@ -319,11 +327,11 @@ function AppShell() {
       {/* Dynamic Ambient Blur Spheres */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/15 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-purple-600/10 rounded-full blur-[140px] pointer-events-none" />
-      
+
       {/* MAIN LAYOUT CANVAS */}
       {currentUser ? (
         <div className="min-h-screen flex flex-col md:flex-row relative">
-          
+
           {/* DESKTOP SIDEBAR NAV BAR */}
           <aside className={`hidden md:flex flex-col bg-slate-900 border-r border-white/10 p-4 flex-shrink-0 sticky top-0 h-screen z-40 backdrop-blur-xl transition-all duration-300 ${
             isSidebarCollapsed ? "w-20 items-center px-2" : "w-64"
@@ -343,7 +351,7 @@ function AppShell() {
                   </div>
                 )}
               </div>
-              
+
               {/* Collapse/Expand Toggle Button */}
               <button
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -354,28 +362,11 @@ function AppShell() {
               </button>
             </div>
 
-            {/* Standalone Action button in the middle */}
-            <div className="pt-6 w-full flex justify-center">
-              <button
-                onClick={handleExportStandaloneHTMLFile}
-                className={`w-full text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition duration-150 rounded-xl flex items-center justify-center gap-1.5 shadow-md cursor-pointer ${
-                  isSidebarCollapsed ? "p-3 h-10 w-10 bg-indigo-600/80 hover:bg-indigo-600" : "py-2.5 px-3 text-[10px]"
-                }`}
-                title="Tải tệp tin Standalone HTML"
-              >
-                <Download className="h-4 w-4 shrink-0" />
-                {!isSidebarCollapsed && <span>Tải Standalone HTML</span>}
-              </button>
-            </div>
-
-            {/* Flex spacer to push user profile menu to the bottom */}
-            <div className="flex-1" />
-
             {/* USER PROFILE DROPDOWN MENU / POPOVER */}
-            <div className="relative w-full pt-4 border-t border-white/5">
+            <div className="relative w-full py-4 border-b border-white/5">
               {/* Dropdown Menu Popup */}
               {userDropdownOpen && (
-                <div className={`absolute bottom-full mb-3 z-50 bg-[#0f172a] border border-white/10 rounded-2xl p-2.5 shadow-2xl backdrop-blur-2xl w-60 animate-in fade-in slide-in-from-bottom-2 duration-150 ${
+                <div className={`absolute top-full mt-3 z-50 bg-[#0f172a] border border-white/10 rounded-2xl p-2.5 shadow-2xl backdrop-blur-2xl w-60 animate-in fade-in slide-in-from-top-2 duration-150 ${
                   isSidebarCollapsed ? "left-0" : "left-0 right-0 w-full"
                 }`}>
                   {/* Scoped Profile Header Info */}
@@ -386,7 +377,7 @@ function AppShell() {
                     <h6 className="font-bold text-white truncate text-xs">{currentUser.name}</h6>
                     <p className="text-[10px] text-white/40 truncate font-mono mt-0.5">{currentUser.email}</p>
                   </div>
-                  
+
                   {/* Action Buttons */}
                   <button
                     onClick={() => { setShowProfileModal(true); setUserDropdownOpen(false); }}
@@ -395,11 +386,11 @@ function AppShell() {
                     <Fingerprint className="h-4 w-4 text-indigo-400" />
                     <span>Xem lý lịch cá nhân</span>
                   </button>
-                  
+
                   <button
-                    onClick={() => { 
-                      setShowChangePasswordModal(true); 
-                      setUserDropdownOpen(false); 
+                    onClick={() => {
+                      setShowChangePasswordModal(true);
+                      setUserDropdownOpen(false);
                       setChangePasswordError(null);
                       setChangePasswordSuccess(null);
                       setCurrentPassword("");
@@ -411,9 +402,9 @@ function AppShell() {
                     <Lock className="h-4 w-4 text-amber-400" />
                     <span>Đổi mật khẩu tài khoản</span>
                   </button>
-                  
+
                   <div className="border-t border-white/5 my-1.5" />
-                  
+
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-3 py-2 text-xs font-bold text-red-400 hover:text-white hover:bg-red-500/10 rounded-xl transition flex items-center gap-2 cursor-pointer"
@@ -436,7 +427,7 @@ function AppShell() {
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center font-bold text-xs text-white shadow-inner shrink-0 uppercase font-mono">
                   {currentUser.name.slice(0, 2)}
                 </div>
-                
+
                 {/* User Details */}
                 {!isSidebarCollapsed && (
                   <div className="min-w-0 flex-1">
@@ -449,12 +440,29 @@ function AppShell() {
 
                 {/* Arrow indicator */}
                 {!isSidebarCollapsed && (
-                  <ChevronLeft className={`h-4 w-4 text-white/30 transform transition-transform duration-200 ${
-                    userDropdownOpen ? "-rotate-90" : ""
+                  <ChevronDown className={`h-4 w-4 text-white/30 transform transition-transform duration-200 ${
+                    userDropdownOpen ? "rotate-180" : ""
                   }`} />
                 )}
               </button>
             </div>
+
+            {/* Standalone Action button in the middle */}
+            <div className="pt-6 w-full flex justify-center">
+              <button
+                onClick={handleExportStandaloneHTMLFile}
+                className={`w-full text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition duration-150 rounded-xl flex items-center justify-center gap-1.5 shadow-md cursor-pointer ${
+                  isSidebarCollapsed ? "p-3 h-10 w-10 bg-indigo-600/80 hover:bg-indigo-600" : "py-2.5 px-3 text-[10px]"
+                }`}
+                title="Tải tệp tin Standalone HTML"
+              >
+                <Download className="h-4 w-4 shrink-0" />
+                {!isSidebarCollapsed && <span>Tải Standalone HTML</span>}
+              </button>
+            </div>
+
+            {/* Flex spacer to push menu content down if needed */}
+            <div className="flex-1" />
           </aside>
 
           {/* MOBILE NAVIGATION SIDEBAR DRAWER */}
@@ -501,13 +509,13 @@ function AppShell() {
             {/* Topbar headers in viewport */}
             <header className="p-4 md:p-6 border-b border-white/10 bg-white/5 backdrop-blur-md flex justify-between items-center z-10">
               <div className="flex items-center gap-3">
-                <button 
+                <button
                   onClick={() => setSidebarOpen(true)}
                   className="p-1.5 bg-white/5 border border-white/10 rounded-lg text-white md:hidden hover:bg-white/10 cursor-pointer"
                 >
                   <Menu className="h-5 w-5" />
                 </button>
-                
+
                 <h3 className="font-display font-black text-white text-sm md:text-base leading-none uppercase tracking-widest hidden md:block">
                   HỆ THỐNG ĐÀO TẠO E16 LMS
                 </h3>
@@ -526,59 +534,59 @@ function AppShell() {
                 </div>
               }>
                 {(currentUser.role === "admin" || currentUser.role === "super_admin") && (
-                  <AdminPanel 
-                    currentUser={currentUser} 
-                    onLogout={handleLogout} 
-                    onRefreshData={refreshStoreData} 
+                  <AdminPanel
+                    currentUser={currentUser}
+                    onLogout={handleLogout}
+                    onRefreshData={refreshStoreDataFromServer}
                   />
                 )}
                 {currentUser.role === "teacher" && (
-                  <TeacherPanel 
-                    currentUser={currentUser} 
-                    onLogout={handleLogout} 
-                    onRefreshData={refreshStoreData} 
+                  <TeacherPanel
+                    currentUser={currentUser}
+                    onLogout={handleLogout}
+                    onRefreshData={refreshStoreDataFromServer}
                   />
                 )}
                 {currentUser.role === "student" && (
-                  <StudentPanel 
-                    currentUser={currentUser} 
-                    onLogout={handleLogout} 
-                    onRefreshData={refreshStoreData} 
+                  <StudentPanel
+                    currentUser={currentUser}
+                    onLogout={handleLogout}
+                    onRefreshData={refreshStoreDataFromServer}
                   />
                 )}
                 {(currentUser.role === "finance") && (
-                  <FinancePanel 
-                    currentUser={currentUser} 
-                    onLogout={handleLogout} 
-                    onRefreshData={refreshStoreData} 
+                  <FinancePanel
+                    currentUser={currentUser}
+                    onLogout={handleLogout}
+                    onRefreshData={refreshStoreDataFromServer}
                   />
                 )}
                 {currentUser.role === "le_tan" && (
-                  <ReceptionPanel 
-                    currentUser={currentUser} 
-                    onLogout={handleLogout} 
-                    onRefreshData={refreshStoreData} 
+                  <ReceptionPanel
+                    currentUser={currentUser}
+                    onLogout={handleLogout}
+                    onRefreshData={refreshStoreDataFromServer}
                   />
                 )}
                 {(currentUser.role === "academic_admin") && (
-                  <AcademicPanel 
-                    currentUser={currentUser} 
-                    onLogout={handleLogout} 
-                    onRefreshData={refreshStoreData} 
+                  <AcademicPanel
+                    currentUser={currentUser}
+                    onLogout={handleLogout}
+                    onRefreshData={refreshStoreDataFromServer}
                   />
                 )}
                 {currentUser.role === "advisor" && (
-                  <AdvisorPanel 
-                    currentUser={currentUser} 
-                    onLogout={handleLogout} 
-                    onRefreshData={refreshStoreData} 
+                  <AdvisorPanel
+                    currentUser={currentUser}
+                    onLogout={handleLogout}
+                    onRefreshData={refreshStoreDataFromServer}
                   />
                 )}
                 {currentUser.role === "parent" && (
-                  <ParentPanel 
-                    currentUser={currentUser} 
-                    onLogout={handleLogout} 
-                    onRefreshData={refreshStoreData} 
+                  <ParentPanel
+                    currentUser={currentUser}
+                    onLogout={handleLogout}
+                    onRefreshData={refreshStoreDataFromServer}
                   />
                 )}
               </React.Suspense>
@@ -589,14 +597,14 @@ function AppShell() {
       ) : (
         /* AUTH SECTION VIEW (SPLIT SCREEN LOGIN / WELCOME CARD) */
         <div className="min-h-screen flex items-center justify-center p-4 relative z-20 animate-in fade-in zoom-in-95 duration-200">
-          
+
           <div className="bg-slate-900 border border-white/15 w-full max-w-5xl rounded-3xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 shadow-2xl">
-            
+
             {/* LEFT LOGO COLUMN */}
             <div className="lg:col-span-5 bg-[#2563eb]/20 p-8 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-white/10 relative overflow-hidden min-h-[300px] lg:min-h-0">
               {/* Blur bubble */}
               <div className="absolute top-[-20%] left-[-20%] w-72 h-72 bg-[#2563eb]/35 rounded-full filter blur-[100px]" />
-              
+
               <div className="flex items-center space-x-2.5 relative z-10 pt-2">
                 <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center">
                   <GraduationCap className="h-4 w-4 text-white" />
@@ -647,6 +655,7 @@ function AppShell() {
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-white/70 block">Địa chỉ Email đăng nhập</label>
                   <input
+                    name="email"
                     type="email"
                     required
                     placeholder="Ví dụ: admin@e16.local"
@@ -659,6 +668,7 @@ function AppShell() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-white/70 block">Mật khẩu tài khoản</label>
                   <input
+                    name="password"
                     type="password"
                     required
                     placeholder="Mật khẩu của bạn"
@@ -766,15 +776,15 @@ function AppShell() {
 
       {/* 1. VIEW PROFILE MODAL */}
       {showProfileModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto animate-in fade-in duration-150">
           <div className="bg-slate-900 border border-white/15 w-full max-w-md rounded-3xl p-6 space-y-6 shadow-2xl relative animate-in zoom-in-95 duration-200 text-left">
-            <button 
+            <button
               onClick={() => setShowProfileModal(false)}
               className="absolute top-4 right-4 p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/60 hover:text-white transition duration-150 cursor-pointer"
             >
               <X className="h-4.5 w-4.5" />
             </button>
-            
+
             <div className="flex items-center gap-3 pb-4 border-b border-white/5">
               <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-400/20 flex items-center justify-center">
                 <Fingerprint className="h-5 w-5 text-indigo-400" />
@@ -815,7 +825,7 @@ function AppShell() {
             </div>
 
             <div className="pt-2">
-              <button 
+              <button
                 onClick={() => setShowProfileModal(false)}
                 className="w-full py-2.5 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl text-xs transition cursor-pointer border border-white/10"
               >
@@ -828,15 +838,15 @@ function AppShell() {
 
       {/* 2. CHANGE PASSWORD MODAL */}
       {showChangePasswordModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto animate-in fade-in duration-150">
           <div className="bg-slate-900 border border-white/15 w-full max-w-md rounded-3xl p-6 space-y-6 shadow-2xl relative animate-in zoom-in-95 duration-200 text-left">
-            <button 
+            <button
               onClick={() => setShowChangePasswordModal(false)}
               className="absolute top-4 right-4 p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-white/60 hover:text-white transition duration-150 cursor-pointer"
             >
               <X className="h-4.5 w-4.5" />
             </button>
-            
+
             <div className="flex items-center gap-3 pb-4 border-b border-white/5">
               <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-400/20 flex items-center justify-center">
                 <Lock className="h-5 w-5 text-amber-400" />
@@ -852,7 +862,7 @@ function AppShell() {
                 {changePasswordError}
               </div>
             )}
-            
+
             {changePasswordSuccess && (
               <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 p-3 rounded-xl text-xs">
                 {changePasswordSuccess}
@@ -863,7 +873,7 @@ function AppShell() {
               e.preventDefault();
               setChangePasswordError(null);
               setChangePasswordSuccess(null);
-              
+
               if (newPassword.length < 6) {
                 setChangePasswordError("Mật khẩu mới phải tối thiểu 6 ký tự.");
                 return;
@@ -872,25 +882,25 @@ function AppShell() {
                 setChangePasswordError("Xác nhận mật khẩu mới không trùng khớp.");
                 return;
               }
-              
+
               try {
                 const csrfToken = sessionStorage.getItem("e16_lms_csrf");
                 const response = await fetch("/api/users/change-password", {
                   method: "POST",
-                  headers: { 
+                  headers: {
                     "Content-Type": "application/json",
                     "X-CSRF-Token": csrfToken || ""
                   },
                   credentials: "include",
                   body: JSON.stringify({ currentPassword, newPassword })
                 });
-                
+
                 const data = await response.json();
                 if (!response.ok) {
                   setChangePasswordError(data.error || "Có lỗi xảy ra khi đổi mật khẩu.");
                   return;
                 }
-                
+
                 setChangePasswordSuccess("Đổi mật khẩu thành công!");
                 setCurrentPassword("");
                 setNewPassword("");

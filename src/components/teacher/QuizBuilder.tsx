@@ -180,13 +180,13 @@ export default function QuizBuilder(props: ComponentProps) {
         triggerToast("Đã thêm câu hỏi mới thành công.");
       }
 
-      AppStore.save(storeData);
       setQText("");
       setQOptions(["", "", ""]);
       setQCorrect("0");
       setEditingQuestionId(null);
       setShowQuestionModal(false);
       onRefreshData();
+      return;
     } catch (err: any) {
       console.error("Failed to save question:", err);
       triggerToast(`Lỗi lưu câu hỏi: ${err.message || "Không thể kết nối máy chủ."}`);
@@ -199,7 +199,7 @@ export default function QuizBuilder(props: ComponentProps) {
         {activeSubTab === "quizzes" && (
           <div className="space-y-6">
             <h4 className="text-base font-display font-semibold text-white mb-2">Phòng Quản lý Đề thi & Đánh giá Học thuật</h4>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Left Side: Segmented control & Lists */}
               <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4 h-fit">
@@ -232,7 +232,7 @@ export default function QuizBuilder(props: ComponentProps) {
                 <span className="text-xs font-semibold text-white uppercase tracking-wider block border-b border-white/10 pb-2">
                   {assessmentType === "quiz" ? "Đề trắc nghiệm đang hoạt động" : "Đề tự luận đang hoạt động"}
                 </span>
-                
+
                 <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
                   {assessmentType === "quiz" ? (
                     store.quizzes.filter(q => myCourseIds.includes(q.courseId)).map(q => {
@@ -243,8 +243,8 @@ export default function QuizBuilder(props: ComponentProps) {
                           type="button"
                           onClick={() => setSelectedQuizId(q.id)}
                           className={`w-full text-left p-3.5 rounded-xl border text-xs transition duration-150 relative block cursor-pointer ${
-                            selectedQuizId === q.id 
-                              ? "bg-white/15 border-white/20 text-white" 
+                            selectedQuizId === q.id
+                              ? "bg-white/15 border-white/20 text-white"
                               : "bg-black/10 border-white/5 text-white/60 hover:text-white"
                           }`}
                         >
@@ -262,8 +262,8 @@ export default function QuizBuilder(props: ComponentProps) {
                           type="button"
                           onClick={() => setSelectedEssayId(a.id)}
                           className={`w-full text-left p-3.5 rounded-xl border text-xs transition duration-150 relative block cursor-pointer ${
-                            selectedEssayId === a.id 
-                              ? "bg-white/15 border-white/20 text-white" 
+                            selectedEssayId === a.id
+                              ? "bg-white/15 border-white/20 text-white"
                               : "bg-black/10 border-white/5 text-white/60 hover:text-white"
                           }`}
                         >
@@ -330,7 +330,7 @@ export default function QuizBuilder(props: ComponentProps) {
                           <h5 className="text-sm font-bold text-white">Cấu hình câu hỏi đề thi trắc nghiệm</h5>
                           <p className="text-[11px] text-white/40">Mã đề thi: <span className="font-mono">{selectedQuizId}</span></p>
                         </div>
-                        
+
                         <button
                           type="button"
                           onClick={() => { setEditingQuestionId(null); setQText(""); setQOptions(["", "", ""]); setQCorrect("0"); setShowQuestionModal(true); }}
@@ -374,8 +374,8 @@ export default function QuizBuilder(props: ComponentProps) {
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pl-4">
                                 {qst.options.map((opt, idx) => (
                                   <div key={idx} className={`p-2 rounded-xl text-xs flex items-center gap-2 border ${
-                                    qst.correctAnswer.split(",").includes(String(idx)) 
-                                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" 
+                                    qst.correctAnswer.split(",").includes(String(idx))
+                                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
                                       : "bg-black/20 border-white/5 text-white/50"
                                   }`}>
                                     <span className="font-bold text-[10px]">{idx + 1}.</span>
@@ -484,9 +484,9 @@ export default function QuizBuilder(props: ComponentProps) {
 
       {/* MODAL 3: CREATE QUIZ FORM */}
       {showQuizModal && (
-        <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 rounded-3xl">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
-            <button 
+            <button
               type="button"
               onClick={() => setShowQuizModal(false)}
               className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10 text-white/60"
@@ -574,9 +574,9 @@ export default function QuizBuilder(props: ComponentProps) {
 
       {/* MODAL 4: ADD QUESTION FORM */}
       {showQuestionModal && (
-        <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 rounded-3xl">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative">
-            <button 
+            <button
               type="button"
               onClick={() => { setShowQuestionModal(false); setEditingQuestionId(null); }}
               className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10 text-white/60"
@@ -664,6 +664,91 @@ export default function QuizBuilder(props: ComponentProps) {
                   className="px-4.5 py-2 bg-white text-indigo-950 font-bold rounded-xl transition cursor-pointer"
                 >
                   {editingQuestionId ? "Cập nhật câu hỏi" : "Thêm Câu hỏi"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: CREATE ASSIGNMENT FORM */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+          <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
+            <button
+              onClick={() => setShowAssignModal(false)}
+              className="absolute top-4 right-4 p-1 rounded-lg hover:bg-white/10 text-white/60"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <h3 className="text-lg font-display font-medium text-white mb-2 flex items-center gap-1.5 border-b border-white/10 pb-3">
+              <FileText className="h-5 w-5 text-indigo-400" /> Tạo Thử thách Bài tự luận Khóa học
+            </h3>
+
+            <form onSubmit={handleAddAssignmentSubmit} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-white/70">Tiêu đề Thử thách bài tập</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Thiết lập Express Routing Controller"
+                  value={assignTitle}
+                  onChange={(e) => setAssignTitle(e.target.value)}
+                  className="w-full px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-white/70">Hạn chót Hoàn thành</label>
+                  <input
+                    type="date"
+                    required
+                    value={assignDeadline}
+                    onChange={(e) => setAssignDeadline(e.target.value)}
+                    className="w-full px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-white/70">Điểm tối đa</label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    max={100}
+                    value={assignMaxScore}
+                    onChange={(e) => setAssignMaxScore(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-black/20 text-white border border-white/10 rounded-xl focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-white/70">Mô tả / Yêu cầu chi tiết</label>
+                <textarea
+                  required
+                  placeholder="Dán các định dạng file hoặc yêu cầu nộp sản phẩm..."
+                  value={assignDesc}
+                  onChange={(e) => setAssignDesc(e.target.value)}
+                  className="w-full px-3 py-2 bg-black/20 text-white h-24 max-h-32 border border-white/10 rounded-xl focus:outline-none focus:border-indigo-400 text-xs"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAssignModal(false)}
+                  className="px-4 py-2 bg-transparent text-white/60 hover:text-white transition cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-4.5 py-2 bg-white text-indigo-950 font-bold rounded-xl transition cursor-pointer"
+                >
+                  Kích hoạt Thử thách
                 </button>
               </div>
             </form>

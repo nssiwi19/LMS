@@ -31,6 +31,7 @@ import { leaveRequestsRepository } from "./src/server/repositories/leaveRequests
 import { graduationRepository } from "./src/server/repositories/graduation";
 import { scholarshipsRepository } from "./src/server/repositories/scholarships";
 import { notificationsRepository } from "./src/server/repositories/notifications";
+import { attendanceRepository } from "./src/server/repositories/attendance";
 import { registerEventHandlers } from "./src/server/eventHandlers";
 import { startScheduler } from "./src/server/scheduler";
 
@@ -120,22 +121,26 @@ function extractCookie(req: express.Request, name: string): string | null {
 }
 
 async function rateLimitLogin(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (process.env.DISABLE_RATE_LIMIT === "true") return next();
-  const key = `ratelimit:login:${req.ip || req.socket.remoteAddress || "unknown"}`;
-  const max = 10;
-  const windowSec = 15 * 60;
-  const current = await safeRedis(async () => {
-    const count = await redis.incr(key);
-    if (count === 1) await redis.expire(key, windowSec);
-    return count;
-  }, 1);
+  try {
+    if (process.env.DISABLE_RATE_LIMIT === "true") return next();
+    const key = `ratelimit:login:${req.ip || req.socket.remoteAddress || "unknown"}`;
+    const max = 10;
+    const windowSec = 15 * 60;
+    const current = await safeRedis(async () => {
+      const count = await redis.incr(key);
+      if (count === 1) await redis.expire(key, windowSec);
+      return count;
+    }, 1);
 
-  if (current > max) {
-    const ttl = await safeRedis(() => redis.ttl(key), windowSec);
-    res.setHeader("Retry-After", String(ttl));
-    return res.status(429).json({ error: "Too many login attempts. Please try again later." });
+    if (current > max) {
+      const ttl = await safeRedis(() => redis.ttl(key), windowSec);
+      res.setHeader("Retry-After", String(ttl));
+      return res.status(429).json({ error: "Too many login attempts. Please try again later." });
+    }
+    next();
+  } catch (error) {
+    next(error);
   }
-  next();
 }
 
 function requireCsrf(req: AuthRequest, res: express.Response, next: express.NextFunction) {
@@ -172,10 +177,14 @@ function requireRole(roles: Array<User["role"]>) {
 }
 
 async function resolveLinkedStudent(req: AuthRequest, res: express.Response, next: express.NextFunction) {
-  const linkedStudentId = await parentRepository.getLinkedStudent(pool, req.user!.id);
-  if (!linkedStudentId) return res.status(403).json({ error: "No linked student found for this parent account." });
-  req.linkedStudentId = linkedStudentId;
-  next();
+  try {
+    const linkedStudentId = await parentRepository.getLinkedStudent(pool, req.user!.id);
+    if (!linkedStudentId) return res.status(403).json({ error: "No linked student found for this parent account." });
+    req.linkedStudentId = linkedStudentId;
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
 
 async function audit(req: AuthRequest, action: string, target: string, detail: string) {
@@ -215,13 +224,13 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
 
       for (const user of store.users || []) {
         if (user.role === "parent") continue;
-        
+
         const dbUser = dbUsersMap.get(user.id);
         const emailLower = user.email.toLowerCase();
         const clientRoleDenorm = denormalizeRole(user.role);
-        
+
         // Determine if dirty
-        const isDirty = !dbUser || 
+        const isDirty = !dbUser ||
           dbUser.email !== emailLower ||
           dbUser.name !== user.name ||
           dbUser.role !== clientRoleDenorm ||
@@ -267,7 +276,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
 
       for (const profile of store.studentProfiles || []) {
         const dbProfile = dbProfilesMap.get(profile.id);
-        
+
         const isDirty = !dbProfile ||
           dbProfile.user_id !== profile.userId ||
           dbProfile.student_code !== profile.studentCode ||
@@ -375,14 +384,14 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
 
     // Sync structural tables (academic_years, semesters, departments, programs, program_courses)
     // Order of deletion to respect foreign keys: program_courses -> programs -> departments -> semesters -> academic_years
-    
+
     // 1. DELETIONS
     if (store.programCourses !== undefined) {
       const clientProgCourses = store.programCourses || [];
       const clientProgCourseIds = clientProgCourses.map(pc => pc.id);
       if (clientProgCourseIds.length > 0) {
         await client.query(
-          "DELETE FROM program_courses WHERE id NOT IN (" + 
+          "DELETE FROM program_courses WHERE id NOT IN (" +
           clientProgCourseIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientProgCourseIds
         );
@@ -396,7 +405,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientProgIds = clientProgs.map(p => p.id);
       if (clientProgIds.length > 0) {
         await client.query(
-          "DELETE FROM programs WHERE id NOT IN (" + 
+          "DELETE FROM programs WHERE id NOT IN (" +
           clientProgIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientProgIds
         );
@@ -410,7 +419,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientDeptIds = clientDepts.map(d => d.id);
       if (clientDeptIds.length > 0) {
         await client.query(
-          "DELETE FROM departments WHERE id NOT IN (" + 
+          "DELETE FROM departments WHERE id NOT IN (" +
           clientDeptIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientDeptIds
         );
@@ -424,7 +433,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientSemesterIds = clientSemesters.map(s => s.id);
       if (clientSemesterIds.length > 0) {
         await client.query(
-          "DELETE FROM semesters WHERE id NOT IN (" + 
+          "DELETE FROM semesters WHERE id NOT IN (" +
           clientSemesterIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientSemesterIds
         );
@@ -438,7 +447,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientYearIds = clientYears.map(y => y.id);
       if (clientYearIds.length > 0) {
         await client.query(
-          "DELETE FROM academic_years WHERE id NOT IN (" + 
+          "DELETE FROM academic_years WHERE id NOT IN (" +
           clientYearIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientYearIds
         );
@@ -570,7 +579,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientNoteIds = clientNotes.map(n => n.id);
       if (clientNoteIds.length > 0) {
         await client.query(
-          "DELETE FROM notifications WHERE id NOT IN (" + 
+          "DELETE FROM notifications WHERE id NOT IN (" +
           clientNoteIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientNoteIds
         );
@@ -598,7 +607,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientWarningIds = clientWarnings.map(w => w.id);
       if (clientWarningIds.length > 0) {
         await client.query(
-          "DELETE FROM academic_warnings WHERE id NOT IN (" + 
+          "DELETE FROM academic_warnings WHERE id NOT IN (" +
           clientWarningIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientWarningIds
         );
@@ -639,7 +648,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientLogIds = clientLogs.map(l => l.id);
       if (clientLogIds.length > 0) {
         await client.query(
-          "DELETE FROM audit_logs WHERE id NOT IN (" + 
+          "DELETE FROM audit_logs WHERE id NOT IN (" +
           clientLogIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientLogIds
         );
@@ -667,7 +676,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientEnrollmentIds = clientEnrollments.map(e => e.id);
       if (clientEnrollmentIds.length > 0) {
         await client.query(
-          "DELETE FROM enrollments WHERE id NOT IN (" + 
+          "DELETE FROM enrollments WHERE id NOT IN (" +
           clientEnrollmentIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientEnrollmentIds
         );
@@ -695,7 +704,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientTxIds = clientTransactions.map(t => t.id);
       if (clientTxIds.length > 0) {
         await client.query(
-          "DELETE FROM transactions WHERE id NOT IN (" + 
+          "DELETE FROM transactions WHERE id NOT IN (" +
           clientTxIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientTxIds
         );
@@ -738,7 +747,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientTuitionIds = clientTuition.map(tf => tf.id);
       if (clientTuitionIds.length > 0) {
         await client.query(
-          "DELETE FROM tuition_fees WHERE id NOT IN (" + 
+          "DELETE FROM tuition_fees WHERE id NOT IN (" +
           clientTuitionIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientTuitionIds
         );
@@ -779,7 +788,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientNotesAdvisorIds = clientNotesAdvisor.map(n => n.id);
       if (clientNotesAdvisorIds.length > 0) {
         await client.query(
-          "DELETE FROM advisor_notes WHERE id NOT IN (" + 
+          "DELETE FROM advisor_notes WHERE id NOT IN (" +
           clientNotesAdvisorIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientNotesAdvisorIds
         );
@@ -814,7 +823,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientQuizIds = clientQuizzes.map(q => q.id);
       if (clientQuizIds.length > 0) {
         await client.query(
-          "DELETE FROM quizzes WHERE id NOT IN (" + 
+          "DELETE FROM quizzes WHERE id NOT IN (" +
           clientQuizIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientQuizIds
         );
@@ -851,7 +860,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientQuestionIds = clientQuestions.map(qst => qst.id);
       if (clientQuestionIds.length > 0) {
         await client.query(
-          "DELETE FROM questions WHERE id NOT IN (" + 
+          "DELETE FROM questions WHERE id NOT IN (" +
           clientQuestionIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientQuestionIds
         );
@@ -886,7 +895,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       const clientSubmissionIds = clientSubmissions.map(s => s.id);
       if (clientSubmissionIds.length > 0) {
         await client.query(
-          "DELETE FROM submissions WHERE id NOT IN (" + 
+          "DELETE FROM submissions WHERE id NOT IN (" +
           clientSubmissionIds.map((_, i) => `$${i + 1}`).join(",") + ")",
           clientSubmissionIds
         );
@@ -1073,18 +1082,18 @@ app.get("/api/auth/me", requireAuth, (req: AuthRequest, res) => res.json({ user:
 app.post("/api/users/change-password", requireAuth, asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) return res.status(400).json({ error: "Vui lòng nhập đầy đủ mật khẩu cũ và mới." });
-  
+
   const row = await usersRepository.findAuthByEmail(pool, req.user!.email) as DbUserRow | null;
   if (!row || !verifyPassword(currentPassword, row.password_hash, row.password_salt || undefined)) {
     return res.status(401).json({ error: "Mật khẩu hiện tại không chính xác." });
   }
-  
+
   const credential = hashPassword(newPassword);
   await pool.query(
     "UPDATE users SET password_hash = $1, password_salt = $2 WHERE id = $3",
     [credential.hash, credential.salt, req.user!.id]
   );
-  
+
   await audit(req, "change_password", req.user!.id, "User updated their account password.");
   res.json({ ok: true, message: "Đổi mật khẩu thành công!" });
 }));
@@ -1092,7 +1101,7 @@ app.post("/api/users/change-password", requireAuth, asyncHandler(async (req, res
 app.patch("/api/student/profile", requireAuth, requireRole(["student"]), validateBody(schemas.updateProfile), asyncHandler(async (req, res) => {
   const { phone, dateOfBirth, gender, address, guardianName, guardianPhone } = req.body;
   const exists = (await pool.query("SELECT id FROM student_profiles WHERE user_id = $1", [req.user!.id])).rowCount;
-  
+
   if (!exists) {
     const profileId = generateId("profile");
     const studentCode = `SV${new Date().getFullYear()}${req.user!.id.slice(-4).toUpperCase()}`;
@@ -1509,6 +1518,87 @@ app.post("/api/tuition/pay", requireAuth, requireRole(["finance", "admin", "supe
   if (!result) return res.status(404).json({ error: "Tuition fee not found." });
   await audit(req, "record_tuition_payment", req.body.feeId, `Paid amount ${req.body.paidAmount}.`);
   res.json(result);
+}));
+
+app.post("/api/tuition/confirm-transfer", requireAuth, requireRole(["student"]), validateBody(schemas.confirmTransfer), asyncHandler(async (req, res) => {
+  const { feeId, amount } = req.body;
+  const fee = (await pool.query(
+    "SELECT id, student_id, amount, paid_amount FROM tuition_fees WHERE id = $1",
+    [feeId]
+  )).rows[0];
+  if (!fee || fee.student_id !== req.user!.id) return res.status(404).json({ error: "Tuition fee not found." });
+  const remaining = Math.max(0, Number(fee.amount) - Number(fee.paid_amount || 0));
+  if (remaining <= 0 || Number(amount) > remaining) return res.status(400).json({ error: "Invalid transfer amount." });
+  const course = (await pool.query(
+    `SELECT c.id
+     FROM enrollments e
+     JOIN courses c ON c.id = e.course_id
+     WHERE e.student_id = $1
+     ORDER BY e.enrolled_at DESC
+     LIMIT 1`,
+    [req.user!.id]
+  )).rows[0] || (await pool.query("SELECT id FROM courses ORDER BY created_at DESC LIMIT 1")).rows[0];
+  if (!course) return res.status(400).json({ error: "No course available to attach transfer transaction." });
+  const txId = generateId("tx");
+  await pool.query(
+    `INSERT INTO transactions (id, student_id, course_id, amount, status, payment_method, created_at, notes)
+     VALUES ($1, $2, $3, $4, 'pending', 'Chuyển khoản Ngân hàng (QR)', $5, $6)`,
+    [txId, req.user!.id, course.id, Number(amount), new Date().toISOString(), `tuition_fee_pay:${feeId}`]
+  );
+  await audit(req, "request_tuition_confirm", feeId, `Pending bank transfer of ${amount} for tuition.`);
+  res.json({ ok: true, transactionId: txId });
+}));
+
+app.patch("/api/finance/transactions/:id/review", requireAuth, requireRole(["finance", "admin", "super_admin"]), validateBody(schemas.reviewTransaction), asyncHandler(async (req, res) => {
+  const result = await financeRepository.reviewTransaction(pool, req.params.id, req.body.status, req.user!.id, req.body.notes);
+  if (!result) return res.status(404).json({ error: "Transaction not found." });
+  if ("error" in result) return res.status(result.status).json({ error: result.error });
+  await audit(req, `finance_transaction_${req.body.status}`, req.params.id, req.body.notes || "");
+  res.json(result);
+}));
+
+app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "academic_admin", "admin", "super_admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
+  const course = await coursesRepository.findById(pool, req.body.courseId);
+  if (!course) return res.status(404).json({ error: "Course not found." });
+  if (req.user!.role === "teacher" && course.teacherId !== req.user!.id) return res.status(403).json({ error: "Permission denied." });
+  const session = {
+    id: generateId("ats"),
+    courseId: req.body.courseId,
+    semesterId: req.body.semesterId || "sem_spring25",
+    teacherId: req.user!.role === "teacher" ? req.user!.id : course.teacherId,
+    date: req.body.date,
+    topic: req.body.topic
+  };
+  const records = (req.body.records || []).map((record: any) => ({
+    id: generateId("atr"),
+    sessionId: session.id,
+    studentId: record.studentId,
+    status: record.status,
+    note: record.note
+  }));
+  await attendanceRepository.saveAttendanceSession(pool, session, records);
+  await audit(req, "create_attendance_session", session.id, session.courseId);
+  res.status(201).json({ session, records });
+}));
+
+app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "academic_admin", "admin", "super_admin"]), validateBody(schemas.attendanceRecord), asyncHandler(async (req, res) => {
+  const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [req.body.sessionId])).rows[0];
+  if (!session) return res.status(404).json({ error: "Attendance session not found." });
+  if (req.user!.role === "teacher" && session.teacher_id !== req.user!.id) return res.status(403).json({ error: "Permission denied." });
+  const existing = (await pool.query(
+    "SELECT id FROM attendance_records WHERE session_id = $1 AND student_id = $2",
+    [req.body.sessionId, req.body.studentId]
+  )).rows[0];
+  const record = {
+    id: existing?.id || generateId("atr"),
+    sessionId: req.body.sessionId,
+    studentId: req.body.studentId,
+    status: req.body.status,
+    note: req.body.note
+  };
+  await attendanceRepository.bulkMarkRecords(pool, [record]);
+  await audit(req, "update_attendance_record", record.id, `${record.studentId}:${record.status}`);
+  res.json(record);
 }));
 
 app.post("/api/store/sync", requireAuth, asyncHandler(async (req, res) => {

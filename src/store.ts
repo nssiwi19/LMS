@@ -658,17 +658,22 @@ export function getInitialStore(): LMSDataStore {
 
 export function calculateStudentGpa(store: LMSDataStore, studentId: string): { gpa: number; earnedCredits: number } {
   const studentEnrollments = store.enrollments.filter(e => e.studentId === studentId && e.status !== "cancelled");
+  const enrollmentsByCourse = studentEnrollments.reduce((groups, enrollment) => {
+    if (!groups.has(enrollment.courseId)) groups.set(enrollment.courseId, []);
+    groups.get(enrollment.courseId)!.push(enrollment);
+    return groups;
+  }, new Map<string, typeof studentEnrollments>());
   
   let totalGradeWeightedPoints = 0;
   let totalCreditsForGpa = 0;
   let totalCreditsEarned = 0;
 
-  studentEnrollments.forEach(enrollment => {
-    const programCourse = store.programCourses.find(pc => pc.courseId === enrollment.courseId);
+  enrollmentsByCourse.forEach((courseEnrollments, courseId) => {
+    const programCourse = store.programCourses.find(pc => pc.courseId === courseId);
     const credits = programCourse ? programCourse.credits : 3;
 
     // Quizzes in this course
-    const courseQuizzes = store.quizzes.filter(q => q.courseId === enrollment.courseId);
+    const courseQuizzes = store.quizzes.filter(q => q.courseId === courseId);
     const quizAttempts = store.quizAttempts.filter(qa => qa.studentId === studentId && courseQuizzes.some(q => q.id === qa.quizId));
     const quizScores = courseQuizzes.map(q => {
       const attempts = quizAttempts.filter(qa => qa.quizId === q.id);
@@ -676,7 +681,7 @@ export function calculateStudentGpa(store: LMSDataStore, studentId: string): { g
     }).filter((s): s is number => s !== null);
 
     // Assignments in this course
-    const courseAssignments = store.assignments.filter(a => a.courseId === enrollment.courseId);
+    const courseAssignments = store.assignments.filter(a => a.courseId === courseId);
     const submissions = store.submissions.filter(s => s.studentId === studentId && courseAssignments.some(a => a.id === s.assignmentId) && s.score !== undefined);
 
     let finalScore = 0;
@@ -711,10 +716,12 @@ export function calculateStudentGpa(store: LMSDataStore, studentId: string): { g
         totalCreditsEarned += credits;
       }
     } else {
-      // check if progress lessons is high
-      const totalLessons = store.lessons.filter(l => l.courseId === enrollment.courseId).length;
-      const progressCount = store.lessonProgress.filter(p => p.enrollmentId === enrollment.id && p.completed).length;
-      if (enrollment.status === "completed" || (totalLessons > 0 && progressCount === totalLessons)) {
+      const totalLessons = store.lessons.filter(l => l.courseId === courseId).length;
+      const hasCompletedEnrollment = courseEnrollments.some(enrollment => {
+        const progressCount = store.lessonProgress.filter(p => p.enrollmentId === enrollment.id && p.completed).length;
+        return enrollment.status === "completed" || (totalLessons > 0 && progressCount === totalLessons);
+      });
+      if (hasCompletedEnrollment) {
         totalCreditsEarned += credits;
       }
     }
@@ -874,19 +881,16 @@ export class AppStore {
           }
           
           backfillMegaDemoData(this.storeInstance);
-          this.save(this.storeInstance);
         } catch (e) {
           console.error("Failed to parse datastore. Seeding clean database.");
           this.storeInstance = getInitialStore();
           normalizeLegacyRoles(this.storeInstance);
           backfillMegaDemoData(this.storeInstance);
-          this.save(this.storeInstance);
         }
       } else {
         this.storeInstance = getInitialStore();
         normalizeLegacyRoles(this.storeInstance);
         backfillMegaDemoData(this.storeInstance);
-        this.save(this.storeInstance);
       }
     }
     return this.storeInstance!;

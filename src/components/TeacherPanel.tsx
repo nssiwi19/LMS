@@ -1,22 +1,22 @@
 import React, { useState } from "react";
-import { 
-  BookOpen, 
-  HelpCircle, 
-  FileText, 
-  Plus, 
-  Eye, 
-  Edit, 
-  Check, 
-  Award, 
-  Settings, 
-  Download, 
-  Tv, 
-  Trash, 
-  ChevronRight, 
-  TrendingUp, 
-  BarChart, 
-  Users, 
-  Clock, 
+import {
+  BookOpen,
+  HelpCircle,
+  FileText,
+  Plus,
+  Eye,
+  Edit,
+  Check,
+  Award,
+  Settings,
+  Download,
+  Tv,
+  Trash,
+  ChevronRight,
+  TrendingUp,
+  BarChart,
+  Users,
+  Clock,
   Search,
   MessageSquare,
   X,
@@ -54,7 +54,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
   const [showCourseModal, setShowCourseModal] = useState(false);
   const [courseModalMode, setCourseModalMode] = useState<"create" | "edit">("create");
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
-  
+
   // Create / Edit course fields
   const [courseTitle, setCourseTitle] = useState("");
   const [courseDesc, setCourseDesc] = useState("");
@@ -163,7 +163,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
         tags: tagsArray
       };
       storeData.courses.push(newCourse);
-      
+
       api.createCourse({
         title: courseTitle,
         description: courseDesc,
@@ -181,11 +181,11 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
       storeData.courses = storeData.courses.map(c => {
         if (c.id === editingCourseId) {
           AppStore.log(currentUser.id, "edit_course_details", c.title, "Updated course detailed descriptors.");
-          return { 
-            ...c, 
-            title: courseTitle, 
-            description: courseDesc, 
-            category: courseCategory, 
+          return {
+            ...c,
+            title: courseTitle,
+            description: courseDesc,
+            category: courseCategory,
             thumbnail: courseThumb,
             price: Number(coursePrice) || 0,
             level: courseLevel as any,
@@ -231,7 +231,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
     const storeData = AppStore.get();
     const currentLessons = storeData.lessons.filter(l => l.courseId === selectedCourseId);
     const orderNum = currentLessons.length + 1;
-    
+
     const newLesson: Lesson = {
       id: generateId("lesson"),
       courseId: selectedCourseId,
@@ -255,7 +255,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
 
     AppStore.log(currentUser.id, "add_lesson", newLesson.title, `Added learning module inside course: ${selectedCourseId}`);
     AppStore.save(storeData);
-    
+
     // Reset fields
     setLessonTitle("");
     setLessonContent("");
@@ -267,11 +267,33 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
   };
 
   // Create Quiz linked to Course
-  const handleAddQuizSubmit = (e: React.FormEvent) => {
+  const handleAddQuizSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourseId) return;
     if (!quizTitle.trim()) {
       triggerToast("Please provide a valid assessment caption.");
+      return;
+    }
+
+    try {
+      const created = await api.createQuiz({
+        courseId: selectedCourseId,
+        title: quizTitle,
+        passingScore: quizPassing,
+        timeLimit: quizLimit,
+        maxAttempts: quizAttempts
+      }) as Quiz;
+      setSelectedQuizId(created.id);
+      setQuizTitle("");
+      setQuizPassing(70);
+      setQuizLimit(15);
+      setQuizAttempts(3);
+      setShowQuizModal(false);
+      onRefreshData();
+      triggerToast("Course final assessment criteria mapped successfully.");
+      return;
+    } catch (err: any) {
+      triggerToast(err.message || "Failed to create quiz on server.");
       return;
     }
 
@@ -349,7 +371,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
   };
 
   // Create Assignment
-  const handleAddAssignmentSubmit = (e: React.FormEvent) => {
+  const handleAddAssignmentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourseId) return;
     if (!assignTitle.trim() || !assignDesc.trim() || !assignDeadline) {
@@ -357,36 +379,27 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
       return;
     }
 
-    const storeData = AppStore.get();
-    const newAssign: Assignment = {
-      id: generateId("assign"),
-      courseId: selectedCourseId,
-      title: assignTitle,
-      description: assignDesc,
-      deadline: assignDeadline,
-      maxScore: Number(assignMaxScore)
-    };
+    try {
+      await api.createAssignment({
+        courseId: selectedCourseId,
+        title: assignTitle,
+        description: assignDesc,
+        deadline: assignDeadline,
+        maxScore: Number(assignMaxScore)
+      });
 
-    storeData.assignments.push(newAssign);
+      AppStore.log(currentUser.id, "create_assignment", assignTitle, `Added task outline inside course: ${selectedCourseId}`);
 
-    api.createAssignment({
-      courseId: selectedCourseId,
-      title: assignTitle,
-      description: assignDesc,
-      deadline: assignDeadline,
-      maxScore: Number(assignMaxScore)
-    }).catch(err => console.warn("Failed to create assignment on server:", err));
-
-    AppStore.log(currentUser.id, "create_assignment", newAssign.title, `Added task outline inside course: ${selectedCourseId}`);
-    AppStore.save(storeData);
-
-    setAssignTitle("");
-    setAssignDesc("");
-    setAssignDeadline("");
-    setAssignMaxScore(100);
-    setShowAssignModal(false);
-    onRefreshData();
-    triggerToast("Course Assignment challenge configured.");
+      setAssignTitle("");
+      setAssignDesc("");
+      setAssignDeadline("");
+      setAssignMaxScore(100);
+      setShowAssignModal(false);
+      await onRefreshData();
+      triggerToast("Course Assignment challenge configured.");
+    } catch (err: any) {
+      triggerToast(err.message || "Failed to create assignment on server.");
+    }
   };
 
   // Submit Grading Score
@@ -401,27 +414,19 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
         feedback: gradingFeedback
       });
 
+      // Log and notify student
       const storeData = AppStore.get();
-      storeData.submissions = storeData.submissions.map(sub => {
-        if (sub.id === activeSubmissionId) {
-          const chal = storeData.assignments.find(a => a.id === sub.assignmentId);
-          const maxScore = chal?.maxScore || 100;
-          AppStore.log(currentUser.id, "grade_assignment", sub.id, `Graded score ${gradingScore} with feedback: ${gradingFeedback}`);
-          AppStore.notify(sub.studentId, "success", `Bài làm của bạn cho bài tập "${chal?.title || "Không tên"}" đã được chấm điểm! Điểm số: ${gradingScore}/${maxScore}. Nhận xét: ${gradingFeedback}`);
-          return {
-            ...sub,
-            score: Number(gradingScore),
-            feedback: gradingFeedback,
-            gradedAt: new Date().toISOString()
-          };
-        }
-        return sub;
-      });
+      const sub = storeData.submissions.find(s => s.id === activeSubmissionId);
+      if (sub) {
+        const chal = storeData.assignments.find(a => a.id === sub.assignmentId);
+        const maxScore = chal?.maxScore || 100;
+        AppStore.log(currentUser.id, "grade_assignment", sub.id, `Graded score ${gradingScore} with feedback: ${gradingFeedback}`);
+        AppStore.notify(sub.studentId, "success", `Bài làm của bạn cho bài tập "${chal?.title || "Không tên"}" đã được chấm điểm! Điểm số: ${gradingScore}/${maxScore}. Nhận xét: ${gradingFeedback}`);
+      }
 
-      AppStore.save(storeData);
       setActiveSubmissionId(null);
       setGradingFeedback("");
-      onRefreshData();
+      await onRefreshData();
       triggerToast("Đã cập nhật điểm số và nhận xét thành công!");
     } catch (err: any) {
       console.error("Failed to grade assignment on server:", err);
@@ -433,7 +438,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
   const handleExportCSVGradebook = () => {
     const storeData = AppStore.get();
     let csvContent = "data:text/csv;charset=utf-8,Student Name,Email,Course,Assignment,Score Obtained,Max Possible Score\n";
-    
+
     const mySubmissions = storeData.submissions.filter(sub => {
       const assignment = storeData.assignments.find(a => a.id === sub.assignmentId);
       return assignment && myCourseIds.includes(assignment.courseId);
@@ -443,7 +448,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
       const student = storeData.users.find(u => u.id === sub.studentId);
       const assignment = storeData.assignments.find(a => a.id === sub.assignmentId);
       const course = storeData.courses.find(c => c.id === assignment?.courseId);
-      
+
       const parts = [
         `"${student?.name || "Không xác định"}"`,
         `"${student?.email || "Không xác định"}"`,
@@ -508,7 +513,7 @@ export default function TeacherPanel({ currentUser, onLogout, onRefreshData }: T
           <p className="text-sm text-white/60">Tải lên giáo án bài giảng mới, thiết lập đề thi đánh giá tự động, quản lý điểm và tương tác trực quan với học viên.</p>
         </div>
 
-        <button 
+        <button
           onClick={handleOpenCreateCourse}
           className="px-4 py-2 text-xs font-bold text-indigo-950 bg-white hover:bg-white/95 rounded-xl flex items-center gap-1.5 transition duration-150 cursor-pointer self-start"
         >

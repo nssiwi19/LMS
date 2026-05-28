@@ -338,7 +338,7 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
 
       {/* COMPREHENSIVE VIEW & ADVISOR PROFILE MODAL CONTAINER */}
       {detailedStudentId && currentDetailedProfile && (
-        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl w-full max-w-4xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 flex flex-col max-h-[90vh]">
             {/* Header elements */}
             <div className="p-6 border-b border-white/10 flex justify-between items-start flex-shrink-0">

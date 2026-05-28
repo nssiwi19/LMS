@@ -18,6 +18,7 @@ import { AppStore } from "../store";
 import { generateId } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
 import TuitionManager from "./TuitionManager";
+import { api } from "../api";
 
 interface FinancePanelProps {
   currentUser: User;
@@ -46,10 +47,19 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
     let totalStudents = 0;
     const totalValue = tCourses.reduce((sum, c) => sum + (c.price || 0), 0);
 
-    tCourses.forEach(c => {
+    const courseBreakdown = tCourses.map(c => {
       const studentsCount = store.enrollments.filter(e => e.courseId === c.id && e.status === "active").length;
       totalStudents += studentsCount;
-      totalCommission += (c.price || 0) * studentsCount * 0.15; // 15% commission
+      const baseSalary = 3000000;
+      const commission = (c.price || 0) * studentsCount * 0.15;
+      totalCommission += commission; // 15% commission
+      return {
+        course: c,
+        studentsCount,
+        baseSalary,
+        commission,
+        total: baseSalary + commission
+      };
     });
 
     return {
@@ -59,7 +69,8 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
       totalValue,
       baseSalary: totalBase,
       commission: totalCommission,
-      totalSalary: totalBase + totalCommission
+      totalSalary: totalBase + totalCommission,
+      courseBreakdown
     };
   });
 
@@ -70,7 +81,20 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleApprove = (tx: Transaction) => {
+  const handleApprove = async (tx: Transaction) => {
+    if (tx.status === "pending") {
+      try {
+        await api.reviewTransaction(tx.id, {
+          status: "approved",
+          notes: "Payment matched and enrollment activated."
+        });
+        showToast("PhÃª duyá»‡t vÃ  kÃ­ch hoáº¡t quyá»n há»c thÃ nh cÃ´ng!");
+        onRefreshData();
+      } catch (err: any) {
+        showToast(err.message || "KhÃ´ng thá»ƒ phÃª duyá»‡t giao dá»‹ch.");
+      }
+      return;
+    }
     const freshStore = AppStore.get();
     const targetTx = freshStore.transactions.find(t => t.id === tx.id);
     if (!targetTx) return;
@@ -109,9 +133,22 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
     onRefreshData();
   };
 
-  const handleRejectSubmit = (e: React.FormEvent) => {
+  const handleRejectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rejectingTxId) return;
+    try {
+      await api.reviewTransaction(rejectingTxId, {
+        status: "rejected",
+        notes: rejectionNotes.trim() || "Payment rejected by finance."
+      });
+      setRejectingTxId(null);
+      setRejectionNotes("");
+      showToast("Tá»« chá»‘i giao dá»‹ch thÃ nh cÃ´ng.");
+      onRefreshData();
+    } catch (err: any) {
+      showToast(err.message || "KhÃ´ng thá»ƒ tá»« chá»‘i giao dá»‹ch.");
+    }
+    return;
 
     const freshStore = AppStore.get();
     const targetTx = freshStore.transactions.find(t => t.id === rejectingTxId);
@@ -140,7 +177,16 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
 
   // Calculations for dashboard
   const approvedTxList = store.transactions.filter(t => t.status === "approved");
-  const totalRevenue = approvedTxList.reduce((acc, curr) => acc + curr.amount, 0);
+  const approvedCoursePurchases = approvedTxList.filter(t => !t.notes?.startsWith("tuition_fee_pay:"));
+  const totalCourseRevenue = approvedCoursePurchases.reduce((acc, curr) => acc + curr.amount, 0);
+  const totalTuitionPaid = store.tuitionFees.reduce((acc, fee) => acc + (fee.paidAmount || 0), 0);
+  const totalRevenue = totalCourseRevenue + totalTuitionPaid;
+  const totalSalaryExpense = teacherSalaries.reduce((sum, salary) => sum + salary.totalSalary, 0);
+  const outstandingLiabilities = store.tuitionFees.reduce((sum, fee) => sum + Math.max(0, fee.amount - (fee.paidAmount || 0)), 0);
+  const totalBilled = store.tuitionFees.reduce((sum, fee) => sum + fee.amount, 0);
+  const paidInvoiceCount = store.tuitionFees.filter(fee => fee.status === "paid").length;
+  const unpaidInvoiceCount = store.tuitionFees.filter(fee => fee.status !== "paid").length;
+  const debtRecoveryRate = totalBilled > 0 ? Math.round((totalTuitionPaid / totalBilled) * 100) : 0;
   const pendingCount = store.transactions.filter(t => t.status === "pending").length;
   
   // Courses with active revenue
@@ -266,6 +312,66 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
           <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-400/20 text-indigo-400 rounded-xl flex items-center justify-center">
             <CheckCircle className="h-6 w-6" />
           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-bold text-white">Income vs Expense & Liabilities</h3>
+              <p className="text-xs text-white/45">Tuition billed/collected, course revenue, payroll expense, and open debt.</p>
+            </div>
+            <span className="text-[10px] uppercase tracking-widest text-emerald-300 font-mono">Recovery {debtRecoveryRate}%</span>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-black/20 rounded-xl border border-white/5 p-3">
+              <span className="text-[10px] text-white/40 uppercase font-mono">Collected</span>
+              <strong className="block text-emerald-300 mt-1">{formatVND(totalTuitionPaid)}</strong>
+            </div>
+            <div className="bg-black/20 rounded-xl border border-white/5 p-3">
+              <span className="text-[10px] text-white/40 uppercase font-mono">Course sales</span>
+              <strong className="block text-sky-300 mt-1">{formatVND(totalCourseRevenue)}</strong>
+            </div>
+            <div className="bg-black/20 rounded-xl border border-white/5 p-3">
+              <span className="text-[10px] text-white/40 uppercase font-mono">Payroll expense</span>
+              <strong className="block text-rose-300 mt-1">{formatVND(totalSalaryExpense)}</strong>
+            </div>
+            <div className="bg-black/20 rounded-xl border border-white/5 p-3">
+              <span className="text-[10px] text-white/40 uppercase font-mono">Open debt</span>
+              <strong className="block text-amber-300 mt-1">{formatVND(outstandingLiabilities)}</strong>
+            </div>
+          </div>
+          <svg viewBox="0 0 520 118" className="w-full h-32 overflow-visible" role="img" aria-label="Billed versus collected chart">
+            <line x1="20" y1="24" x2="500" y2="24" stroke="rgba(255,255,255,.08)" />
+            <line x1="20" y1="72" x2="500" y2="72" stroke="rgba(255,255,255,.08)" />
+            <text x="20" y="18" fill="rgba(255,255,255,.55)" fontSize="11">Billed</text>
+            <rect x="92" y="8" width="400" height="22" rx="8" fill="rgba(148,163,184,.18)" />
+            <rect x="92" y="8" width={totalBilled > 0 ? 400 : 0} height="22" rx="8" fill="rgba(56,189,248,.75)" />
+            <text x="20" y="66" fill="rgba(255,255,255,.55)" fontSize="11">Collected</text>
+            <rect x="92" y="56" width="400" height="22" rx="8" fill="rgba(148,163,184,.18)" />
+            <rect x="92" y="56" width={totalBilled > 0 ? Math.min(400, Math.round((totalTuitionPaid / totalBilled) * 400)) : 0} height="22" rx="8" fill="rgba(16,185,129,.82)" />
+            <text x="92" y="104" fill="rgba(255,255,255,.4)" fontSize="10">{formatVND(totalBilled)} billed</text>
+            <text x="360" y="104" fill="rgba(255,255,255,.4)" fontSize="10">{formatVND(totalTuitionPaid)} collected</text>
+          </svg>
+        </div>
+
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-5 space-y-4">
+          <h3 className="text-sm font-bold text-white">Invoice Health</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-4">
+              <span className="text-[10px] text-emerald-200 uppercase font-mono">Paid</span>
+              <strong className="block text-2xl text-emerald-300 mt-1">{paidInvoiceCount}</strong>
+            </div>
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
+              <span className="text-[10px] text-amber-200 uppercase font-mono">Unpaid</span>
+              <strong className="block text-2xl text-amber-300 mt-1">{unpaidInvoiceCount}</strong>
+            </div>
+          </div>
+          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+            <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${debtRecoveryRate}%` }} />
+          </div>
+          <p className="text-xs text-white/45">Debt recovery is based on paid tuition amount divided by billed tuition amount.</p>
         </div>
       </div>
 
@@ -471,7 +577,7 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
 
           {/* Rejecting Transaction Modal dialog box */}
           {rejectingTxId && (
-            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
               <div className="bg-slate-900 border border-white/10 w-full max-w-md rounded-2xl p-6 space-y-4 shadow-2xl">
                 <div className="flex justify-between items-center pb-2 border-b border-white/5">
                   <h4 className="text-sm font-bold text-red-400 font-display">Từ chối giao dịch học phí</h4>
@@ -564,6 +670,40 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
                   <tr>
                     <td colSpan={7} className="text-center py-16 text-white/40">
                       Chưa ghi nhận thông tin giảng viên nào trong hệ thống.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-white/5">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead>
+                <tr className="bg-black/20 border-b border-white/10 text-white/50 uppercase font-mono tracking-wider font-bold">
+                  <th className="p-4">Teacher</th>
+                  <th className="p-4">Course</th>
+                  <th className="p-4 text-center">Active enrollments</th>
+                  <th className="p-4 text-right">Base salary</th>
+                  <th className="p-4 text-right">15% commission</th>
+                  <th className="p-4 text-right text-emerald-400">Course total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {teacherSalaries.flatMap(ts => ts.courseBreakdown.map(item => (
+                  <tr key={`${ts.teacher.id}-${item.course.id}`} className="hover:bg-white/5 transition">
+                    <td className="p-4 font-bold text-white">{ts.teacher.name}</td>
+                    <td className="p-4 text-white/75">{item.course.title}</td>
+                    <td className="p-4 text-center font-mono text-sky-300">{item.studentsCount}</td>
+                    <td className="p-4 text-right font-mono text-white/65">{formatVND(item.baseSalary)}</td>
+                    <td className="p-4 text-right font-mono text-white/65">{formatVND(item.commission)}</td>
+                    <td className="p-4 text-right font-mono font-bold text-emerald-300">{formatVND(item.total)}</td>
+                  </tr>
+                )))}
+                {teacherSalaries.every(ts => ts.courseBreakdown.length === 0) && (
+                  <tr>
+                    <td colSpan={6} className="text-center py-10 text-white/40">
+                      No assigned teacher courses to break down.
                     </td>
                   </tr>
                 )}

@@ -857,7 +857,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
 
       {/* USER REGISTRATION POPUP MODAL */}
       {showAddUserModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-sm shadow-2xl relative animate-in zoom-in-95 duration-150">
             <button 
               onClick={() => setShowAddUserModal(false)}
@@ -944,7 +944,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
 
       {/* REJECT MODAL CHAT BOX */}
       {rejectingCourseId && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-150">
             <button 
               onClick={() => setRejectingCourseId(null)}
@@ -991,7 +991,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
 
       {/* IMPORT MULTIPLE USERS REGISTRY CSV */}
       {showImportModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative">
             <button 
               onClick={() => { setShowImportModal(false); setImportMessage(null); }}
