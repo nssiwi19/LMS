@@ -37,6 +37,8 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
   const [rejectingTxId, setRejectingTxId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"transactions" | "salaries" | "tuition">("transactions");
+  const [salarySearch, setSalarySearch] = useState("");
+  const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
 
   // Dynamic salary computation for teachers
   const teachers = store ? store.users.filter(u => u.role === "teacher") : [];
@@ -510,8 +512,18 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
                           <div className="font-bold text-white">{studentUser?.name || "Không xác định"}</div>
                           <div className="text-[10px] text-white/40 font-mono">{studentUser?.email}</div>
                         </td>
-                        <td className="p-4">
-                          <div className="font-semibold text-white/80 max-w-xs truncate">{courseObj?.title || "Không xác định"}</div>
+                        <td className="p-4 font-sans text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-white/80 max-w-[150px] truncate">{courseObj?.title || "Không xác định"}</span>
+                            {courseObj && (
+                              <button
+                                onClick={() => setCourseDetailId(courseObj.id)}
+                                className="px-1.5 py-0.5 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-white rounded text-[9px] font-bold transition flex items-center gap-0.5 cursor-pointer"
+                              >
+                                Xem 👁️
+                              </button>
+                            )}
+                          </div>
                           <div className="text-[10px] text-white/40 font-mono uppercase">{courseObj?.category}</div>
                         </td>
                         <td className="p-4 font-semibold text-emerald-400 font-mono text-sm">
@@ -631,6 +643,17 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
             <p className="text-xs text-white/50">Lương tự động dựa trên số khóa học phụ trách (3.000.000 VND/khóa) và hoa hồng tuyển sinh (15% học phí của khóa).</p>
           </div>
 
+          {/* Salaries search bar */}
+          <div className="flex gap-3 bg-white/3 border border-white/5 p-3 rounded-xl text-xs max-w-md">
+            <input
+              type="text"
+              placeholder="Tìm kiếm giảng viên theo tên hoặc email..."
+              value={salarySearch}
+              onChange={(e) => setSalarySearch(e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 font-sans"
+            />
+          </div>
+
           <div className="overflow-x-auto rounded-xl border border-white/5">
             <table className="w-full text-xs text-left border-collapse">
               <thead>
@@ -645,7 +668,11 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {teacherSalaries.map(ts => (
+                {teacherSalaries.filter(ts => {
+                  return !salarySearch ||
+                    ts.teacher.name.toLowerCase().includes(salarySearch.toLowerCase()) ||
+                    ts.teacher.email.toLowerCase().includes(salarySearch.toLowerCase());
+                }).map(ts => (
                   <tr key={ts.teacher.id} className="hover:bg-white/5 transition">
                     <td className="p-4 font-bold text-white">
                       <div>{ts.teacher.name}</div>
@@ -738,6 +765,83 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
           </p>
         </div>
       </div>
+
+      {/* Premium glassmorphic Course Details consultation modal */}
+      {courseDetailId && (() => {
+        const course = store.courses.find(c => c.id === courseDetailId);
+        if (!course) return null;
+        const teacher = store.users.find(u => u.id === course.teacherId) || { name: "Chưa phân công" };
+        const lessons = store.lessons.filter(l => l.courseId === course.id).sort((a,b) => a.order - b.order);
+        const quizzes = store.quizzes.filter(q => q.courseId === course.id);
+        const assignments = store.assignments.filter(a => a.courseId === course.id);
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
+              <div className="space-y-5">
+                <div className="flex justify-between items-start border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">
+                      {course.category}
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-2">{course.title}</h3>
+                    <p className="text-xs text-white/40 mt-1">Giảng viên: <strong className="text-indigo-200">{teacher.name}</strong></p>
+                  </div>
+                  <button 
+                    onClick={() => setCourseDetailId(null)}
+                    className="p-1 rounded-lg hover:bg-white/10 text-white/50 cursor-pointer"
+                  >
+                    <XCircle className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-white/2 p-4 rounded-xl border border-white/5 font-sans">
+                  <div>
+                    <span className="text-white/45 block">Học phí:</span>
+                    <strong className="text-sm font-mono text-emerald-400 font-black">{course.price ? formatVND(course.price) : "Miễn phí"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-white/45 block">Cấp trình độ:</span>
+                    <strong className="text-indigo-300 capitalize">{course.level || "Cơ bản"}</strong>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] text-white/45 font-bold uppercase block">Mô tả khóa đào tạo:</span>
+                  <p className="text-xs text-white/70 leading-relaxed bg-black/15 p-3 rounded-lg border border-white/5 font-sans">{course.description}</p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <span className="text-[11px] text-white/45 font-bold uppercase flex items-center gap-1 font-sans">
+                    <FileText className="h-3.5 w-3.5" /> Khung chương trình ({lessons.length} bài học, {quizzes.length} bài thi, {assignments.length} tự luận)
+                  </span>
+                  
+                  {lessons.length > 0 ? (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 font-sans">
+                      {lessons.map((lesson, idx) => (
+                        <div key={lesson.id} className="p-2.5 bg-white/3 border border-white/5 rounded-lg flex justify-between items-center text-xs">
+                          <span className="font-semibold text-white/90">Bài {idx + 1}: {lesson.title}</span>
+                          <span className="text-[10px] text-white/40 font-mono">{lesson.duration || "15 phút"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/35 italic font-sans">Chưa tải giáo trình bài giảng cho lớp học này.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/10 mt-5 flex justify-end">
+                <button
+                  onClick={() => setCourseDetailId(null)}
+                  className="px-4 py-2 bg-white text-indigo-950 font-bold rounded-xl hover:bg-slate-100 transition text-xs cursor-pointer"
+                >
+                  Đóng thông tin
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

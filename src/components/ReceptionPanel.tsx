@@ -45,6 +45,7 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
 
   // Search states
   const [searchQuery, setSearchQuery] = useState("");
+  const [courseSearch, setCourseSearch] = useState("");
 
   // Toast notifications
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -364,13 +365,33 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
         {/* Tab 3: Xem danh sách khóa học đang mở để tư vấn */}
         {activeTab === "courses" && (
           <div className="space-y-6">
-            <div className="border-b border-white/5 pb-4">
-              <h4 className="text-base font-display font-semibold text-white">Chương trình Danh mục Khóa đào tạo</h4>
-              <p className="text-xs text-white/50">Cung cấp các thông tin thiết yếu bao gồm: giảng viên, học bổng học phí để trả lời khách hàng/học viên khi tư vấn.</p>
+            <div className="flex justify-between items-center border-b border-white/5 pb-4">
+              <div>
+                <h4 className="text-base font-display font-semibold text-white">Chương trình Danh mục Khóa đào tạo</h4>
+                <p className="text-xs text-white/50">Cung cấp các thông tin thiết yếu bao gồm: giảng viên, học bổng học phí để trả lời khách hàng/học viên khi tư vấn.</p>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {store.courses.filter(c => c.status === "published").map(course => {
+            {/* Course search bar */}
+            <div className="flex gap-3 bg-white/3 border border-white/5 p-3 rounded-xl text-xs max-w-md">
+              <input
+                type="text"
+                placeholder="Tìm kiếm khóa học theo tên hoặc danh mục..."
+                value={courseSearch}
+                onChange={(e) => setCourseSearch(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 font-sans"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-sans">
+              {store.courses.filter(c => {
+                const matchesStatus = c.status === "published";
+                const matchesSearch = !courseSearch ||
+                  c.title.toLowerCase().includes(courseSearch.toLowerCase()) ||
+                  c.category.toLowerCase().includes(courseSearch.toLowerCase()) ||
+                  c.description.toLowerCase().includes(courseSearch.toLowerCase());
+                return matchesStatus && matchesSearch;
+              }).map(course => {
                 const enrollmentCount = store.enrollments.filter(e => e.courseId === course.id).length;
                 const teacherObj = store.users.find(u => u.id === course.teacherId);
                 const formatFee = (p?: number) => p ? new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(p) : "Miễn phí";
@@ -406,6 +427,17 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
                   </div>
                 );
               })}
+
+              {store.courses.filter(c => {
+                const matchesStatus = c.status === "published";
+                const matchesSearch = !courseSearch ||
+                  c.title.toLowerCase().includes(courseSearch.toLowerCase()) ||
+                  c.category.toLowerCase().includes(courseSearch.toLowerCase()) ||
+                  c.description.toLowerCase().includes(courseSearch.toLowerCase());
+                return matchesStatus && matchesSearch;
+              }).length === 0 && (
+                <div className="col-span-full py-12 text-center text-white/30 italic">Không tìm thấy khóa học nào phù hợp.</div>
+              )}
             </div>
           </div>
         )}

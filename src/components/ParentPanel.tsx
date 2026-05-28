@@ -31,12 +31,24 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
   
   // States
   const [activeTab, setActiveTab] = useState<"overview" | "grades" | "attendance" | "warnings" | "financial" | "notifications">("overview");
+  const [gradesSearch, setGradesSearch] = useState("");
+  const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
 
   // Parents are linked to exactly one student via linkedStudentId
   const childId = currentUser.role === "student" ? currentUser.id : (currentUser.linkedStudentId || "user_student");
   const childUser = store.users.find(u => u.id === childId);
   const childProfile = store.studentProfiles.find(p => p.userId === childId);
   const childProgram = store.programs.find(p => p.id === childProfile?.programId);
+
+  // Attendance metrics
+  const courseEnrollments = store.enrollments.filter(e => e.studentId === childId && e.status !== "cancelled");
+
+  // Filtered grades enrollment
+  const filteredEnrollments = courseEnrollments.filter(enroll => {
+    if (!gradesSearch.trim()) return true;
+    const course = store.courses.find(c => c.id === enroll.courseId);
+    return course?.title?.toLowerCase().includes(gradesSearch.toLowerCase());
+  });
 
   if (!childProfile || !childUser) {
     return (
@@ -48,8 +60,6 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
     );
   }
 
-  // Attendance metrics
-  const courseEnrollments = store.enrollments.filter(e => e.studentId === childId && e.status !== "cancelled");
   // Calculate average attendance for child in courses
   const childRecords = store.attendanceRecords.filter(r => r.studentId === childId);
   const totalSessionsCount = childRecords.length;
@@ -231,6 +241,18 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
                 <p className="text-[10px] text-white/40 mt-0.5">Tổng kết điểm thi đánh giá thường kì từ các Giáo sư phụ trách bộ môn.</p>
               </div>
 
+              {/* Grades Search Input */}
+              <div className="relative max-w-md">
+                <input
+                  type="text"
+                  placeholder="Tìm theo tên môn học..."
+                  value={gradesSearch}
+                  onChange={(e) => setGradesSearch(e.target.value)}
+                  className="w-full bg-black/25 text-white border border-white/10 rounded-xl py-2 px-3 pl-8 text-xs outline-none focus:border-indigo-400 placeholder-white/20"
+                />
+                <span className="absolute left-2.5 top-2 px-1 text-white/40 text-xs">🔍</span>
+              </div>
+
               <div className="space-y-4">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs text-white/75 divide-y divide-white/5">
@@ -243,7 +265,7 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {courseEnrollments.map(enroll => {
+                      {filteredEnrollments.map(enroll => {
                         const course = store.courses.find(c => c.id === enroll.courseId);
                         const teacher = store.users.find(u => u.id === course?.teacherId);
 
@@ -253,7 +275,19 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
 
                         return (
                           <tr key={enroll.id}>
-                            <td className="py-3 font-bold text-white">{course?.title || "Không xác định"}</td>
+                            <td className="py-3 font-bold text-white">
+                              <div className="flex items-center gap-2">
+                                <span>{course?.title || "Không xác định"}</span>
+                                {course && (
+                                  <button
+                                    onClick={() => setCourseDetailId(course.id)}
+                                    className="text-[10px] bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 py-0.5 px-1.5 rounded flex items-center gap-0.5 transition cursor-pointer font-sans"
+                                  >
+                                    Xem 👁️
+                                  </button>
+                                )}
+                              </div>
+                            </td>
                             <td className="py-3 text-white/45">{teacher?.name || "Không xác định"}</td>
                             <td className="py-3 font-mono">Học kỳ {course?.category || "Lớp SIS"}</td>
                             <td className="py-3 text-right font-mono text-emerald-400 font-bold">
@@ -263,9 +297,9 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
                         );
                       })}
 
-                      {courseEnrollments.length === 0 && (
+                      {filteredEnrollments.length === 0 && (
                         <tr>
-                          <td colSpan={4} className="py-8 text-center text-white/30">Chưa ghi nhận khóa học đăng ký chính thức nào.</td>
+                          <td colSpan={4} className="py-8 text-center text-white/30">Chưa ghi nhận khóa học đăng ký chính thức nào hoặc không khớp kết quả tìm kiếm.</td>
                         </tr>
                       )}
                     </tbody>
@@ -401,11 +435,88 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
 
             </div>
           )}
-
         </div>
-
       </div>
 
+      {/* Premium glassmorphic Course Details consultation modal */}
+      {courseDetailId && (() => {
+        const course = store.courses.find(c => c.id === courseDetailId);
+        if (!course) return null;
+        const teacher = store.users.find(u => u.id === course.teacherId) || { name: "Chưa phân công" };
+        const lessons = store.lessons.filter(l => l.courseId === course.id).sort((a,b) => a.order - b.order);
+        const quizzes = store.quizzes.filter(q => q.courseId === course.id);
+        const assignments = store.assignments.filter(a => a.courseId === course.id);
+        const formatVND = (num: number) => {
+          return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+        };
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
+              <div className="space-y-5">
+                <div className="flex justify-between items-start border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">
+                      {course.category}
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-2">{course.title}</h3>
+                    <p className="text-xs text-white/40 mt-1">Giảng viên: <strong className="text-indigo-200">{teacher.name}</strong></p>
+                  </div>
+                  <button 
+                    onClick={() => setCourseDetailId(null)}
+                    className="p-1 rounded-lg hover:bg-white/10 text-white/50 cursor-pointer font-sans"
+                  >
+                    <span className="text-lg font-bold">✕</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-white/2 p-4 rounded-xl border border-white/5 font-sans">
+                  <div>
+                    <span className="text-white/45 block">Học phí:</span>
+                    <strong className="text-sm font-mono text-emerald-400 font-black">{course.price ? formatVND(course.price) : "Miễn phí"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-white/45 block">Cấp trình độ:</span>
+                    <strong className="text-indigo-300 capitalize">{course.level || "Cơ bản"}</strong>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] text-white/45 font-bold uppercase block">Mô tả khóa đào tạo:</span>
+                  <p className="text-xs text-white/70 leading-relaxed bg-black/15 p-3 rounded-lg border border-white/5 font-sans">{course.description}</p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <span className="text-[11px] text-white/45 font-bold uppercase flex items-center gap-1 font-sans">
+                    Khung chương trình ({lessons.length} bài học, {quizzes.length} bài thi, {assignments.length} tự luận)
+                  </span>
+                  
+                  {lessons.length > 0 ? (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 font-sans">
+                      {lessons.map((lesson, idx) => (
+                        <div key={lesson.id} className="p-2.5 bg-white/3 border border-white/5 rounded-lg flex justify-between items-center text-xs">
+                          <span className="font-semibold text-white/90">Bài {idx + 1}: {lesson.title}</span>
+                          <span className="text-[10px] text-white/40 font-mono">{lesson.duration || "15 phút"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/35 italic font-sans">Chưa tải giáo trình bài giảng cho lớp học này.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/10 mt-5 flex justify-end">
+                <button
+                  onClick={() => setCourseDetailId(null)}
+                  className="px-4 py-2 bg-white text-indigo-950 font-bold rounded-xl hover:bg-slate-100 transition text-xs cursor-pointer font-sans"
+                >
+                  Đóng thông tin
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

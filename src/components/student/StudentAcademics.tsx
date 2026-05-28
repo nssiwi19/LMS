@@ -83,6 +83,12 @@ export default function StudentAcademics(props: ComponentProps) {
     handleMarkNotificationRead
   } = props;
 
+  // Local search filter states
+  const [courseSearch, setCourseSearch] = useState("");
+  const [txSearch, setTxSearch] = useState("");
+  const [transcriptSearch, setTranscriptSearch] = useState("");
+  const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
+
   // Dynamic GPA and Credits calculation
   const enrollmentsByCourse: Record<string, any[]> = {};
   myEnrollments.forEach((enroll: any) => {
@@ -197,6 +203,33 @@ export default function StudentAcademics(props: ComponentProps) {
   const calculatedGpa = gradedCourses.length > 0
     ? gradedCourses.reduce((sum, c) => sum + (c.scale4Val * c.credits), 0) / gradedCourses.reduce((sum, c) => sum + c.credits, 0)
     : 0.0;
+
+  // Filtered datasets for SIS tabs
+  const filteredMyEnrollments = myEnrollments.filter((enroll: any) => {
+    if (!courseSearch.trim()) return true;
+    const course = store.courses.find((c: any) => c.id === enroll.courseId);
+    return course?.title?.toLowerCase().includes(courseSearch.toLowerCase());
+  });
+
+  const filteredTransactions = (store.transactions || [])
+    .filter((t: any) => t.studentId === currentUser.id)
+    .filter((tx: any) => {
+      if (!txSearch.trim()) return true;
+      const course = store.courses.find((c: any) => c.id === tx.courseId);
+      const courseTitle = course?.title || "";
+      const txNotes = tx.notes || "";
+      const searchLower = txSearch.toLowerCase();
+      return (
+        courseTitle.toLowerCase().includes(searchLower) ||
+        tx.id.toLowerCase().includes(searchLower) ||
+        txNotes.toLowerCase().includes(searchLower)
+      );
+    });
+
+  const filteredUniqueCourseGrades = uniqueCourseGrades.filter((g: any) => {
+    if (!transcriptSearch.trim()) return true;
+    return g.course?.title?.toLowerCase().includes(transcriptSearch.toLowerCase());
+  });
 
   const unresolvedWarnings = (store.academicWarnings || []).filter(
     (w: any) => w.studentId === currentUser.id && !w.isResolved
@@ -522,7 +555,22 @@ export default function StudentAcademics(props: ComponentProps) {
 
             {/* Curriculum checklist details */}
             <div className="bg-white/3 border border-white/5 rounded-2xl p-5 space-y-3">
-              <span className="text-xs font-bold text-white uppercase tracking-wider block border-b border-white/5 pb-2">Danh sách lớp đào tạo đang học</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-2">
+                <span className="text-xs font-bold text-white uppercase tracking-wider block">Danh sách lớp đào tạo đang học</span>
+                
+                {/* Course Search Input */}
+                <div className="relative max-w-xs w-full">
+                  <input
+                    type="text"
+                    placeholder="Tìm lớp đang học..."
+                    value={courseSearch}
+                    onChange={(e) => setCourseSearch(e.target.value)}
+                    className="w-full bg-black/25 text-white border border-white/10 rounded-xl py-1.5 px-3 pl-8 text-xs outline-none focus:border-indigo-400 placeholder-white/20"
+                  />
+                  <span className="absolute left-2.5 top-1.5 text-white/40 text-xs">🔍</span>
+                </div>
+              </div>
+
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-white/5 text-[10px] uppercase text-white/45">
@@ -533,11 +581,23 @@ export default function StudentAcademics(props: ComponentProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/2 text-xs text-white/85">
-                  {myEnrollments.map(enroll => {
+                  {filteredMyEnrollments.map(enroll => {
                     const course = store.courses.find(c => c.id === enroll.courseId);
                     return (
                       <tr key={enroll.id}>
-                        <td className="py-2.5 font-bold text-white">{course ? course.title : "Không xác định"}</td>
+                        <td className="py-2.5 font-bold text-white">
+                          <div className="flex items-center gap-2">
+                            <span>{course ? course.title : "Không xác định"}</span>
+                            {course && (
+                              <button
+                                onClick={() => setCourseDetailId(course.id)}
+                                className="text-[10px] bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 py-0.5 px-1.5 rounded flex items-center gap-0.5 transition cursor-pointer font-sans"
+                              >
+                                Xem 👁️
+                              </button>
+                            )}
+                          </div>
+                        </td>
                         <td className="py-2.5 text-center font-mono font-bold text-indigo-300">3 Tín</td>
                         <td className="py-2.5 text-white/50">{course ? course.category : "Không xác định"}</td>
                         <td className="py-2.5 text-right font-bold text-emerald-400">
@@ -546,6 +606,12 @@ export default function StudentAcademics(props: ComponentProps) {
                       </tr>
                     );
                   })}
+
+                  {filteredMyEnrollments.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-white/30 italic">Chưa ghi nhận khóa học nào đang tiến hành hoặc không khớp từ khóa tìm kiếm.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -732,13 +798,27 @@ export default function StudentAcademics(props: ComponentProps) {
 
               {/* Bảng Lịch sử giao dịch đóng tiền (Double check) */}
               <div className="space-y-4 pt-6 border-t border-white/10">
-                <div className="space-y-1">
-                  <h5 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                    <FileText className="h-4 w-4 text-indigo-400" /> Nhật ký nộp học phí trực tuyến (Double check)
-                  </h5>
-                  <p className="text-[11px] text-white/50 leading-relaxed font-sans">
-                    Danh sách các giao dịch đóng tiền bạn đã gửi lên hệ thống. Giao dịch ở trạng thái "Chờ kế toán duyệt" đang được phòng tài vụ đối soát ngân hàng tự động.
-                  </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <h5 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                      <FileText className="h-4 w-4 text-indigo-400" /> Nhật ký nộp học phí trực tuyến (Double check)
+                    </h5>
+                    <p className="text-[11px] text-white/50 leading-relaxed font-sans">
+                      Danh sách các giao dịch đóng tiền bạn đã gửi lên hệ thống. Giao dịch ở trạng thái "Chờ kế toán duyệt" đang được phòng tài vụ đối soát ngân hàng tự động.
+                    </p>
+                  </div>
+
+                  {/* Transaction Search Input */}
+                  <div className="relative max-w-xs w-full">
+                    <input
+                      type="text"
+                      placeholder="Tìm mã GD, môn học..."
+                      value={txSearch}
+                      onChange={(e) => setTxSearch(e.target.value)}
+                      className="w-full bg-black/25 text-white border border-white/10 rounded-xl py-1.5 px-3 pl-8 text-xs outline-none focus:border-indigo-400 placeholder-white/20"
+                    />
+                    <span className="absolute left-2.5 top-1.5 text-white/40 text-xs">🔍</span>
+                  </div>
                 </div>
                 
                 <div className="overflow-x-auto rounded-xl border border-white/5 bg-black/15">
@@ -754,13 +834,23 @@ export default function StudentAcademics(props: ComponentProps) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5 text-white/85">
-                      {(store.transactions || []).filter(t => t.studentId === currentUser.id).map(tx => {
+                      {filteredTransactions.map(tx => {
                         const course = store.courses.find(c => c.id === tx.courseId);
                         return (
                           <tr key={tx.id} className="hover:bg-white/3 transition duration-150">
                             <td className="p-3 font-mono font-bold text-cyan-400">{tx.id}</td>
                             <td className="p-3 font-medium text-white">
-                              {tx.notes && tx.notes.startsWith("tuition_fee_pay:") ? "Học phí học kỳ" : (course ? course.title : "Học phí")}
+                              <div className="flex items-center gap-2">
+                                <span>{tx.notes && tx.notes.startsWith("tuition_fee_pay:") ? "Học phí học kỳ" : (course ? course.title : "Học phí")}</span>
+                                {course && (
+                                  <button
+                                    onClick={() => setCourseDetailId(course.id)}
+                                    className="text-[10px] bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 py-0.5 px-1.5 rounded flex items-center gap-0.5 transition cursor-pointer font-sans"
+                                  >
+                                    Xem 👁️
+                                  </button>
+                                )}
+                              </div>
                             </td>
                             <td className="p-3 text-right font-mono font-bold text-emerald-400">{tx.amount.toLocaleString()} VND</td>
                             <td className="p-3 text-white/60">{tx.paymentMethod}</td>
@@ -779,9 +869,9 @@ export default function StudentAcademics(props: ComponentProps) {
                           </tr>
                         );
                       })}
-                      {(store.transactions || []).filter(t => t.studentId === currentUser.id).length === 0 && (
+                      {filteredTransactions.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="text-center py-8 text-white/30 italic">Bạn chưa thực hiện giao dịch nộp học phí trực tuyến nào trên hệ thống.</td>
+                          <td colSpan={6} className="text-center py-8 text-white/30 italic">Không tìm thấy giao dịch nào khớp với kết quả tìm kiếm.</td>
                         </tr>
                       )}
                     </tbody>
@@ -812,9 +902,20 @@ export default function StudentAcademics(props: ComponentProps) {
 
             {/* Transcript Table and cumulative scores calculations */}
             <div className="bg-slate-900 border border-white/10 rounded-3xl p-5 space-y-4">
-              <div className="flex justify-between items-center border-b border-white/5 pb-2 text-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-2 text-xs">
                 <span className="font-mono text-cyan-400 font-bold">MÃ PROFILE: {myProfile.studentCode}</span>
-                <span className="font-mono text-[11px] text-white/40">Thống kê điểm học sinh</span>
+                
+                {/* Transcript Search Input */}
+                <div className="relative max-w-xs w-full">
+                  <input
+                    type="text"
+                    placeholder="Tìm theo môn học..."
+                    value={transcriptSearch}
+                    onChange={(e) => setTranscriptSearch(e.target.value)}
+                    className="w-full bg-black/25 text-white border border-white/10 rounded-xl py-1.5 px-3 pl-8 text-xs outline-none focus:border-indigo-400 placeholder-white/20"
+                  />
+                  <span className="absolute left-2.5 top-1.5 text-white/40 text-xs">🔍</span>
+                </div>
               </div>
 
               <div className="overflow-x-auto text-xs">
@@ -831,9 +932,19 @@ export default function StudentAcademics(props: ComponentProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-xs text-white/85">
-                    {uniqueCourseGrades.map(g => (
+                    {filteredUniqueCourseGrades.map(g => (
                       <tr key={g.courseId}>
-                        <td className="py-3 font-bold text-white">{g.course.title}</td>
+                        <td className="py-3 font-bold text-white">
+                          <div className="flex items-center gap-2">
+                            <span>{g.course.title}</span>
+                            <button
+                              onClick={() => setCourseDetailId(g.courseId)}
+                              className="text-[10px] bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 py-0.5 px-1.5 rounded flex items-center gap-0.5 transition cursor-pointer font-sans"
+                            >
+                              Xem 👁️
+                            </button>
+                          </div>
+                        </td>
                         <td className="py-3 text-center font-mono font-bold text-indigo-300">{g.credits} Tín</td>
                         <td className="py-3 text-center font-mono font-bold text-sky-400">
                           {g.midtermGrade !== null ? g.midtermGrade : "-"}
@@ -855,6 +966,12 @@ export default function StudentAcademics(props: ComponentProps) {
                         </td>
                       </tr>
                     ))}
+
+                    {filteredUniqueCourseGrades.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center text-white/30 italic">Không tìm thấy kết quả phù hợp với từ khóa tìm kiếm.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -966,6 +1083,85 @@ export default function StudentAcademics(props: ComponentProps) {
           </div>
         </div>
       )}
+      {/* Premium glassmorphic Course Details consultation modal */}
+      {courseDetailId && (() => {
+        const course = store.courses.find((c: any) => c.id === courseDetailId);
+        if (!course) return null;
+        const teacher = store.users.find((u: any) => u.id === course.teacherId) || { name: "Chưa phân công" };
+        const lessons = store.lessons.filter((l: any) => l.courseId === course.id).sort((a: any, b: any) => a.order - b.order);
+        const quizzes = store.quizzes.filter((q: any) => q.courseId === course.id);
+        const assignments = store.assignments.filter((a: any) => a.courseId === course.id);
+        const formatVND = (num: number) => {
+          return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+        };
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto text-left">
+            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
+              <div className="space-y-5">
+                <div className="flex justify-between items-start border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">
+                      {course.category}
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-2">{course.title}</h3>
+                    <p className="text-xs text-white/40 mt-1">Giảng viên: <strong className="text-indigo-200">{teacher.name}</strong></p>
+                  </div>
+                  <button 
+                    onClick={() => setCourseDetailId(null)}
+                    className="p-1 rounded-lg hover:bg-white/10 text-white/50 cursor-pointer font-sans"
+                  >
+                    <span className="text-lg font-bold">✕</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-white/2 p-4 rounded-xl border border-white/5 font-sans">
+                  <div>
+                    <span className="text-white/45 block">Học phí:</span>
+                    <strong className="text-sm font-mono text-emerald-400 font-black">{course.price ? formatVND(course.price) : "Miễn phí"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-white/45 block">Cấp trình độ:</span>
+                    <strong className="text-indigo-300 capitalize">{course.level || "Cơ bản"}</strong>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] text-white/45 font-bold uppercase block">Mô tả khóa đào tạo:</span>
+                  <p className="text-xs text-white/70 leading-relaxed bg-black/15 p-3 rounded-lg border border-white/5 font-sans">{course.description}</p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <span className="text-[11px] text-white/45 font-bold uppercase flex items-center gap-1 font-sans">
+                    Khung chương trình ({lessons.length} bài học, {quizzes.length} bài thi, {assignments.length} tự luận)
+                  </span>
+                  
+                  {lessons.length > 0 ? (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 font-sans">
+                      {lessons.map((lesson: any, idx: number) => (
+                        <div key={lesson.id} className="p-2.5 bg-white/3 border border-white/5 rounded-lg flex justify-between items-center text-xs">
+                          <span className="font-semibold text-white/90">Bài {idx + 1}: {lesson.title}</span>
+                          <span className="text-[10px] text-white/40 font-mono">{lesson.duration || "15 phút"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/35 italic font-sans">Chưa tải giáo trình bài giảng cho lớp học này.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/10 mt-5 flex justify-end">
+                <button
+                  onClick={() => setCourseDetailId(null)}
+                  className="px-4 py-2 bg-white text-indigo-950 font-bold rounded-xl hover:bg-slate-100 transition text-xs cursor-pointer font-sans"
+                >
+                  Đóng thông tin
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }
