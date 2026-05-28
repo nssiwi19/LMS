@@ -15,8 +15,7 @@ import {
   GraduationCap,
   Calendar,
   Clock,
-  ShieldAlert,
-  Save
+  ShieldAlert
 } from "lucide-react";
 import { 
   LMSDataStore, 
@@ -47,10 +46,6 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
   const [filterProg, setFilterProg] = useState("all");
   const [filterYear, setFilterYear] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-
-  // Selection for bulk action
-  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
-  const [bulkStatusToUpdate, setBulkStatusToUpdate] = useState("");
 
   // Target Student for View Modal
   const [detailedStudentId, setDetailedStudentId] = useState<string | null>(null);
@@ -94,53 +89,6 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
   });
 
   // Checkbox selectors
-  const handleToggleSelectOne = (userId: string) => {
-    if (selectedStudentIds.includes(userId)) {
-      setSelectedStudentIds(selectedStudentIds.filter(id => id !== userId));
-    } else {
-      setSelectedStudentIds([...selectedStudentIds, userId]);
-    }
-  };
-
-  const handleToggleSelectAll = () => {
-    if (selectedStudentIds.length === filteredStudents.length) {
-      setSelectedStudentIds([]);
-    } else {
-      setSelectedStudentIds(filteredStudents.map(st => st.userId));
-    }
-  };
-
-  // Bulk status change trigger
-  const handleBulkStatusSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedStudentIds.length === 0) {
-      triggerToast("Vui lòng tick chọn ít nhất một sinh viên để thao tác.");
-      return;
-    }
-    if (!bulkStatusToUpdate) {
-      triggerToast("Hãy chỉ định trạng thái muốn chuyển đổi.");
-      return;
-    }
-
-    const storeData = AppStore.get();
-    storeData.studentProfiles = storeData.studentProfiles.map(p => {
-      if (selectedStudentIds.includes(p.userId)) {
-        AppStore.log(currentUser.id, "bulk_update_status", p.studentCode, `Đổi trạng thái học tập sang: ${bulkStatusToUpdate}`);
-        return {
-          ...p,
-          status: bulkStatusToUpdate as any
-        };
-      }
-      return p;
-    });
-
-    AppStore.save(storeData);
-    setSelectedStudentIds([]);
-    setBulkStatusToUpdate("");
-    onRefreshData();
-    triggerToast(`Đã đồng loạt đổi trạng thái ${selectedStudentIds.length} sinh viên thành công.`);
-  };
-
   // CSV Export action
   const handleExportCSV = () => {
     let csvContent = "\ufeff"; // BOM for excel Vietnamese readability
@@ -326,14 +274,6 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-white/10 bg-white/2 text-[10.5px] uppercase tracking-wider text-white/50">
-                <th className="py-3 px-4 text-center w-12">
-                  <input
-                    type="checkbox"
-                    checked={filteredStudents.length > 0 && selectedStudentIds.length === filteredStudents.length}
-                    onChange={handleToggleSelectAll}
-                    className="rounded border-white/20 bg-black/25 h-3.5 w-3.5 text-indigo-500 cursor-pointer"
-                  />
-                </th>
                 <th className="py-3 px-3">Mã SV</th>
                 <th className="py-3 px-3">Học sinh Sinh viên</th>
                 <th className="py-3 px-3">Khoa chuyên môn</th>
@@ -346,7 +286,6 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
             </thead>
             <tbody className="divide-y divide-white/5 text-white/95">
               {filteredStudents.map(st => {
-                const isSelected = selectedStudentIds.includes(st.userId);
                 const dept = departments.find(d => d.id === st.departmentId);
                 const prog = programs.find(p => p.id === st.programId);
                 
@@ -359,14 +298,6 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
 
                 return (
                   <tr key={st.id} className="hover:bg-white/3 transition duration-150">
-                    <td className="py-3 px-4 text-center">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleToggleSelectOne(st.userId)}
-                        className="rounded border-white/20 bg-black/25 h-3.5 w-3.5 text-indigo-500 cursor-pointer"
-                      />
-                    </td>
                     <td className="py-3 px-3 font-mono font-bold text-cyan-400">{st.studentCode}</td>
                     <td className="py-3 px-3">
                       <div className="font-bold text-white text-xs">{st.name}</div>
@@ -397,43 +328,13 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
               })}
               {filteredStudents.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-white/30 text-xs">Không tìm thấy bản ghi sinh viên trùng khớp yêu cầu tra cứu.</td>
+                  <td colSpan={8} className="py-12 text-center text-white/30 text-xs">Không tìm thấy bản ghi sinh viên trùng khớp yêu cầu tra cứu.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
-
-      {/* Bulk actions manager footer */}
-      {selectedStudentIds.length > 0 && (
-        <div className="bg-indigo-950/40 border border-indigo-500/20 backdrop-blur-md rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-in duration-200">
-          <div className="text-xs text-white/80">
-            Đã tích chọn <span className="font-mono font-bold text-cyan-400 text-sm">{selectedStudentIds.length}</span> tài khoản học sinh sinh viên.
-          </div>
-          <form onSubmit={handleBulkStatusSubmit} className="flex items-center gap-2">
-            <select
-              value={bulkStatusToUpdate}
-              onChange={(e) => setBulkStatusToUpdate(e.target.value)}
-              required
-              className="px-2.5 py-1.5 text-xs bg-slate-900 text-white border border-white/15 rounded-xl focus:outline-none"
-            >
-              <option value="">-- Đổi trạng thái hàng loạt --</option>
-              <option value="active">Đang học</option>
-              <option value="on-leave">Bảo lưu</option>
-              <option value="suspended">Đình chỉ</option>
-              <option value="graduated">Tốt nghiệp</option>
-              <option value="withdrawn">Thôi học</option>
-            </select>
-            <button
-              type="submit"
-              className="px-4 py-1.5 bg-white text-indigo-950 text-xs font-bold rounded-xl hover:bg-slate-100 transition cursor-pointer flex items-center gap-1"
-            >
-              <Save className="h-3.5 w-3.5" /> Đồng ý cập nhật
-            </button>
-          </form>
-        </div>
-      )}
 
       {/* COMPREHENSIVE VIEW & ADVISOR PROFILE MODAL CONTAINER */}
       {detailedStudentId && currentDetailedProfile && (
@@ -647,7 +548,7 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
                   {/* Note input forms */}
                   <form onSubmit={handleAddAdvisorNoteSubmit} className="space-y-2 text-xs">
                     <div className="space-y-1">
-                      <label className="text-[10px] text-white/50 text-slate-300 font-bold">Phân hệ Tư vấn</label>
+                     <label className="text-[10px] text-slate-300 font-bold">Phân hệ Tư vấn</label>
                       <select
                         value={noteType}
                         onChange={(e) => setNoteType(e.target.value as any)}
