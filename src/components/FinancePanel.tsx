@@ -18,6 +18,7 @@ import { AppStore } from "../store";
 import { generateId } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
 import TuitionManager from "./TuitionManager";
+import { api } from "../api";
 
 interface FinancePanelProps {
   currentUser: User;
@@ -70,7 +71,20 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleApprove = (tx: Transaction) => {
+  const handleApprove = async (tx: Transaction) => {
+    if (tx.status === "pending") {
+      try {
+        await api.reviewTransaction(tx.id, {
+          status: "approved",
+          notes: "Payment matched and enrollment activated."
+        });
+        showToast("PhÃª duyá»‡t vÃ  kÃ­ch hoáº¡t quyá»n há»c thÃ nh cÃ´ng!");
+        onRefreshData();
+      } catch (err: any) {
+        showToast(err.message || "KhÃ´ng thá»ƒ phÃª duyá»‡t giao dá»‹ch.");
+      }
+      return;
+    }
     const freshStore = AppStore.get();
     const targetTx = freshStore.transactions.find(t => t.id === tx.id);
     if (!targetTx) return;
@@ -109,9 +123,22 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
     onRefreshData();
   };
 
-  const handleRejectSubmit = (e: React.FormEvent) => {
+  const handleRejectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rejectingTxId) return;
+    try {
+      await api.reviewTransaction(rejectingTxId, {
+        status: "rejected",
+        notes: rejectionNotes.trim() || "Payment rejected by finance."
+      });
+      setRejectingTxId(null);
+      setRejectionNotes("");
+      showToast("Tá»« chá»‘i giao dá»‹ch thÃ nh cÃ´ng.");
+      onRefreshData();
+    } catch (err: any) {
+      showToast(err.message || "KhÃ´ng thá»ƒ tá»« chá»‘i giao dá»‹ch.");
+    }
+    return;
 
     const freshStore = AppStore.get();
     const targetTx = freshStore.transactions.find(t => t.id === rejectingTxId);

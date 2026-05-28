@@ -3,14 +3,22 @@ import { eventBus } from "./eventBus";
 
 export function startScheduler() {
   setInterval(async () => {
-    await checkOverdueFees();
-    await checkAttendanceAlerts();
-    await checkGPAWarnings();
+    await runSchedulerTask("overdue fees", checkOverdueFees);
+    await runSchedulerTask("attendance alerts", checkAttendanceAlerts);
+    await runSchedulerTask("gpa warnings", checkGPAWarnings);
   }, 60 * 60 * 1000);
 
   setTimeout(async () => {
-    await checkOverdueFees();
+    await runSchedulerTask("overdue fees", checkOverdueFees);
   }, 5000);
+}
+
+async function runSchedulerTask(name: string, task: () => Promise<void>) {
+  try {
+    await task();
+  } catch (error) {
+    console.error(`[scheduler] ${name} failed`, error);
+  }
 }
 
 async function checkOverdueFees() {

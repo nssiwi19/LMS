@@ -24,13 +24,57 @@ export const financeRepository = {
   async payTuition(db: Queryable, feeId: string, paidAmount: number) {
     const fee = (await db.query("SELECT * FROM tuition_fees WHERE id = $1", [feeId])).rows[0];
     if (!fee) return null;
+    if (paidAmount <= 0) return null;
+    if (Number(fee.paid_amount || 0) >= Number(fee.amount)) {
+      return tuitionFeeFromRow(fee);
+    }
     const totalPaid = Math.min(Number(fee.amount), Number(fee.paid_amount || 0) + paidAmount);
     const status: TuitionFee["status"] = totalPaid >= Number(fee.amount) ? "paid" : totalPaid > 0 ? "partial" : "unpaid";
     const paidAt = status === "paid" ? new Date().toISOString() : fee.paid_at;
     const receiptCode = fee.receipt_code || `RC${Date.now()}`;
     await db.query("UPDATE tuition_fees SET paid_amount = $1, status = $2, paid_at = $3, receipt_code = $4 WHERE id = $5", [totalPaid, status, paidAt, receiptCode, feeId]);
-    if (status === "paid") await db.query("UPDATE student_profiles SET fee_hold = false WHERE user_id = $1", [fee.student_id]);
+    if (status === "paid") {
+      await db.query("UPDATE student_profiles SET fee_hold = false WHERE user_id = $1", [fee.student_id]);
+      await db.query(
+        "UPDATE academic_warnings SET is_resolved = true, resolved_at = $2 WHERE student_id = $1 AND type = 'unpaid_fee' AND is_resolved = false",
+        [fee.student_id, new Date().toISOString()]
+      );
+    }
     return { id: feeId, paidAmount: totalPaid, status, paidAt, receiptCode };
+  },
+
+  async reviewTransaction(db: Queryable, txId: string, status: "approved" | "rejected", reviewerId: string, notes?: string) {
+    const tx = (await db.query("SELECT * FROM transactions WHERE id = $1", [txId])).rows[0];
+    if (!tx) return null;
+    if (tx.status !== "pending") return { error: "Transaction already reviewed.", status: 409 };
+
+    const processedAt = new Date().toISOString();
+    const finalNotes = notes || (status === "approved" ? "Payment matched and enrollment activated." : "Payment rejected by finance.");
+    const row = (await db.query(
+      `UPDATE transactions
+       SET status = $2, processed_at = $3, processed_by = $4, notes = $5
+       WHERE id = $1
+       RETURNING *`,
+      [txId, status, processedAt, reviewerId, finalNotes]
+    )).rows[0];
+
+    if (status === "approved") {
+      await db.query(
+        `UPDATE enrollments
+         SET status = 'active'
+         WHERE student_id = $1 AND course_id = $2 AND status = 'pending_payment'`,
+        [tx.student_id, tx.course_id]
+      );
+    } else {
+      await db.query(
+        `UPDATE enrollments
+         SET status = 'pending_payment'
+         WHERE student_id = $1 AND course_id = $2`,
+        [tx.student_id, tx.course_id]
+      );
+    }
+
+    return row;
   },
 
   async checkOverdueFees(db: Queryable) {

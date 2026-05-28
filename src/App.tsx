@@ -84,12 +84,6 @@ function AppShell() {
   };
 
   useEffect(() => {
-    // Only auto-restore session if this tab originally logged in (has active session marker)
-    const isActiveTab = sessionStorage.getItem("e16_lms_active_session") === "true";
-    if (!isActiveTab) {
-      setCurrentUser(null);
-      return;
-    }
     fetch("/api/auth/me", {
       credentials: "include"
     })
@@ -97,6 +91,9 @@ function AppShell() {
         if (!response.ok) throw new Error("Session expired");
         const data = await response.json();
         setCurrentUser(data.user);
+        const csrfCookie = document.cookie.split("; ").find(item => item.startsWith("e16_lms_csrf="));
+        if (csrfCookie) setCsrfToken(decodeURIComponent(csrfCookie.split("=")[1] || ""));
+        sessionStorage.setItem("e16_lms_active_session", "true");
         const serverStore = await api.getStore();
         AppStore.hydrate(serverStore);
         setStoreData({ ...serverStore });

@@ -95,6 +95,27 @@ export const schemas = {
     feeId: z.string().trim().min(1),
     paidAmount: z.coerce.number().positive()
   }),
+  reviewTransaction: z.object({
+    status: z.enum(["approved", "rejected"]),
+    notes: z.string().trim().optional()
+  }),
+  attendanceSession: z.object({
+    courseId: z.string().trim().min(1),
+    semesterId: z.string().trim().optional(),
+    date: z.string().trim().min(1),
+    topic: z.string().trim().min(1),
+    records: z.array(z.object({
+      studentId: z.string().trim().min(1),
+      status: z.enum(["present", "absent", "late", "excused"]),
+      note: z.string().trim().optional()
+    })).default([])
+  }),
+  attendanceRecord: z.object({
+    sessionId: z.string().trim().min(1),
+    studentId: z.string().trim().min(1),
+    status: z.enum(["present", "absent", "late", "excused"]),
+    note: z.string().trim().optional()
+  }),
   createWarning: z.object({
     studentId: z.string().trim().min(1),
     type: z.enum(["low_gpa", "low_attendance", "unpaid_fee", "exam_ban", "overdue_assignment"]),

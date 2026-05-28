@@ -15,6 +15,7 @@ import {
 import { LMSDataStore, Course, User, AttendanceSession, AttendanceRecord, AcademicWarning } from "../types";
 import { AppStore } from "../store";
 import { generateId } from "../utils";
+import { api } from "../api";
 
 interface AttendanceManagerProps {
   store: LMSDataStore;
@@ -59,7 +60,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
   const activeRecords = (store.attendanceRecords || []).filter(r => r.sessionId === activeSessionId);
 
   // New Session submit
-  const handleCreateSessionSubmit = (e: React.FormEvent) => {
+  const handleCreateSessionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCourseId) {
       triggerToast("Vui lòng chọn môn học trước khi lập buổi điểm danh.");
@@ -70,8 +71,29 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
       return;
     }
 
-    const storeData = AppStore.get();
     const combinedDate = newSessionTime.trim() ? `${newSessionDate} (${newSessionTime.trim()})` : newSessionDate;
+    try {
+      const result = await api.saveAttendance({
+        courseId: selectedCourseId,
+        semesterId: curSemesterId,
+        date: combinedDate,
+        topic: newSessionTopic.trim(),
+        records: courseEnrollments.map(enroll => ({ studentId: enroll.studentId, status: "present" }))
+      }) as any;
+      setNewSessionDate("");
+      setNewSessionTopic("");
+      setNewSessionTime("09:00 - 11:30");
+      setShowCreateSession(false);
+      setActiveSessionId(result.session.id);
+      onRefreshData();
+      triggerToast("ÄÃ£ khá»Ÿi táº¡o buá»•i Ä‘iá»ƒm danh mÃ´n há»c má»›i thÃ nh cÃ´ng.");
+      return;
+    } catch (err: any) {
+      triggerToast(err.message || "KhÃ´ng thá»ƒ táº¡o buá»•i Ä‘iá»ƒm danh.");
+      return;
+    }
+
+    const storeData = AppStore.get();
     const newSession: AttendanceSession = {
       id: generateId("ats"),
       courseId: selectedCourseId,
@@ -109,8 +131,16 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
   };
 
   // Modify Record Status per student
-  const handleMarkStatusChange = (studentId: string, status: "present" | "absent" | "late" | "excused") => {
+  const handleMarkStatusChange = async (studentId: string, status: "present" | "absent" | "late" | "excused") => {
     if (!activeSessionId) return;
+    try {
+      await api.updateAttendanceRecord({ sessionId: activeSessionId, studentId, status });
+      onRefreshData();
+      return;
+    } catch (err: any) {
+      triggerToast(err.message || "KhÃ´ng thá»ƒ cáº­p nháº­t Ä‘iá»ƒm danh.");
+      return;
+    }
     const storeData = AppStore.get();
     
     let recordIndex = storeData.attendanceRecords.findIndex(r => r.sessionId === activeSessionId && r.studentId === studentId);
