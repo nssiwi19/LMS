@@ -142,47 +142,9 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
       setActiveSessionId(result.session.id);
       onRefreshData();
       triggerToast("Đã khởi tạo buổi điểm danh môn học mới thành công.");
-      return;
     } catch (err: any) {
       triggerToast(err.message || "Không thể tạo buổi điểm danh.");
-      return;
     }
-
-    const storeData = AppStore.get();
-    const newSession: AttendanceSession = {
-      id: generateId("ats"),
-      courseId: selectedCourseId,
-      semesterId: curSemesterId,
-      teacherId: currentUser.id,
-      date: combinedDate,
-      topic: newSessionTopic.trim()
-    };
-
-    if (!storeData.attendanceSessions) storeData.attendanceSessions = [];
-    storeData.attendanceSessions.push(newSession);
-
-    // Auto initialize attendance record as "present" for all enrolled students
-    if (!storeData.attendanceRecords) storeData.attendanceRecords = [];
-    courseEnrollments.forEach(enroll => {
-      const rec: AttendanceRecord = {
-        id: generateId("atr"),
-        sessionId: newSession.id,
-        studentId: enroll.studentId,
-        status: "present"
-      };
-      storeData.attendanceRecords.push(rec);
-    });
-
-    AppStore.log(currentUser.id, "create_attendance_session", selectedCourseId, `Khởi tạo buổi học ngày ${combinedDate}`);
-    AppStore.save(storeData);
-    
-    setNewSessionDate("");
-    setNewSessionTopic("");
-    setNewSessionTime("09:00 - 11:30");
-    setShowCreateSession(false);
-    setActiveSessionId(newSession.id);
-    onRefreshData();
-    triggerToast("Đã khởi tạo buổi điểm danh môn học mới thành công.");
   };
 
   // Modify Record Status per student
@@ -191,28 +153,9 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
     try {
       await api.updateAttendanceRecord({ sessionId: activeSessionId, studentId, status });
       onRefreshData();
-      return;
     } catch (err: any) {
       triggerToast(err.message || "Không thể cập nhật điểm danh.");
-      return;
     }
-    const storeData = AppStore.get();
-    
-    let recordIndex = storeData.attendanceRecords.findIndex(r => r.sessionId === activeSessionId && r.studentId === studentId);
-    if (recordIndex !== -1) {
-      storeData.attendanceRecords[recordIndex].status = status;
-    } else {
-      // Create if missing
-      const newRec: AttendanceRecord = {
-        id: generateId("atr"),
-        sessionId: activeSessionId,
-        studentId,
-        status
-      };
-      storeData.attendanceRecords.push(newRec);
-    }
-    AppStore.save(storeData);
-    onRefreshData();
   };
 
   // Auto Scan compliance & create warnings

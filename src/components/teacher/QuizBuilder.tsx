@@ -375,7 +375,7 @@ export default function QuizBuilder(props: ComponentProps) {
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pl-4">
                                 {qst.options.map((opt, idx) => (
                                   <div key={idx} className={`p-2 rounded-xl text-xs flex items-center gap-2 border ${
-                                    qst.correctAnswer.split(",").includes(String(idx))
+                                    (qst.correctAnswer || "").split(",").includes(String(idx))
                                       ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
                                       : "bg-black/20 border-white/5 text-white/50"
                                   }`}>

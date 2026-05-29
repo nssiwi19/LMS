@@ -180,66 +180,29 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
   const handleRecordPaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activePaymentFeeId) return;
-    try {
-      await api.payTuition({ feeId: activePaymentFeeId, paidAmount: Number(paymentAmount) });
-      setActivePaymentFeeId(null);
-      onRefreshData();
-      triggerToast("Ghi nhận bút toán thanh toán học phí thành công.");
-      return;
-    } catch (err: any) {
-      triggerToast(err.message || "Không thể ghi nhận thanh toán.");
-      return;
-    }
+
     if (paymentAmount < 0) {
       triggerToast("Số tiền thanh toán không được âm.");
       return;
     }
 
-    const storeData = AppStore.get();
-    const feeIndex = storeData.tuitionFees.findIndex(f => f.id === activePaymentFeeId);
-    if (feeIndex === -1) return;
+    const fee = store.tuitionFees.find(f => f.id === activePaymentFeeId);
+    if (!fee) return;
 
-    const fee = storeData.tuitionFees[feeIndex];
     const totalNewPaid = fee.paidAmount + Number(paymentAmount);
-    
     if (totalNewPaid > fee.amount) {
       triggerToast(`Vượt hạn mức! Số học phí nợ tối đa là ${(fee.amount - fee.paidAmount).toLocaleString()} VND.`);
       return;
     }
 
-    fee.paidAmount = totalNewPaid;
-    fee.paidAt = new Date().toISOString();
-    fee.receiptCode = `RECEIPT-${Date.now().toString().slice(-6)}`;
-    
-    if (totalNewPaid >= fee.amount) {
-      fee.status = "paid";
-    } else {
-      fee.status = "partial";
+    try {
+      await api.payTuition({ feeId: activePaymentFeeId, paidAmount: Number(paymentAmount) });
+      setActivePaymentFeeId(null);
+      onRefreshData();
+      triggerToast("Ghi nhận bút toán thanh toán học phí thành công.");
+    } catch (err: any) {
+      triggerToast(err.message || "Không thể ghi nhận thanh toán.");
     }
-
-    AppStore.log(currentUser.id, "record_payment", fee.studentId, `Thu học phí: nộp thêm ${paymentAmount.toLocaleString()} VND. Mã biên lai: ${fee.receiptCode}`);
-    AppStore.notify(fee.studentId, "success", `Biên lai thu học phí: Hệ thống đã ghi nhận khoản nộp ${paymentAmount.toLocaleString()} VND từ cán bộ kế toán. Mã: ${fee.receiptCode}.`);
-    
-    // Auto sync warning resolution if paid off
-    if (fee.status === "paid") {
-      storeData.academicWarnings = storeData.academicWarnings.map(aw => {
-        if (aw.studentId === fee.studentId && (aw.type === "unpaid_fee" || aw.type === "unpaid-fee")) {
-          return { ...aw, isResolved: true, resolvedBy: currentUser.id, resolvedAt: new Date().toISOString() };
-        }
-        return aw;
-      });
-      storeData.studentProfiles = storeData.studentProfiles.map(p => {
-        if (p.userId === fee.studentId) {
-          return { ...p, feeHold: false };
-        }
-        return p;
-      });
-    }
-
-    AppStore.save(storeData);
-    setActivePaymentFeeId(null);
-    onRefreshData();
-    triggerToast("Ghi nhận bút toán thanh toán học vị thành công.");
   };
 
   // Scan overdue and apply warnings
@@ -334,7 +297,7 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
               
               {/* Collected Progress Bar */}
               <rect x="10" y="25" width="140" height="12" rx="3" fill="rgba(255,255,255,0.06)" />
-              <rect x="10" y="25" width={140 * (collectionRate/100)} height="12" rx="3" fill="#10b981" />
+              <rect x="10" y="25" width={140 * (Math.min(collectionRate, 100)/100)} height="12" rx="3" fill="#10b981" />
               <text x="13" y="34" fill="#ffffff" fontSize="7" fontWeight="bold">Collected ({collectionRate}%)</text>
             </svg>
           </div>

@@ -110,7 +110,7 @@ export default function QuizConsole(props: ComponentProps) {
                       {currentQuestionObj.type !== "text" ? (
                         <div className="space-y-2.5">
                           {currentQuestionObj.options.map((opt, idx) => {
-                            const selectedStr = quizAnswers[currentQuestionObj.id] || "";
+                            const selectedStr = (quizAnswers && quizAnswers[currentQuestionObj.id]) || "";
                             const isChosen = currentQuestionObj.type === "multiple" 
                               ? selectedStr.split(",").includes(String(idx)) 
                               : selectedStr === String(idx);

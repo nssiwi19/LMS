@@ -367,10 +367,10 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
 
     let correctCount = 0;
     questions.forEach(q => {
-      const studentAns = quizAnswers[q.id] || "";
+      const studentAns = (quizAnswers && quizAnswers[q.id]) || "";
       if (q.type === "text") {
         // Matching text key values lower cases
-        const cleanAnswerList = q.correctAnswer.toLowerCase().split(",").map(itm => itm.trim());
+        const cleanAnswerList = (q.correctAnswer || "").toLowerCase().split(",").map(itm => itm.trim());
         const matched = cleanAnswerList.some(kw => studentAns.toLowerCase().includes(kw));
         if (matched) correctCount++;
       } else {

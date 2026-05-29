@@ -74,6 +74,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
 
   // Local file state for the submission modal
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+  const [existingAttachment, setExistingAttachment] = useState<string | null>(null);
   const [isSubmittingAssignment, setIsSubmittingAssignment] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -85,17 +86,20 @@ export default function AssignmentSubmit(props: ComponentProps) {
     e.preventDefault();
     const hasText = submissionCodeText.trim().length > 0;
     const hasFile = submissionFile !== null;
-    if (!hasText && !hasFile) {
+    if (!hasText && !hasFile && !existingAttachment) {
       triggerToast("Vui lòng nhập nội dung bài làm hoặc đính kèm tệp.");
       return;
     }
     // Build combined content including file reference
-    let finalContent = submissionCodeText.trim();
+    let finalContent = submissionCodeText.trim().replace(/\s*\[Tệp đính kèm:[^\]]+\]/g, "").trim();
     if (hasFile) {
       finalContent += (finalContent ? "\n\n" : "") + `[Tệp đính kèm: ${submissionFile!.name} (${(submissionFile!.size / 1024).toFixed(1)} KB)]`;
+    } else if (existingAttachment) {
+      finalContent += (finalContent ? "\n\n" : "") + `[Tệp đính kèm: ${existingAttachment}]`;
     }
     
     setSubmissionFile(null);
+    setExistingAttachment(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     setIsSubmittingAssignment(true);
     Promise.resolve(handleSendAssignmentSubmit(e, finalContent)).finally(() => setIsSubmittingAssignment(false));
@@ -157,6 +161,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
                               }
                               setSubmittingAssignmentId(a.id);
                               setSubmissionCodeText("");
+                              setExistingAttachment(null);
                             }}
                             disabled={isDeadlineExpired}
                             className="p-1.5 px-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs rounded-xl disabled:bg-white/10 disabled:text-white/40 transition cursor-pointer"
@@ -171,7 +176,14 @@ export default function AssignmentSubmit(props: ComponentProps) {
                                 return;
                               }
                               setSubmittingAssignmentId(a.id);
-                              setSubmissionCodeText(sub.content);
+                              const match = sub.content.match(/\[Tệp đính kèm:\s*([^\]]+)\]/);
+                              if (match) {
+                                setExistingAttachment(match[1]);
+                                setSubmissionCodeText(sub.content.replace(/\s*\[Tệp đính kèm:[^\]]+\]/g, "").trim());
+                              } else {
+                                setExistingAttachment(null);
+                                setSubmissionCodeText(sub.content);
+                              }
                             }}
                             className="p-1.5 px-3 bg-white/5 hover:bg-white/10 text-xs border border-white/10 text-white/80 rounded-xl transition cursor-pointer"
                           >
@@ -228,10 +240,10 @@ export default function AssignmentSubmit(props: ComponentProps) {
               {/* File attachment */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-white/70">Hoặc đính kèm tệp</label>
-                <label className={`mt-1.5 flex items-center gap-3 w-full px-4 py-3 border border-dashed rounded-xl cursor-pointer transition text-xs ${submissionFile ? "border-indigo-400/60 bg-indigo-500/10 text-indigo-300" : "border-white/15 bg-white/3 text-white/40 hover:border-white/30 hover:text-white/60"}`}>
+                <label className={`mt-1.5 flex items-center gap-3 w-full px-4 py-3 border border-dashed rounded-xl cursor-pointer transition text-xs ${submissionFile ? "border-indigo-400/60 bg-indigo-500/10 text-indigo-300" : existingAttachment ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-300" : "border-white/15 bg-white/3 text-white/40 hover:border-white/30 hover:text-white/60"}`}>
                   <FileText className="h-4 w-4 shrink-0" />
                   <span className="truncate">
-                    {submissionFile ? submissionFile.name : "Chọn tệp đính kèm (PDF, DOCX, ZIP, ảnh...)"}
+                    {submissionFile ? submissionFile.name : existingAttachment ? `Giữ tệp cũ: ${existingAttachment}` : "Chọn tệp đính kèm (PDF, DOCX, ZIP, ảnh...)"}
                   </span>
                   <input
                     ref={fileInputRef}
@@ -241,15 +253,23 @@ export default function AssignmentSubmit(props: ComponentProps) {
                     className="hidden"
                   />
                 </label>
-                {submissionFile && (
+                {submissionFile ? (
                   <button
                     type="button"
                     onClick={() => { setSubmissionFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
                     className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1 mt-1 cursor-pointer"
                   >
-                    <X className="h-3 w-3" /> Xóa tệp đính kèm
+                    <X className="h-3 w-3" /> Xóa tệp đính kèm mới
                   </button>
-                )}
+                ) : existingAttachment ? (
+                  <button
+                    type="button"
+                    onClick={() => setExistingAttachment(null)}
+                    className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1 mt-1 cursor-pointer"
+                  >
+                    <X className="h-3 w-3" /> Gỡ bỏ tệp cũ
+                  </button>
+                ) : null}
               </div>
 
               <div className="pt-2 flex justify-end gap-2 text-xs">
