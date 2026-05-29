@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { User, StudentProfile, AdvisorNote, AcademicWarning, TuitionFee, Course, Enrollment, AttendanceSession, AttendanceRecord, QuizAttempt } from "../types";
 import { AppStore } from "../store";
+import ModalPortal from "./ModalPortal";
 
 interface ParentPanelProps {
   currentUser: User;
@@ -606,6 +607,7 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
           return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
         };
         return (
+          <ModalPortal>
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
             <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
               <div className="space-y-5">
@@ -671,6 +673,7 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
               </div>
             </div>
           </div>
+          </ModalPortal>
         );
       })()}
     </div>

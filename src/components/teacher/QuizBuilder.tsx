@@ -4,6 +4,7 @@ import { AppStore } from "../../store";
 import { generateId } from "../../utils";
 import { Question } from "../../types";
 import { api } from "../../api";
+import ModalPortal from "../ModalPortal";
 
 interface ComponentProps {
   [key: string]: any;
@@ -484,6 +485,7 @@ export default function QuizBuilder(props: ComponentProps) {
 
       {/* MODAL 3: CREATE QUIZ FORM */}
       {showQuizModal && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
             <button
@@ -570,10 +572,12 @@ export default function QuizBuilder(props: ComponentProps) {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* MODAL 4: ADD QUESTION FORM */}
       {showQuestionModal && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative">
             <button
@@ -669,10 +673,12 @@ export default function QuizBuilder(props: ComponentProps) {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* MODAL 5: CREATE ASSIGNMENT FORM */}
       {showAssignModal && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
             <button
@@ -754,6 +760,7 @@ export default function QuizBuilder(props: ComponentProps) {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
     </>

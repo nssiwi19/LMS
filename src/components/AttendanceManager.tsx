@@ -16,6 +16,7 @@ import { LMSDataStore, Course, User, AttendanceSession, AttendanceRecord, Academ
 import { AppStore } from "../store";
 import { generateId } from "../utils";
 import { api } from "../api";
+import ModalPortal from "./ModalPortal";
 
 interface AttendanceManagerProps {
   store: LMSDataStore;
@@ -645,6 +646,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
 
       {/* CREATE SESSION MODAL CONTAINER */}
       {showCreateSession && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-150">
             <button 
@@ -718,6 +720,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
       {/* Premium glassmorphic Course Details consultation modal */}
       {courseDetailId && (() => {
@@ -731,6 +734,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
           return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
         };
         return (
+          <ModalPortal>
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
             <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
               <div className="space-y-5">
@@ -796,6 +800,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
               </div>
             </div>
           </div>
+          </ModalPortal>
         );
       })()}
     </div>

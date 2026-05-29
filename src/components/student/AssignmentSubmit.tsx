@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert } from "lucide-react";
 import { AppStore } from "../../store";
+import ModalPortal from "../ModalPortal";
 
 interface ComponentProps {
   [key: string]: any;
@@ -194,6 +195,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
 
       {/* ASSIGNMENT ATTACHMENT MODAL SUBMISSION */}
       {submittingAssignmentId && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6.5 w-full max-w-lg shadow-2xl relative mb-10">
             <button
@@ -270,6 +272,7 @@ export default function AssignmentSubmit(props: ComponentProps) {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Hướng dẫn chuyển khoản học phí Modal */}

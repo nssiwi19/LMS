@@ -1,5 +1,6 @@
 import React from "react";
 import { BookOpen, HelpCircle, FileText, Plus, Eye, Edit, Check, Award, Settings, Download, Tv, Trash, ChevronRight, TrendingUp, BarChart, Users, Clock, Search, MessageSquare, X, PlusCircle, FolderPlus } from "lucide-react";
+import ModalPortal from "../ModalPortal";
 
 interface ComponentProps {
   [key: string]: any;
@@ -364,6 +365,7 @@ export default function CourseBuilder(props: ComponentProps) {
 
       {/* MODAL 1: ADD / EDIT COURSE FORMS */}
       {showCourseModal && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
             <button 
@@ -483,10 +485,12 @@ export default function CourseBuilder(props: ComponentProps) {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* MODAL 2: ADD LESSON FORM */}
       {showLessonModal && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
             <button 
@@ -567,6 +571,7 @@ export default function CourseBuilder(props: ComponentProps) {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
     </>

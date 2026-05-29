@@ -16,6 +16,7 @@ import {
 import { LMSDataStore, AcademicWarning, User, StudentProfile } from "../types";
 import { AppStore } from "../store";
 import { api } from "../api";
+import ModalPortal from "./ModalPortal";
 
 interface WarningAndReportsProps {
   store: LMSDataStore;
@@ -217,6 +218,7 @@ export default function WarningAndReports({
     <div className="relative space-y-6">
       {/* Create Warning Modal Overlay */}
       {isCreateModalOpen && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 bg-slate-950/95 overflow-y-auto p-4 pt-6 md:pt-10 border border-white/10 backdrop-blur-xl animate-fade-in flex flex-col">
           <div className="space-y-6">
             <div className="flex justify-between items-start border-b border-white/10 pb-4">
@@ -300,6 +302,7 @@ export default function WarningAndReports({
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
       
       {/* Selector tab bars */}

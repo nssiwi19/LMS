@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert } from "lucide-react";
 import { AppStore } from "../../store";
 import { api } from "../../api";
+import ModalPortal from "../ModalPortal";
 
 /** Format date string to dd/mm/yyyy. Never shows time. Returns '—' for empty. */
 const fmtDate = (s?: string | null): string => {
@@ -1164,6 +1165,7 @@ export default function StudentAcademics(props: ComponentProps) {
           </div>
         )}
       {showPrintTranscript && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-white text-slate-900 w-full max-w-2xl rounded-3xl p-8 relative shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto print:p-0 print:border-none print:shadow-none print:rounded-none">
             <button
@@ -1257,6 +1259,7 @@ export default function StudentAcademics(props: ComponentProps) {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
       {/* Premium glassmorphic Course Details consultation modal */}
       {courseDetailId && (() => {
@@ -1270,6 +1273,7 @@ export default function StudentAcademics(props: ComponentProps) {
           return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
         };
         return (
+          <ModalPortal>
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto text-left">
             <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
               <div className="space-y-5">
@@ -1335,6 +1339,7 @@ export default function StudentAcademics(props: ComponentProps) {
               </div>
             </div>
           </div>
+          </ModalPortal>
         );
       })()}
     </>

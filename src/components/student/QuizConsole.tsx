@@ -1,6 +1,7 @@
 import React from "react";
 import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert } from "lucide-react";
 import { AppStore } from "../../store";
+import ModalPortal from "../ModalPortal";
 
 interface ComponentProps {
   [key: string]: any;
@@ -80,6 +81,7 @@ export default function QuizConsole(props: ComponentProps) {
         const currentQuestionObj = questions[currentQuestionIndex];
 
         return (
+          <ModalPortal>
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
             <div className="bg-slate-900 border border-white/15 rounded-3xl p-6.5 w-full max-w-2xl shadow-2xl relative">
               
@@ -230,6 +232,7 @@ export default function QuizConsole(props: ComponentProps) {
 
             </div>
           </div>
+          </ModalPortal>
         );
       })()}
 

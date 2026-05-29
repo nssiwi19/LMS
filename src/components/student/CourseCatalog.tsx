@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert } from "lucide-react";
 import { AppStore } from "../../store";
+import ModalPortal from "../ModalPortal";
 
 interface ComponentProps {
   [key: string]: any;
@@ -299,6 +300,7 @@ export default function CourseCatalog(props: ComponentProps) {
       {paymentGuideTx && (() => {
         const matchingCourse = store.courses.find(c => c.id === paymentGuideTx.courseId);
         return (
+          <ModalPortal>
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
             <div className="bg-slate-900 border border-white/15 w-full max-w-md rounded-3xl p-6 space-y-4.5 shadow-2xl relative animate-in zoom-in-95 duration-150 text-white leading-relaxed">
               <button 
@@ -381,6 +383,7 @@ export default function CourseCatalog(props: ComponentProps) {
               </div>
             </div>
           </div>
+          </ModalPortal>
         );
       })()}
 

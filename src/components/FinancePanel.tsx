@@ -19,6 +19,7 @@ import { generateId } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
 import TuitionManager from "./TuitionManager";
 import { api } from "../api";
+import ModalPortal from "./ModalPortal";
 
 interface FinancePanelProps {
   currentUser: User;
@@ -756,6 +757,7 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
 
           {/* Rejecting Transaction Modal dialog box */}
           {rejectingTxId && (
+            <ModalPortal>
             <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
               <div className="bg-slate-900 border border-white/10 w-full max-w-md rounded-2xl p-6 space-y-4 shadow-2xl">
                 <div className="flex justify-between items-center pb-2 border-b border-white/5">
@@ -799,6 +801,7 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
                 </form>
               </div>
             </div>
+            </ModalPortal>
           )}
         </>
       )}
@@ -962,6 +965,7 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
         const quizzes = store.quizzes.filter(q => q.courseId === course.id);
         const assignments = store.assignments.filter(a => a.courseId === course.id);
         return (
+          <ModalPortal>
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
             <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
               <div className="space-y-5">
@@ -1027,6 +1031,7 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
               </div>
             </div>
           </div>
+          </ModalPortal>
         );
       })()}
     </div>

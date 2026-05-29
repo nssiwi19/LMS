@@ -41,6 +41,7 @@ import StudentRegistry from "./StudentRegistry";
 import AttendanceManager from "./AttendanceManager";
 import TuitionManager from "./TuitionManager";
 import WarningAndReports from "./WarningAndReports";
+import ModalPortal from "./ModalPortal";
 
 interface AdminPanelProps {
   currentUser: User;
@@ -999,6 +1000,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
 
       {/* USER REGISTRATION POPUP MODAL */}
       {showAddUserModal && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-sm shadow-2xl relative animate-in zoom-in-95 duration-150">
             <button 
@@ -1082,10 +1084,12 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* REJECT MODAL CHAT BOX */}
       {rejectingCourseId && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-150">
             <button 
@@ -1129,10 +1133,12 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* IMPORT MULTIPLE USERS REGISTRY CSV */}
       {showImportModal && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative">
             <button 
@@ -1189,6 +1195,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
       {/* Premium glassmorphic Course Details consultation modal */}
       {courseDetailId && (() => {
@@ -1202,6 +1209,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
           return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
         };
         return (
+          <ModalPortal>
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
             <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
               <div className="space-y-5">
@@ -1267,6 +1275,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
               </div>
             </div>
           </div>
+          </ModalPortal>
         );
       })()}
     </div>

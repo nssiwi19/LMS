@@ -1,5 +1,6 @@
 import React from "react";
 import { BookOpen, HelpCircle, FileText, Plus, Eye, Edit, Check, Award, Settings, Download, Tv, Trash, ChevronRight, TrendingUp, BarChart, Users, Clock, Search, MessageSquare, X, PlusCircle, FolderPlus } from "lucide-react";
+import ModalPortal from "../ModalPortal";
 
 interface ComponentProps {
   [key: string]: any;
@@ -260,6 +261,7 @@ export default function AssignmentGrader(props: ComponentProps) {
 
       {/* MODAL 5: CREATE ASSIGNMENT FORM */}
       {showAssignModal && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
             <button 
@@ -341,10 +343,12 @@ export default function AssignmentGrader(props: ComponentProps) {
             </form>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* MODAL 6: EVALUATE & GRADE FORM */}
       {activeSubmissionId && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
             <button 
@@ -415,6 +419,7 @@ export default function AssignmentGrader(props: ComponentProps) {
             })()}
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Premium glassmorphic Course Details consultation modal */}
@@ -429,6 +434,7 @@ export default function AssignmentGrader(props: ComponentProps) {
           return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
         };
         return (
+          <ModalPortal>
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto text-white">
             <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
               <div className="space-y-5 text-left">
@@ -494,6 +500,7 @@ export default function AssignmentGrader(props: ComponentProps) {
               </div>
             </div>
           </div>
+          </ModalPortal>
         );
       })()}
     </>

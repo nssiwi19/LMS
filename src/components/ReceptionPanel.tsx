@@ -24,6 +24,7 @@ import { generateId } from "../utils";
 import { hashPassword } from "../authHash";
 import { api } from "../api";
 import { useApiStore } from "../hooks/apiHooks";
+import ModalPortal from "./ModalPortal";
 
 interface ReceptionPanelProps {
   currentUser: UserType;
@@ -498,6 +499,7 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
 
       {/* Curriculum detailed consultation modal */}
       {selectedCourseId && selectedCourse && (
+        <ModalPortal>
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
           <div className="bg-slate-900 border border-white/15 w-full max-w-4xl rounded-3xl p-8 space-y-6 shadow-2xl relative animate-in zoom-in-95 duration-150 text-white max-h-[90vh] overflow-y-auto font-sans flex flex-col justify-between">
             <div className="space-y-6">
@@ -593,6 +595,7 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Constraints note */}

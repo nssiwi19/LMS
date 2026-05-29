@@ -44,6 +44,7 @@ import ParentPanel from "./ParentPanel";
 import { generateId, escapeHTML } from "../utils";
 import { useApiStore } from "../hooks/apiHooks";
 import { api } from "../api";
+import ModalPortal from "./ModalPortal";
 
 interface StudentPanelProps {
   currentUser: UserType;
@@ -606,6 +607,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
 
       {/* Change Password Modal */}
       {showChangePassword && (
+        <ModalPortal>
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 pt-6 md:pt-10 overflow-y-auto" onClick={() => { setShowChangePassword(false); setCpError(null); setCpSuccess(false); }}>
           <div className="bg-slate-900 border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-2xl space-y-5" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
@@ -651,6 +653,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
             )}
           </div>
         </div>
+        </ModalPortal>
       )}
 
       {/* Header section spacing */}
