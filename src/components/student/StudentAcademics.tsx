@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { BookOpen, GraduationCap, CheckCircle, Bookmark, Award, Send, Clock, Play, Check, Lock, User, Search, ChevronRight, ArrowRight, HelpCircle, FileCheck, AlertCircle, X, FileText, CreditCard, Phone, Calendar, Home, Shield, Activity, DollarSign, Printer, FileSpreadsheet, Cpu, BadgeAlert } from "lucide-react";
 import { AppStore } from "../../store";
 import { api } from "../../api";
+import { calculateCourseGradePercent, collectCourseGradeInputs, warningTypeLabel } from "../../gradeUtils";
 import ModalPortal from "../ModalPortal";
 
 /** Format date string to dd/mm/yyyy. Never shows time. Returns '—' for empty. */
@@ -142,83 +143,25 @@ export default function StudentAcademics(props: ComponentProps) {
     const course = store.courses.find((c: any) => c.id === courseId);
     if (!course) return null;
 
-    let maxGradeNum = 0;
-    let isCompleted = false;
-
-    // Get credits for course
     const programCourse = store.programCourses?.find((pc: any) => pc.courseId === courseId);
     const credits = programCourse ? programCourse.credits : 3;
+    const gradeResult = calculateCourseGradePercent(collectCourseGradeInputs(store, currentUser.id, courseId));
+    const isCompleted = enrolls.some((e: any) => e.status === "completed") || Boolean(gradeResult.countsForGpa);
 
-    // Quizzes in this course
-    const courseQuizzes = store.quizzes.filter((q: any) => q.courseId === courseId);
-    const quizAttempts = store.quizAttempts.filter((qa: any) => qa.studentId === currentUser.id && courseQuizzes.some((q: any) => q.id === qa.quizId));
-    const quizScores = courseQuizzes.map((q: any) => {
-      const attempts = quizAttempts.filter((qa: any) => qa.quizId === q.id);
-      return attempts.length > 0 ? Math.max(...attempts.map((a: any) => a.score)) : null;
-    }).filter((s: any): s is number => s !== null);
-
-    // Assignments in this course
-    const courseAssignments = store.assignments.filter((a: any) => a.courseId === courseId);
-    const assignmentSubmissions = store.submissions.filter((s: any) =>
-      s.studentId === currentUser.id &&
-      courseAssignments.some((ea: any) => ea.id === s.assignmentId) &&
-      s.score !== undefined
-    );
-
-    let finalGradeNum = 0;
-
-    let midtermVal = null;
-    if (assignmentSubmissions.length > 0) {
-      midtermVal = Math.round(assignmentSubmissions.reduce((sum: number, s: any) => {
-        const chal = store.assignments.find((a: any) => a.id === s.assignmentId);
-        const maxS = chal ? chal.maxScore : 100;
-        return sum + ((s.score || 0) / maxS) * 100;
-      }, 0) / assignmentSubmissions.length);
+    if (!gradeResult.hasGrades || gradeResult.finalPercent === null) {
+      return null;
     }
-
-    let finalVal = null;
-    if (quizScores.length > 0) {
-      finalVal = Math.round(quizScores.reduce((sum: number, s: number) => sum + s, 0) / quizScores.length);
-    }
-
-    if (midtermVal !== null && finalVal !== null) {
-      finalGradeNum = Math.round(midtermVal * 0.3 + finalVal * 0.7);
-    } else if (midtermVal !== null) {
-      finalGradeNum = midtermVal;
-    } else if (finalVal !== null) {
-      finalGradeNum = finalVal;
-    } else {
-      const hasCompletedEnrollment = enrolls.some((e: any) => e.status === "completed");
-      if (hasCompletedEnrollment) {
-        finalGradeNum = 85;
-        isCompleted = true;
-      } else {
-        finalGradeNum = 0;
-      }
-    }
-
-    if (enrolls.some((e: any) => e.status === "completed") || finalGradeNum >= 60) {
-      isCompleted = true;
-    }
-
-    let scale4Val = 0;
-    let letterGrade = "F";
-    if (finalGradeNum >= 90) { scale4Val = 4.0; letterGrade = "A"; }
-    else if (finalGradeNum >= 80) { scale4Val = 3.0; letterGrade = "B"; }
-    else if (finalGradeNum >= 70) { scale4Val = 2.0; letterGrade = "C"; }
-    else if (finalGradeNum >= 60) { scale4Val = 1.0; letterGrade = "D"; }
-    else { scale4Val = 0.0; letterGrade = "F"; }
 
     return {
       courseId,
       course,
-      grade: finalGradeNum,
-      scale4Val,
-      letterGrade,
+      grade: gradeResult.finalPercent,
+      scale4Val: gradeResult.gradePoint ?? 0,
+      letterGrade: gradeResult.letterGrade ?? "F",
       isCompleted,
       credits,
-      midtermGrade: midtermVal,
-      finalExamGrade: finalVal
+      midtermGrade: gradeResult.assignmentAvg,
+      finalExamGrade: gradeResult.quizAvg
     };
   }).filter(Boolean) as Array<{
     courseId: string;
@@ -389,12 +332,7 @@ export default function StudentAcademics(props: ComponentProps) {
               <BadgeAlert className="h-5 w-5 shrink-0 text-red-500 mt-0.5" />
               <div className="space-y-1">
                 <span className="font-bold text-white block uppercase tracking-wider text-[10px]">
-                  Cảnh báo học tập chưa xử lý: {
-                    w.type === "low_attendance" || w.type === "attendance" ? "Chuyên cần thấp" :
-                    w.type === "low_gpa" || w.type === "low-gpa" ? "GPA thấp" :
-                    w.type === "unpaid_fee" || w.type === "unpaid-fee" ? "Nợ học phí" :
-                    w.type === "exam_ban" ? "Cấm thi" : "Yêu cầu học tập quá hạn"
-                  }
+                  Cảnh báo học tập chưa xử lý: {warningTypeLabel(w.type)}
                 </span>
                 <p className="text-red-300/90">{w.message}</p>
                 <span className="text-[10px] text-white/30 mt-1 block">Ngày tạo cảnh báo: {fmtDate(w.createdAt)}</span>

@@ -9,6 +9,10 @@ import {
 import { generateId } from "./utils";
 import { hashPassword } from "./authHash";
 import { backfillMegaDemoData } from "./mockSeeds";
+import {
+  calculateCourseGradePercent,
+  collectCourseGradeInputs
+} from "./gradeUtils";
 
 const STORAGE_KEY = "e16_lms_data";
 
@@ -663,7 +667,7 @@ export function calculateStudentGpa(store: LMSDataStore, studentId: string): { g
     groups.get(enrollment.courseId)!.push(enrollment);
     return groups;
   }, new Map<string, typeof studentEnrollments>());
-  
+
   let totalGradeWeightedPoints = 0;
   let totalCreditsForGpa = 0;
   let totalCreditsEarned = 0;
@@ -671,48 +675,12 @@ export function calculateStudentGpa(store: LMSDataStore, studentId: string): { g
   enrollmentsByCourse.forEach((courseEnrollments, courseId) => {
     const programCourse = store.programCourses.find(pc => pc.courseId === courseId);
     const credits = programCourse ? programCourse.credits : 3;
+    const grade = calculateCourseGradePercent(collectCourseGradeInputs(store, studentId, courseId));
 
-    // Quizzes in this course
-    const courseQuizzes = store.quizzes.filter(q => q.courseId === courseId);
-    const quizAttempts = store.quizAttempts.filter(qa => qa.studentId === studentId && courseQuizzes.some(q => q.id === qa.quizId));
-    const quizScores = courseQuizzes.map(q => {
-      const attempts = quizAttempts.filter(qa => qa.quizId === q.id);
-      return attempts.length > 0 ? Math.max(...attempts.map(a => a.score)) : null;
-    }).filter((s): s is number => s !== null);
-
-    // Assignments in this course
-    const courseAssignments = store.assignments.filter(a => a.courseId === courseId);
-    const submissions = store.submissions.filter(s => s.studentId === studentId && courseAssignments.some(a => a.id === s.assignmentId) && s.score !== undefined);
-
-    let finalScore = 0;
-    let compCount = 0;
-    if (quizScores.length > 0) {
-      finalScore += quizScores.reduce((sum, s) => sum + s, 0) / quizScores.length;
-      compCount++;
-    }
-    if (submissions.length > 0) {
-      const avgAssignmentScore = submissions.reduce((sum, s) => {
-        const chal = store.assignments.find(a => a.id === s.assignmentId);
-        const maxS = chal ? chal.maxScore : 100;
-        return sum + ((s.score || 0) / maxS) * 100;
-      }, 0) / submissions.length;
-      finalScore += avgAssignmentScore;
-      compCount++;
-    }
-
-    if (compCount > 0) {
-      const courseAvgScore = finalScore / compCount;
-      let gradePoint = 0.0;
-      if (courseAvgScore >= 90) gradePoint = 4.0;
-      else if (courseAvgScore >= 80) gradePoint = 3.0;
-      else if (courseAvgScore >= 70) gradePoint = 2.0;
-      else if (courseAvgScore >= 60) gradePoint = 1.0;
-      else gradePoint = 0.0;
-
-      totalGradeWeightedPoints += gradePoint * credits;
+    if (grade.hasGrades && grade.gradePoint !== null) {
+      totalGradeWeightedPoints += grade.gradePoint * credits;
       totalCreditsForGpa += credits;
-
-      if (courseAvgScore >= 60) {
+      if (grade.countsForGpa) {
         totalCreditsEarned += credits;
       }
     } else {
@@ -751,31 +719,8 @@ export function recomputeAndPersistAllGpas(store: LMSDataStore) {
           break;
         }
         
-        // Find if they passed this course (course average Score >= 60)
-        const courseQuizzes = store.quizzes.filter(q => q.courseId === pc.courseId);
-        const quizAttempts = store.quizAttempts.filter(qa => qa.studentId === profile.userId && courseQuizzes.some(q => q.id === qa.quizId));
-        const quizScores = courseQuizzes.map(q => {
-          const attempts = quizAttempts.filter(qa => qa.quizId === q.id);
-          return attempts.length > 0 ? Math.max(...attempts.map(a => a.score)) : null;
-        }).filter((s): s is number => s !== null);
-
-        const courseAssignments = store.assignments.filter(a => a.courseId === pc.courseId);
-        const submissions = store.submissions.filter(s => s.studentId === profile.userId && courseAssignments.some(a => a.id === s.assignmentId) && s.score !== undefined);
-        
-        let finalScore = 0;
-        let compCount = 0;
-        if (quizScores.length > 0) { finalScore += quizScores.reduce((a,b)=>a+b, 0) / quizScores.length; compCount++; }
-        if (submissions.length > 0) {
-          const avgAssignmentScore = submissions.reduce((sum, s) => {
-            const chal = store.assignments.find(a => a.id === s.assignmentId);
-            return sum + ((s.score || 0) / (chal?.maxScore || 100)) * 100;
-          }, 0) / submissions.length;
-          finalScore += avgAssignmentScore;
-          compCount++;
-        }
-
-        const avgScore = compCount > 0 ? finalScore / compCount : 0;
-        if (compCount === 0 || avgScore < 60) {
+        const grade = calculateCourseGradePercent(collectCourseGradeInputs(store, profile.userId, pc.courseId));
+        if (!grade.hasGrades || !grade.countsForGpa) {
           allCompletedAndPassed = false;
           break;
         }

@@ -1,7 +1,10 @@
-import { AcademicWarning } from "../../types";
+import { AcademicWarning, User } from "../../types";
 import { Queryable } from "../db";
 import { generateId } from "../ids";
 import { academicWarningFromRow } from "../mappers";
+import { parentRepository } from "./parent";
+
+const ADMIN_WARNING_ROLES = new Set<User["role"]>(["admin", "super_admin", "academic_admin", "finance"]);
 
 export const academicsRepository = {
   async listWarnings(db: Queryable, studentId?: string) {
@@ -9,6 +12,59 @@ export const academicsRepository = {
       ? await db.query("SELECT * FROM academic_warnings WHERE student_id = $1 ORDER BY created_at DESC", [studentId])
       : await db.query("SELECT * FROM academic_warnings ORDER BY created_at DESC");
     return result.rows.map(academicWarningFromRow);
+  },
+
+  async isAdvisorForStudent(db: Queryable, advisorId: string, studentId: string) {
+    const row = await db.query(
+      "SELECT 1 FROM advisor_assignments WHERE advisor_id = $1 AND student_id = $2 LIMIT 1",
+      [advisorId, studentId]
+    );
+    return Boolean(row.rowCount);
+  },
+
+  async listWarningsForUser(
+    db: Queryable,
+    user: Pick<User, "id" | "role">,
+    requestedStudentId?: string
+  ): Promise<{ warnings: AcademicWarning[] } | { error: string; status: number }> {
+    if (user.role === "student") {
+      return { warnings: await this.listWarnings(db, user.id) };
+    }
+
+    if (user.role === "parent") {
+      const linkedStudentId = await parentRepository.getLinkedStudent(db, user.id);
+      if (!linkedStudentId) {
+        return { error: "No linked student found for this parent account.", status: 403 };
+      }
+      if (requestedStudentId && requestedStudentId !== linkedStudentId) {
+        return { error: "Permission denied.", status: 403 };
+      }
+      return { warnings: await this.listWarnings(db, linkedStudentId) };
+    }
+
+    if (user.role === "advisor") {
+      if (requestedStudentId) {
+        if (!(await this.isAdvisorForStudent(db, user.id, requestedStudentId))) {
+          return { error: "You are not assigned to this student.", status: 403 };
+        }
+        return { warnings: await this.listWarnings(db, requestedStudentId) };
+      }
+      const result = await db.query(
+        `SELECT aw.*
+         FROM academic_warnings aw
+         INNER JOIN advisor_assignments aa ON aa.student_id = aw.student_id
+         WHERE aa.advisor_id = $1
+         ORDER BY aw.created_at DESC`,
+        [user.id]
+      );
+      return { warnings: result.rows.map(academicWarningFromRow) };
+    }
+
+    if (ADMIN_WARNING_ROLES.has(user.role)) {
+      return { warnings: await this.listWarnings(db, requestedStudentId) };
+    }
+
+    return { error: "Permission denied.", status: 403 };
   },
 
   async createWarning(db: Queryable, input: Omit<AcademicWarning, "id" | "createdAt" | "isResolved">) {

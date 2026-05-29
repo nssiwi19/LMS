@@ -16,6 +16,7 @@ import {
 import { LMSDataStore, AcademicWarning, User, StudentProfile } from "../types";
 import { AppStore } from "../store";
 import { api } from "../api";
+import { normalizeWarningType, warningTypeLabel, warningTypesMatch } from "../gradeUtils";
 import ModalPortal from "./ModalPortal";
 
 interface WarningAndReportsProps {
@@ -92,12 +93,7 @@ export default function WarningAndReports({
       studentCode: studentProf ? studentProf.studentCode : "SV-UNLINKED"
     };
   }).filter(w => {
-    const matchesType = filterWarningType === "all" || 
-      w.type === filterWarningType ||
-      (filterWarningType === "low_gpa" && w.type === "low-gpa") ||
-      (filterWarningType === "low_attendance" && w.type === "attendance") ||
-      (filterWarningType === "unpaid_fee" && w.type === "unpaid-fee") ||
-      (filterWarningType === "overdue_assignment" && w.type === "overdue-assignment");
+    const matchesType = filterWarningType === "all" || warningTypesMatch(w.type, filterWarningType);
     const matchesSearch = !warningSearch ||
       w.studentName.toLowerCase().includes(warningSearch.toLowerCase()) ||
       w.studentCode.toLowerCase().includes(warningSearch.toLowerCase()) ||
@@ -391,9 +387,7 @@ export default function WarningAndReports({
                       {w.studentCode} -- {w.studentName}
                     </span>
                     <span className="text-[9px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-white/5 text-slate-300 font-mono">
-                      {w.type === "low_gpa" || w.type === "low-gpa" ? "GPA kém" :
-                       w.type === "low_attendance" || w.type === "attendance" ? "Chuyên cần vắng" :
-                       w.type === "unpaid_fee" || w.type === "unpaid-fee" ? "Học phí trễ" : "Trễ deadline"}
+                      {warningTypeLabel(w.type)}
                     </span>
                   </div>
                   <p className="text-[11.5px] leading-relaxed pt-1.5 text-white/80">{w.message}</p>

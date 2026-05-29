@@ -303,9 +303,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
         dbProfile.guardian_name !== (profile.guardianName || null) ||
         dbProfile.guardian_phone !== (profile.guardianPhone || null) ||
         dbProfile.guardian_email !== (profile.guardianEmail || null) ||
-        dbProfile.notes !== (profile.notes || null) ||
-        Boolean(dbProfile.fee_hold) !== Boolean(profile.feeHold) ||
-        Boolean(dbProfile.academic_probation) !== Boolean(profile.academicProbation);
+        dbProfile.notes !== (profile.notes || null);
 
       if (isDirty) {
         await client.query(
@@ -391,80 +389,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
     }
 
     // Sync structural tables (academic_years, semesters, departments, programs, program_courses)
-    // Order of deletion to respect foreign keys: program_courses -> programs -> departments -> semesters -> academic_years
-
-    // 1. DELETIONS
-    if (store.programCourses !== undefined) {
-      const clientProgCourses = store.programCourses || [];
-      const clientProgCourseIds = clientProgCourses.map(pc => pc.id);
-      if (clientProgCourseIds.length > 0) {
-        await client.query(
-          "DELETE FROM program_courses WHERE id NOT IN (" +
-          clientProgCourseIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientProgCourseIds
-        );
-      } else {
-        await client.query("DELETE FROM program_courses");
-      }
-    }
-
-    if (store.programs !== undefined) {
-      const clientProgs = store.programs || [];
-      const clientProgIds = clientProgs.map(p => p.id);
-      if (clientProgIds.length > 0) {
-        await client.query(
-          "DELETE FROM programs WHERE id NOT IN (" +
-          clientProgIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientProgIds
-        );
-      } else {
-        await client.query("DELETE FROM programs");
-      }
-    }
-
-    if (store.departments !== undefined) {
-      const clientDepts = store.departments || [];
-      const clientDeptIds = clientDepts.map(d => d.id);
-      if (clientDeptIds.length > 0) {
-        await client.query(
-          "DELETE FROM departments WHERE id NOT IN (" +
-          clientDeptIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientDeptIds
-        );
-      } else {
-        await client.query("DELETE FROM departments");
-      }
-    }
-
-    if (store.semesters !== undefined) {
-      const clientSemesters = store.semesters || [];
-      const clientSemesterIds = clientSemesters.map(s => s.id);
-      if (clientSemesterIds.length > 0) {
-        await client.query(
-          "DELETE FROM semesters WHERE id NOT IN (" +
-          clientSemesterIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientSemesterIds
-        );
-      } else {
-        await client.query("DELETE FROM semesters");
-      }
-    }
-
-    if (store.academicYears !== undefined) {
-      const clientYears = store.academicYears || [];
-      const clientYearIds = clientYears.map(y => y.id);
-      if (clientYearIds.length > 0) {
-        await client.query(
-          "DELETE FROM academic_years WHERE id NOT IN (" +
-          clientYearIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientYearIds
-        );
-      } else {
-        await client.query("DELETE FROM academic_years");
-      }
-    }
-
-    // 2. INSERTIONS / UPSERTS (reverse order of deletion to satisfy foreign keys)
+    // Upsert-only: never DELETE rows missing from client snapshot (prevents mass data loss).
     if (store.academicYears !== undefined) {
       const clientYears = store.academicYears || [];
       for (const year of clientYears) {
@@ -581,19 +506,9 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       }
     }
 
-    // Sync notifications
+    // Sync notifications (upsert-only)
     if (store.notifications !== undefined) {
       const clientNotes = store.notifications || [];
-      const clientNoteIds = clientNotes.map(n => n.id);
-      if (clientNoteIds.length > 0) {
-        await client.query(
-          "DELETE FROM notifications WHERE id NOT IN (" +
-          clientNoteIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientNoteIds
-        );
-      } else {
-        await client.query("DELETE FROM notifications");
-      }
       for (const note of clientNotes) {
         await client.query(
           `INSERT INTO notifications (id, user_id, type, message, is_read, created_at)
@@ -610,34 +525,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
     }
 
     // Sync academic_warnings bypassed (server-managed only)
-
-    // Sync audit_logs
-    if (store.auditLogs !== undefined) {
-      const clientLogs = store.auditLogs || [];
-      const clientLogIds = clientLogs.map(l => l.id);
-      if (clientLogIds.length > 0) {
-        await client.query(
-          "DELETE FROM audit_logs WHERE id NOT IN (" +
-          clientLogIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientLogIds
-        );
-      } else {
-        await client.query("DELETE FROM audit_logs");
-      }
-      for (const log of clientLogs) {
-        await client.query(
-          `INSERT INTO audit_logs (id, user_id, action, target, detail, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (id) DO UPDATE SET
-             user_id = EXCLUDED.user_id,
-             action = EXCLUDED.action,
-             target = EXCLUDED.target,
-             detail = EXCLUDED.detail,
-             created_at = EXCLUDED.created_at`,
-          [log.id, log.userId, log.action, log.target, log.detail || null, log.createdAt]
-        );
-      }
-    }
+    // Sync audit_logs bypassed (server-managed only — never accept client audit trail)
 
     // Sync enrollments bypassed (server-managed only)
 
@@ -645,19 +533,9 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
 
     // Sync tuitionFees bypassed (server-managed only)
 
-    // Sync advisorNotes
+    // Sync advisorNotes (upsert-only)
     if (store.advisorNotes !== undefined) {
       const clientNotesAdvisor = store.advisorNotes || [];
-      const clientNotesAdvisorIds = clientNotesAdvisor.map(n => n.id);
-      if (clientNotesAdvisorIds.length > 0) {
-        await client.query(
-          "DELETE FROM advisor_notes WHERE id NOT IN (" +
-          clientNotesAdvisorIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientNotesAdvisorIds
-        );
-      } else {
-        await client.query("DELETE FROM advisor_notes");
-      }
       for (const n of clientNotesAdvisor) {
         await client.query(
           `INSERT INTO advisor_notes (id, advisor_id, student_id, content, type, created_at)
@@ -680,19 +558,9 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       }
     }
 
-    // Sync quizzes
+    // Sync quizzes (upsert-only)
     if (store.quizzes !== undefined) {
       const clientQuizzes = store.quizzes || [];
-      const clientQuizIds = clientQuizzes.map(q => q.id);
-      if (clientQuizIds.length > 0) {
-        await client.query(
-          "DELETE FROM quizzes WHERE id NOT IN (" +
-          clientQuizIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientQuizIds
-        );
-      } else {
-        await client.query("DELETE FROM quizzes");
-      }
       for (const q of clientQuizzes) {
         await client.query(
           `INSERT INTO quizzes (id, course_id, lesson_id, title, passing_score, time_limit, max_attempts)
@@ -717,19 +585,9 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       }
     }
 
-    // Sync questions
+    // Sync questions (upsert-only)
     if (store.questions !== undefined) {
       const clientQuestions = store.questions || [];
-      const clientQuestionIds = clientQuestions.map(qst => qst.id);
-      if (clientQuestionIds.length > 0) {
-        await client.query(
-          "DELETE FROM questions WHERE id NOT IN (" +
-          clientQuestionIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientQuestionIds
-        );
-      } else {
-        await client.query("DELETE FROM questions");
-      }
       for (const qst of clientQuestions) {
         await client.query(
           `INSERT INTO questions (id, quiz_id, text, type, options_json, correct_answer)
@@ -752,19 +610,9 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       }
     }
 
-    // Sync submissions
+    // Sync submissions (upsert-only)
     if (store.submissions !== undefined) {
       const clientSubmissions = store.submissions || [];
-      const clientSubmissionIds = clientSubmissions.map(s => s.id);
-      if (clientSubmissionIds.length > 0) {
-        await client.query(
-          "DELETE FROM submissions WHERE id NOT IN (" +
-          clientSubmissionIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientSubmissionIds
-        );
-      } else {
-        await client.query("DELETE FROM submissions");
-      }
       for (const sub of clientSubmissions) {
         await client.query(
           `INSERT INTO submissions (id, assignment_id, student_id, content, score, feedback, submitted_at, graded_at)
@@ -1309,8 +1157,10 @@ app.patch("/api/admin/users/:id/status", requireAuth, requireRole(["admin", "sup
 }));
 
 app.get("/api/academics/warnings", requireAuth, asyncHandler(async (req, res) => {
-  const canViewAll = ["admin", "super_admin", "academic_admin", "advisor"].includes(req.user!.role);
-  res.json(await academicsRepository.listWarnings(pool, canViewAll ? undefined : req.user!.id));
+  const requestedStudentId = typeof req.query.studentId === "string" ? req.query.studentId : undefined;
+  const result = await academicsRepository.listWarningsForUser(pool, req.user!, requestedStudentId);
+  if ("error" in result) return res.status(result.status).json({ error: result.error });
+  res.json(result.warnings);
 }));
 app.post("/api/academics/warnings", requireAuth, requireRole(["academic_admin", "advisor", "admin", "super_admin"]), validateBody(schemas.createWarning), asyncHandler(async (req, res) => {
   const warning = await academicsRepository.createWarning(pool, req.body);
@@ -1452,8 +1302,10 @@ app.patch("/api/scholarship-applications/:id/reject", requireAuth, requireRole([
 }));
 
 app.get("/api/academic-warnings", requireAuth, asyncHandler(async (req, res) => {
-  const studentId = req.user!.role === "student" ? req.user!.id : typeof req.query.studentId === "string" ? req.query.studentId : undefined;
-  res.json(await academicsRepository.listWarnings(pool, studentId));
+  const requestedStudentId = typeof req.query.studentId === "string" ? req.query.studentId : undefined;
+  const result = await academicsRepository.listWarningsForUser(pool, req.user!, requestedStudentId);
+  if ("error" in result) return res.status(result.status).json({ error: result.error });
+  res.json(result.warnings);
 }));
 app.patch("/api/academic-warnings/:id/resolve", requireAuth, requireRole(["advisor", "academic_admin"]), asyncHandler(async (req, res) => {
   const warning = await academicsRepository.resolveWarning(pool, req.params.id, req.user!.id);
@@ -1462,7 +1314,8 @@ app.patch("/api/academic-warnings/:id/resolve", requireAuth, requireRole(["advis
 }));
 
 app.post("/api/tuition/pay", requireAuth, requireRole(["finance", "admin", "super_admin", "student"]), validateBody(schemas.payTuition), asyncHandler(async (req, res) => {
-  const result = await financeRepository.payTuition(pool, req.body.feeId, req.body.paidAmount);
+  const ownerStudentId = req.user!.role === "student" ? req.user!.id : undefined;
+  const result = await financeRepository.payTuition(pool, req.body.feeId, req.body.paidAmount, ownerStudentId);
   if (!result) return res.status(404).json({ error: "Tuition fee not found." });
   await audit(req, "record_tuition_payment", req.body.feeId, `Paid amount ${req.body.paidAmount}.`);
   res.json(result);

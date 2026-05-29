@@ -44,17 +44,25 @@ export function registerEventHandlers() {
       const total = Number(totals.rows[0]?.total || 0);
       const present = Number(totals.rows[0]?.present || 0);
       const attendancePct = total ? Math.round((present / total) * 100) : 100;
+      const warningMessage = `Attendance is below 80% (${attendancePct}%).`;
+      const existingWarning = (await pool.query(
+        "SELECT id FROM academic_warnings WHERE student_id = $1 AND course_id = $2 AND type = 'low_attendance' AND is_resolved = false",
+        [studentId, courseId]
+      )).rows[0];
+
       if (attendancePct < 80) {
         await pool.query(
           `INSERT INTO academic_warnings (id, student_id, type, course_id, message, is_resolved, created_at)
            VALUES ($1,$2,'low_attendance',$3,$4,false,$5)
            ON CONFLICT (student_id, type, COALESCE(course_id, '')) DO UPDATE
            SET message = EXCLUDED.message`,
-          [`warning_att_${studentId}_${courseId}`, studentId, courseId, `Attendance is below 80% (${attendancePct}%).`, new Date().toISOString()]
+          [`warning_att_${studentId}_${courseId}`, studentId, courseId, warningMessage, new Date().toISOString()]
         );
-        await notifyStudent(pool, studentId, `Attendance warning: ${attendancePct}%.`, { relatedEntityType: "course", relatedEntityId: courseId });
-        await notifyAdvisorOf(pool, studentId, `Assigned student attendance is ${attendancePct}%.`, { relatedEntityType: "course", relatedEntityId: courseId });
-        await notifyParentOf(pool, studentId, `Attendance warning: ${attendancePct}%.`, { relatedEntityType: "course", relatedEntityId: courseId });
+        if (!existingWarning) {
+          await notifyStudent(pool, studentId, `Attendance warning: ${attendancePct}%.`, { relatedEntityType: "course", relatedEntityId: courseId });
+          await notifyAdvisorOf(pool, studentId, `Assigned student attendance is ${attendancePct}%.`, { relatedEntityType: "course", relatedEntityId: courseId });
+          await notifyParentOf(pool, studentId, `Attendance warning: ${attendancePct}%.`, { relatedEntityType: "course", relatedEntityId: courseId });
+        }
       }
       if (attendancePct < 60) {
         await pool.query(
@@ -64,7 +72,17 @@ export function registerEventHandlers() {
            WHERE cs.id = cr.section_id AND cr.student_id = $1 AND cs.course_id = $2`,
           [studentId, courseId]
         );
-        await notifyRole(pool, "academic_admin", "A student has been exam-banned for attendance.", { relatedEntityType: "course", relatedEntityId: courseId });
+        if (!existingWarning) {
+          await notifyRole(pool, "academic_admin", "A student has been exam-banned for attendance.", { relatedEntityType: "course", relatedEntityId: courseId });
+        }
+      } else {
+        await pool.query(
+          `UPDATE course_registrations cr
+           SET exam_ban = false
+           FROM course_sections cs
+           WHERE cs.id = cr.section_id AND cr.student_id = $1 AND cs.course_id = $2 AND cr.exam_ban = true`,
+          [studentId, courseId]
+        );
       }
       if (attendancePct >= 80) {
         await pool.query("UPDATE academic_warnings SET is_resolved = true, resolved_at = $3 WHERE student_id = $1 AND course_id = $2 AND type = 'low_attendance'", [studentId, courseId, new Date().toISOString()]);
@@ -73,6 +91,11 @@ export function registerEventHandlers() {
   });
 
   eventBus.on("tuition.overdue", async ({ feeId, studentId }, pool) => {
+    const hadUnresolvedWarning = Boolean((await pool.query(
+      "SELECT 1 FROM academic_warnings WHERE student_id = $1 AND type = 'unpaid_fee' AND is_resolved = false LIMIT 1",
+      [studentId]
+    )).rowCount);
+
     await pool.query(
       `INSERT INTO academic_warnings (id, student_id, type, message, is_resolved, created_at)
        VALUES ($1,$2,'unpaid_fee','Tuition payment is overdue.',false,$3)
@@ -80,9 +103,12 @@ export function registerEventHandlers() {
       [`warning_fee_${studentId}`, studentId, new Date().toISOString()]
     );
     await pool.query("UPDATE student_profiles SET fee_hold = true WHERE user_id = $1", [studentId]);
-    await notifyStudent(pool, studentId, "Tuition payment is overdue.", { relatedEntityType: "tuition_fee", relatedEntityId: feeId });
-    await notifyParentOf(pool, studentId, "Tuition payment is overdue.", { relatedEntityType: "tuition_fee", relatedEntityId: feeId });
-    await notifyRole(pool, "finance", "A tuition fee is overdue.", { relatedEntityType: "tuition_fee", relatedEntityId: feeId });
+
+    if (!hadUnresolvedWarning) {
+      await notifyStudent(pool, studentId, "Tuition payment is overdue.", { relatedEntityType: "tuition_fee", relatedEntityId: feeId });
+      await notifyParentOf(pool, studentId, "Tuition payment is overdue.", { relatedEntityType: "tuition_fee", relatedEntityId: feeId });
+      await notifyRole(pool, "finance", "A tuition fee is overdue.", { relatedEntityType: "tuition_fee", relatedEntityId: feeId });
+    }
   });
 
   eventBus.on("scholarship.approved", async ({ studentId, scholarshipId, semesterId }, pool) => {

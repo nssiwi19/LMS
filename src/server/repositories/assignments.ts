@@ -1,7 +1,5 @@
 import { Assignment, Submission } from "../../types";
 import { Queryable } from "../db";
-import { pool } from "../db";
-import { eventBus } from "../eventBus";
 import { generateId } from "../ids";
 import { notifyStudent } from "../notify";
 
@@ -61,7 +59,6 @@ export const assignmentsRepository = {
       [submissionId]
     )).rows[0];
     if (submission) {
-      await eventBus.emit("grade.saved", { studentId: submission.student_id, grade: score }, pool);
       const feedbackText = feedback?.trim() ? ` Nhận xét: ${feedback.trim()}` : "";
       await notifyStudent(
         db,

@@ -127,6 +127,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
   const [cpConfirmPass, setCpConfirmPass] = useState("");
   const [cpError, setCpError] = useState<string | null>(null);
   const [cpSuccess, setCpSuccess] = useState(false);
+  const [cpLoading, setCpLoading] = useState(false);
 
   // Mobile sidebar visibility
   const [showSidebar, setShowSidebar] = useState(false);
@@ -158,6 +159,8 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
   const [activeQuizId, setActiveQuizId] = useState<string | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
+  const quizAnswersRef = useRef<Record<string, string>>({});
+  quizAnswersRef.current = quizAnswers;
   const [quizTimeRemaining, setQuizTimeRemaining] = useState(0);
   const [quizFinishedState, setQuizFinishedState] = useState<{
     score: number;
@@ -293,44 +296,9 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
 
   // Lesson Tick Mark Toggle
   const handleToggleLessonComplete = (enrollmentId: string, lessonId: string) => {
-    const storeData = AppStore.get();
-    const existingProgressIndex = storeData.lessonProgress.findIndex(
-      p => p.enrollmentId === enrollmentId && p.lessonId === lessonId
-    );
-
-    let nextCompleted = true;
-
-    if (existingProgressIndex !== -1) {
-      nextCompleted = !storeData.lessonProgress[existingProgressIndex].completed;
-      storeData.lessonProgress[existingProgressIndex].completed = nextCompleted;
-      storeData.lessonProgress[existingProgressIndex].completedAt = nextCompleted ? new Date().toISOString() : undefined;
-    } else {
-      const progressItem: LessonProgress = {
-        id: generateId("prog"),
-        enrollmentId,
-        lessonId,
-        completed: true,
-        completedAt: new Date().toISOString()
-      };
-      storeData.lessonProgress.push(progressItem);
-    }
-
-    // Auto complete curriculum check & quiz evaluation trigger!
-    const activeEnroll = storeData.enrollments.find(e => e.id === enrollmentId);
-    if (activeEnroll && nextCompleted) {
-      const courseLessons = storeData.lessons.filter(l => l.courseId === activeEnroll.courseId);
-      const studentProgressForEnroll = storeData.lessonProgress.filter(p => p.enrollmentId === enrollmentId && p.completed);
-
-      // Check if all lessons are complete
-      if (studentProgressForEnroll.length === courseLessons.length) {
-        // Course completely viewed!
-        AppStore.log(currentUser.id, "complete_syllabus_lessons", activeEnroll.courseId, "Lessons syllabus fully completed.");
-        AppStore.notify(currentUser.id, "info", `Fabulous! You have read all learning lessons modules for your course. Take the final graduation quiz to earn certificates!`);
-      }
-    }
-
-    AppStore.save(storeData);
-    onRefreshData();
+    api.toggleProgress({ enrollmentId, lessonId })
+      .then(() => onRefreshData())
+      .catch((err: Error) => triggerToast(err.message || "Không thể cập nhật tiến độ bài học."));
   };
 
   // Launch Quiz Parameters
@@ -361,13 +329,14 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
   // Auto-submit on timer end or manual check
   const handleAutoSubmitQuiz = () => {
     if (!activeQuizId) return;
+    const answers = quizAnswersRef.current;
     const storeData = AppStore.get();
     const quiz = storeData.quizzes.find(q => q.id === activeQuizId)!;
     const questions = storeData.questions.filter(qst => qst.quizId === activeQuizId);
 
     let correctCount = 0;
     questions.forEach(q => {
-      const studentAns = (quizAnswers && quizAnswers[q.id]) || "";
+      const studentAns = answers[q.id] || "";
       if (q.type === "text") {
         // Matching text key values lower cases
         const cleanAnswerList = (q.correctAnswer || "").toLowerCase().split(",").map(itm => itm.trim());
@@ -383,7 +352,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
 
     const finalScore = Math.round((correctCount / (questions.length || 1)) * 100);
     const passed = finalScore >= quiz.passingScore;
-    api.submitQuiz({ quizId: activeQuizId, answers: quizAnswers, startedAt: new Date().toISOString() })
+    api.submitQuiz({ quizId: activeQuizId, answers, startedAt: new Date().toISOString() })
       .then((result: any) => {
         setQuizFinishedState({
           score: result.score,
@@ -639,15 +608,42 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
                   <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl">{cpError}</p>
                 )}
                 <button
-                  onClick={() => {
+                  disabled={cpLoading}
+                  onClick={async () => {
                     if (!cpOldPass || !cpNewPass || !cpConfirmPass) { setCpError("Vui lòng điền đầy đủ thông tin."); return; }
                     if (cpNewPass.length < 6) { setCpError("Mật khẩu mới phải có ít nhất 6 ký tự."); return; }
                     if (cpNewPass !== cpConfirmPass) { setCpError("Mật khẩu xác nhận không khớp."); return; }
-                    setCpSuccess(true); setCpOldPass(""); setCpNewPass(""); setCpConfirmPass("");
+                    setCpLoading(true);
+                    setCpError(null);
+                    try {
+                      const csrfToken = sessionStorage.getItem("e16_lms_csrf");
+                      const response = await fetch("/api/users/change-password", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          "X-CSRF-Token": csrfToken || ""
+                        },
+                        credentials: "include",
+                        body: JSON.stringify({ currentPassword: cpOldPass, newPassword: cpNewPass })
+                      });
+                      const data = await response.json();
+                      if (!response.ok) {
+                        setCpError(data.error || "Có lỗi xảy ra khi đổi mật khẩu.");
+                        return;
+                      }
+                      setCpSuccess(true);
+                      setCpOldPass("");
+                      setCpNewPass("");
+                      setCpConfirmPass("");
+                    } catch {
+                      setCpError("Dịch vụ xác thực không phản hồi.");
+                    } finally {
+                      setCpLoading(false);
+                    }
                   }}
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold rounded-xl transition cursor-pointer"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition cursor-pointer"
                 >
-                  Cập nhật mật khẩu
+                  {cpLoading ? "Đang cập nhật..." : "Cập nhật mật khẩu"}
                 </button>
               </div>
             )}

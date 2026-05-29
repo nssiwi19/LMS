@@ -26,6 +26,13 @@ interface AcademicManagerProps {
 export default function AcademicManager({ store, currentUser, onRefreshData, triggerToast, initialTab }: AcademicManagerProps) {
   const [activeTab, setActiveTab] = useState<"years" | "semesters" | "departments" | "programs">(initialTab ?? "years");
 
+  const persistFromSnapshot = (mutator: (data: LMSDataStore) => void) => {
+    const next = structuredClone(store);
+    mutator(next);
+    AppStore.save(next);
+    onRefreshData();
+  };
+
   // Sync activeTab when initialTab prop changes (sidebar click)
   React.useEffect(() => {
     if (initialTab) setActiveTab(initialTab);
@@ -131,18 +138,17 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
       triggerToast("Vui lòng điền đầy đủ thông tin năm học.");
       return;
     }
-    const storeData = AppStore.get();
     const newYear: AcademicYear = {
       id: generateId("ay"),
       name: yearName.trim(),
       startDate: yearStart,
       endDate: yearEnd,
-      isCurrent: years.length === 0 // Make current if it's the first one
+      isCurrent: years.length === 0
     };
-    storeData.academicYears.push(newYear);
-    AppStore.log(currentUser.id, "add_academic_year", newYear.name, "Khởi tạo năm học mới.");
-    AppStore.save(storeData);
-    onRefreshData();
+    persistFromSnapshot((storeData) => {
+      storeData.academicYears.push(newYear);
+      AppStore.log(currentUser.id, "add_academic_year", newYear.name, "Khởi tạo năm học mới.");
+    });
     triggerToast(`Đã thêm năm học: ${newYear.name}`);
     setYearName("");
     setYearStart("");
@@ -150,28 +156,26 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
   };
 
   const handleSetCurrentYear = (id: string) => {
-    const storeData = AppStore.get();
-    storeData.academicYears = storeData.academicYears.map(y => ({
-      ...y,
-      isCurrent: y.id === id
-    }));
-    const chosen = storeData.academicYears.find(y => y.id === id);
-    AppStore.log(currentUser.id, "set_current_academic_year", chosen?.name || id, "Thay đổi năm học hiện đại của SIS.");
-    AppStore.save(storeData);
-    onRefreshData();
-    triggerToast(`Đã chuyển đổi năm học hiện tại.`);
+    persistFromSnapshot((storeData) => {
+      storeData.academicYears = storeData.academicYears.map(y => ({
+        ...y,
+        isCurrent: y.id === id
+      }));
+      const chosen = storeData.academicYears.find(y => y.id === id);
+      AppStore.log(currentUser.id, "set_current_academic_year", chosen?.name || id, "Thay đổi năm học hiện đại của SIS.");
+    });
+    triggerToast("Đã chuyển đổi năm học hiện tại.");
   };
 
   const handleDeleteYear = (id: string) => {
-    const storeData = AppStore.get();
-    const linkedSems = storeData.semesters.filter(s => s.academicYearId === id);
+    const linkedSems = store.semesters.filter(s => s.academicYearId === id);
     if (linkedSems.length > 0) {
       triggerToast("Không thể xóa năm học vì có các học kỳ đang ràng buộc.");
       return;
     }
-    storeData.academicYears = storeData.academicYears.filter(y => y.id !== id);
-    AppStore.save(storeData);
-    onRefreshData();
+    persistFromSnapshot((storeData) => {
+      storeData.academicYears = storeData.academicYears.filter(y => y.id !== id);
+    });
     triggerToast("Đã xóa năm học thành công.");
   };
 
@@ -182,7 +186,6 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
       triggerToast("Vui lòng nhập đầy đủ thông tin học kỳ.");
       return;
     }
-    const storeData = AppStore.get();
     const newSem: Semester = {
       id: generateId("sem"),
       academicYearId: semYearId,
@@ -190,15 +193,13 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
       type: semType,
       startDate: semStart,
       endDate: semEnd,
-      registrationOpen: semRegReg(semRegOpen),
-      registrationClose: semRegReg(semRegClose)
+      registrationOpen: semRegOpen,
+      registrationClose: semRegClose
     };
-    function semRegReg(raw: string) { return raw; }
-
-    storeData.semesters.push(newSem);
-    AppStore.log(currentUser.id, "add_semester", newSem.name, "Liên kết học kỳ mới vào hệ thống.");
-    AppStore.save(storeData);
-    onRefreshData();
+    persistFromSnapshot((storeData) => {
+      storeData.semesters.push(newSem);
+      AppStore.log(currentUser.id, "add_semester", newSem.name, "Liên kết học kỳ mới vào hệ thống.");
+    });
     triggerToast(`Đã lưu học kỳ: ${newSem.name}`);
     setSemName("");
     setSemStart("");
@@ -208,10 +209,9 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
   };
 
   const handleDeleteSemester = (id: string) => {
-    const storeData = AppStore.get();
-    storeData.semesters = storeData.semesters.filter(s => s.id !== id);
-    AppStore.save(storeData);
-    onRefreshData();
+    persistFromSnapshot((storeData) => {
+      storeData.semesters = storeData.semesters.filter(s => s.id !== id);
+    });
     triggerToast("Đã loại bỏ học kỳ khỏi danh sách.");
   };
 
@@ -222,7 +222,6 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
       triggerToast("Thông tin khoa chuyên môn không được bỏ trống.");
       return;
     }
-    const storeData = AppStore.get();
     const newDept: Department = {
       id: generateId("dept"),
       name: deptName.trim(),
@@ -230,10 +229,10 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
       headTeacherId: deptHeadId,
       description: deptDesc.trim()
     };
-    storeData.departments.push(newDept);
-    AppStore.log(currentUser.id, "add_department", newDept.name, `Đăng ký thành lập khoa chuyên môn code: ${newDept.code}`);
-    AppStore.save(storeData);
-    onRefreshData();
+    persistFromSnapshot((storeData) => {
+      storeData.departments.push(newDept);
+      AppStore.log(currentUser.id, "add_department", newDept.name, `Đăng ký thành lập khoa chuyên môn code: ${newDept.code}`);
+    });
     triggerToast(`Đã lập khoa: ${newDept.name}`);
     setDeptName("");
     setDeptCode("");
@@ -248,7 +247,6 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
       triggerToast("Vui lòng hợp lệ hóa thông tin chương trình.");
       return;
     }
-    const storeData = AppStore.get();
     const newProg: Program = {
       id: generateId("prog"),
       departmentId: progDeptId,
@@ -258,10 +256,10 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
       totalCredits: Number(progCredits),
       description: progDesc.trim()
     };
-    storeData.programs.push(newProg);
-    AppStore.log(currentUser.id, "add_program", newProg.name, `Tạo hệ đào tạo ${newProg.type} ngành ${newProg.code}`);
-    AppStore.save(storeData);
-    onRefreshData();
+    persistFromSnapshot((storeData) => {
+      storeData.programs.push(newProg);
+      AppStore.log(currentUser.id, "add_program", newProg.name, `Tạo hệ đào tạo ${newProg.type} ngành ${newProg.code}`);
+    });
     triggerToast(`Đã tạo ngành đào tạo: ${newProg.name}`);
     setProgName("");
     setProgCode("");
@@ -276,15 +274,11 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
       triggerToast("Thông tin khung bài học học phần chưa hợp lệ.");
       return;
     }
-
-    const storeData = AppStore.get();
-    // Check duplicate
-    const exists = storeData.programCourses.some(pc => pc.programId === selectedProgramId && pc.courseId === currCourseId);
+    const exists = programCourses.some(pc => pc.programId === selectedProgramId && pc.courseId === currCourseId);
     if (exists) {
       triggerToast("Học phần này đã nằm trong khung chương trình của ngành.");
       return;
     }
-
     const newProgCourse: ProgramCourse = {
       id: generateId("pc"),
       programId: selectedProgramId,
@@ -293,19 +287,18 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
       isRequired: currRequired,
       semester: Number(currSemester)
     };
-    storeData.programCourses.push(newProgCourse);
-    AppStore.log(currentUser.id, "add_program_course", `Curriculum ${selectedProgramId}`, `Liên kết học phần ${currCourseId} vào khung đào tạo.`);
-    AppStore.save(storeData);
-    onRefreshData();
+    persistFromSnapshot((storeData) => {
+      storeData.programCourses.push(newProgCourse);
+      AppStore.log(currentUser.id, "add_program_course", `Curriculum ${selectedProgramId}`, `Liên kết học phần ${currCourseId} vào khung đào tạo.`);
+    });
     triggerToast("Học phần đã được ghim vào khung đào tạo thành công.");
     setCurrCourseId("");
   };
 
   const handleRemoveCourseFromCurriculum = (id: string) => {
-    const storeData = AppStore.get();
-    storeData.programCourses = storeData.programCourses.filter(pc => pc.id !== id);
-    AppStore.save(storeData);
-    onRefreshData();
+    persistFromSnapshot((storeData) => {
+      storeData.programCourses = storeData.programCourses.filter(pc => pc.id !== id);
+    });
     triggerToast("Đã rút học phần ra khỏi khung giảng dạy.");
   };
 

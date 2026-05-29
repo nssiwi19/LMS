@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { User, StudentProfile, AdvisorNote, AcademicWarning, TuitionFee, Course, Enrollment, AttendanceSession, AttendanceRecord, QuizAttempt } from "../types";
 import { AppStore } from "../store";
+import { calculateCourseGradePercent, collectCourseGradeInputs, warningTypeLabel } from "../gradeUtils";
 import ModalPortal from "./ModalPortal";
 
 interface ParentPanelProps {
@@ -51,7 +52,24 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
   };
 
   // Parents are linked to exactly one student via linkedStudentId
-  const childId = currentUser.role === "student" ? currentUser.id : (currentUser.linkedStudentId || "user_student");
+  const childId = currentUser.role === "student" ? currentUser.id : currentUser.linkedStudentId;
+
+  if (currentUser.role === "parent" && !childId) {
+    return (
+      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-6 text-sm text-amber-100">
+        Tài khoản phụ huynh chưa được liên kết với học viên. Vui lòng liên hệ quản trị viên để được hỗ trợ.
+      </div>
+    );
+  }
+
+  if (!childId) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-white/70">
+        Không xác định được học viên cần theo dõi.
+      </div>
+    );
+  }
+
   const childUser = store.users.find(u => u.id === childId);
   const childProfile = store.studentProfiles.find(p => p.userId === childId);
   const childProgram = store.programs.find(p => p.id === childProfile?.programId);
@@ -59,57 +77,14 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
   // Attendance metrics
   const courseEnrollments = store.enrollments.filter(e => e.studentId === childId && e.status !== "cancelled");
 
-  const calculateEnrollmentGrades = (enroll: any, studentId: string) => {
-    const courseId = enroll.courseId;
-    const courseQuizzes = store.quizzes.filter((q: any) => q.courseId === courseId);
-    const quizAttempts = store.quizAttempts.filter((qa: any) => qa.studentId === studentId && courseQuizzes.some((q: any) => q.id === qa.quizId));
-    const quizScores = courseQuizzes.map((q: any) => {
-      const attempts = quizAttempts.filter((qa: any) => qa.quizId === q.id);
-      return attempts.length > 0 ? Math.max(...attempts.map((a: any) => a.score)) : null;
-    }).filter((s: any): s is number => s !== null);
-
-    const courseAssignments = store.assignments.filter((a: any) => a.courseId === courseId);
-    const assignmentSubmissions = store.submissions.filter((s: any) =>
-      s.studentId === studentId &&
-      courseAssignments.some((ea: any) => ea.id === s.assignmentId) &&
-      s.score !== undefined
-    );
-
-    let midtermVal = null;
-    if (assignmentSubmissions.length > 0) {
-      midtermVal = Math.round(assignmentSubmissions.reduce((sum: number, s: any) => {
-        const chal = store.assignments.find((a: any) => a.id === s.assignmentId);
-        const maxS = chal ? chal.maxScore : 100;
-        return sum + ((s.score || 0) / maxS) * 100;
-      }, 0) / assignmentSubmissions.length);
-    }
-
-    let finalVal = null;
-    if (quizScores.length > 0) {
-      finalVal = Math.round(quizScores.reduce((sum: number, s: number) => sum + s, 0) / quizScores.length);
-    }
-
-    let finalGradeNum = 0;
-    let hasGrades = false;
-
-    if (midtermVal !== null && finalVal !== null) {
-      finalGradeNum = Math.round(midtermVal * 0.3 + finalVal * 0.7);
-      hasGrades = true;
-    } else if (midtermVal !== null) {
-      finalGradeNum = midtermVal;
-      hasGrades = true;
-    } else if (finalVal !== null) {
-      finalGradeNum = finalVal;
-      hasGrades = true;
-    } else {
-      const hasCompletedEnrollment = enroll.status === "completed";
-      if (hasCompletedEnrollment) {
-        finalGradeNum = 85;
-        hasGrades = true;
-      }
-    }
-
-    return { midtermVal, finalVal, finalGradeNum, hasGrades };
+  const calculateEnrollmentGrades = (enroll: Enrollment, studentId: string) => {
+    const gradeResult = calculateCourseGradePercent(collectCourseGradeInputs(store, studentId, enroll.courseId));
+    return {
+      midtermVal: gradeResult.assignmentAvg,
+      finalVal: gradeResult.quizAvg,
+      finalGradeNum: gradeResult.finalPercent ?? 0,
+      hasGrades: gradeResult.hasGrades
+    };
   };
 
   // Filtered grades enrollment
@@ -176,8 +151,8 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
   // Active Warnings for child
   const childWarnings = store.academicWarnings.filter(w => w.studentId === childId && !w.isResolved);
 
-  // Filter advisor notes shared with parent (where shareWithParent !== false)
-  const sharedNotes = store.advisorNotes.filter(n => n.studentId === childId && (n as any).shareWithParent !== false);
+  // Filter advisor notes explicitly shared with parent
+  const sharedNotes = store.advisorNotes.filter(n => n.studentId === childId && (n as any).shareWithParent === true);
 
   return (
     <div className="space-y-6 font-sans">
@@ -194,8 +169,8 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
           </div>
         </div>
         <div className="bg-black/35 py-1.5 px-4 rounded-2xl border border-white/5 text-xs text-white/70 flex flex-col md:text-right gap-1 font-mono">
-          <span>Học sinh đại diện: <strong className="text-white text-sans">{childUser.name}</strong></span>
-          <span className="text-[10px] text-white/40">Mã SV: {childProfile.studentCode} | Khoá: K{childProfile.academicYear}</span>
+          <span>Học sinh đại diện: <strong className="text-white text-sans">{childUser?.name || "—"}</strong></span>
+          <span className="text-[10px] text-white/40">Mã SV: {childProfile?.studentCode || "—"} | Khoá: K{childProfile?.academicYear ?? "—"}</span>
         </div>
       </div>
 
@@ -205,7 +180,7 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
         <div className="bg-slate-900 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
           <div>
             <span className="text-xs text-white/45 block tracking-wider uppercase font-semibold">Điểm TB Tích Lũy</span>
-            <span className="text-lg font-black text-white mt-1 block">{childProfile.gpa.toFixed(2)} GPA</span>
+            <span className="text-lg font-black text-white mt-1 block">{childProfile?.gpa?.toFixed(2) ?? "—"} GPA</span>
           </div>
           <TrendingUp className="h-5 w-5 text-indigo-400" />
         </div>
@@ -535,7 +510,7 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
                     <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
                     <div className="text-xs space-y-1 min-w-0 flex-1">
                       <div className="flex justify-between">
-                        <span className="font-bold uppercase">Cảnh Báo {warning.type === "attendance" ? "Chuyên Cần" : "Vấn Đề Kỷ Luật"}</span>
+                        <span className="font-bold uppercase">Cảnh Báo {warningTypeLabel(warning.type)}</span>
                         <span className="text-[10px] text-white/30 font-mono">{new Date(warning.createdAt).toLocaleDateString("vi-VN")}</span>
                       </div>
                       <p className="text-white/80">{warning.message}</p>

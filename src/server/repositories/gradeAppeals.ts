@@ -3,6 +3,7 @@ import { generateId } from "../ids";
 import { eventBus } from "../eventBus";
 import { pool } from "../db";
 import { notifyStudent } from "../notify";
+import { toGradePoint, toLetterGrade } from "../gpaCalculator";
 
 export const gradeAppealsRepository = {
   async create(db: Queryable, studentId: string, input: { courseRegistrationId: string; reason: string }) {
@@ -72,8 +73,17 @@ export const gradeAppealsRepository = {
     )).rows[0];
     if (!row) return null;
     if (status === "approved" && row.revised_grade) {
-      await db.query("UPDATE course_registrations SET grade = $1, grade_posted_at = $2 WHERE id = $3", [row.revised_grade, new Date().toISOString(), row.course_registration_id]);
-      await eventBus.emit("grade.saved", { studentId: row.student_id, courseRegistrationId: row.course_registration_id, grade: row.revised_grade }, pool);
+      const numericScore = Number(row.revised_grade);
+      const letterGrade = Number.isFinite(numericScore) ? toLetterGrade(numericScore) : String(row.revised_grade);
+      const gradePoint = toGradePoint(letterGrade);
+      const gradeValue = Number.isFinite(numericScore) ? numericScore : null;
+      await db.query(
+        `UPDATE course_registrations
+         SET grade = COALESCE($1, grade), letter_grade = $2, grade_point = $3, grade_posted_at = $4
+         WHERE id = $5`,
+        [gradeValue, letterGrade, gradePoint, new Date().toISOString(), row.course_registration_id]
+      );
+      await eventBus.emit("grade.saved", { studentId: row.student_id, courseRegistrationId: row.course_registration_id, grade: letterGrade }, pool);
     }
     await notifyStudent(db, row.student_id, status === "approved" ? "Grade appeal approved." : `Grade appeal rejected.${resolutionNote ? ` ${resolutionNote}` : ""}`, { relatedEntityType: "grade_appeal", relatedEntityId: appealId });
     return row;

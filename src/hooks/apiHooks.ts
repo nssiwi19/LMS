@@ -3,6 +3,36 @@ import { api } from "../api";
 import { AppStore } from "../store";
 import { LMSDataStore } from "../types";
 
+const createEmptyStore = (): LMSDataStore => ({
+  users: [],
+  courses: [],
+  lessons: [],
+  enrollments: [],
+  lessonProgress: [],
+  quizzes: [],
+  questions: [],
+  quizAttempts: [],
+  assignments: [],
+  submissions: [],
+  certificates: [],
+  notifications: [],
+  forumPosts: [],
+  auditLogs: [],
+  transactions: [],
+  academicYears: [],
+  semesters: [],
+  departments: [],
+  programs: [],
+  programCourses: [],
+  studentProfiles: [],
+  attendanceSessions: [],
+  attendanceRecords: [],
+  tuitionFees: [],
+  academicWarnings: [],
+  officialTranscripts: [],
+  advisorNotes: []
+});
+
 const hydrateStore = (store: LMSDataStore) => {
   AppStore.hydrate(store);
   return store;
@@ -68,8 +98,9 @@ export function useGradebook() {
 
 export function useApiStore(enabled = true) {
   const query = useStoreSnapshot(enabled);
+  const store = query.data ?? (query.isLoading ? createEmptyStore() : AppStore.get());
   return {
-    store: query.data || AppStore.get(),
+    store,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,

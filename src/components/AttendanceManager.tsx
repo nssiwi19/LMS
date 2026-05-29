@@ -14,8 +14,8 @@ import {
 } from "lucide-react";
 import { LMSDataStore, Course, User, AttendanceSession, AttendanceRecord, AcademicWarning } from "../types";
 import { AppStore } from "../store";
-import { generateId } from "../utils";
 import { api } from "../api";
+import { normalizeWarningType, warningTypesMatch } from "../gradeUtils";
 import ModalPortal from "./ModalPortal";
 
 interface AttendanceManagerProps {
@@ -171,12 +171,11 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
       return;
     }
 
-    const storeData = AppStore.get();
-    let warningCount = 0;
+    const pendingWarnings: Array<{ studentId: string; message: string }> = [];
 
     courseEnrollments.forEach(enroll => {
       const studentId = enroll.studentId;
-      const records = storeData.attendanceRecords.filter(r => 
+      const records = store.attendanceRecords.filter(r =>
         r.studentId === studentId && 
         sessions.some(s => s.id === r.sessionId)
       );
@@ -185,38 +184,35 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
       const rate = Math.round((presentRecords / sessionsCount) * 100);
 
       if (rate < 80) {
-        // Issue Academic Warning if not exist
         const courseObj = courses.find(c => c.id === selectedCourseId);
         const nameText = courseObj ? courseObj.title : selectedCourseId;
-        const exists = storeData.academicWarnings.some(w => 
-          w.studentId === studentId && 
-          w.type === "attendance" && 
+        const exists = store.academicWarnings.some(w =>
+          w.studentId === studentId &&
+          warningTypesMatch(w.type, "low_attendance") &&
           !w.isResolved &&
           w.message.includes(nameText)
         );
 
         if (!exists) {
-          const warn: AcademicWarning = {
-            id: generateId("warn"),
+          pendingWarnings.push({
             studentId,
-            type: "attendance",
-            message: `Tỷ lệ tham gia giảng dạy môn: ${nameText} xuống thấp báo động dưới 80% (Thực đạt ${rate}% vắng ${sessionsCount - presentRecords} buổi).`,
-            isResolved: false,
-            createdAt: new Date().toISOString()
-          };
-          storeData.academicWarnings.push(warn);
-          
-          // Auto issue system notification to student
-          AppStore.notify(studentId, "danger", `Cảnh báo chuyên cần: Bạn đã vắng học vượt quá giới hạn ở môn ${nameText} (${rate}%). Vui lòng liên hệ phòng đào tạo.`);
-          warningCount++;
+            message: `Tỷ lệ tham gia giảng dạy môn: ${nameText} xuống thấp báo động dưới 80% (Thực đạt ${rate}% vắng ${sessionsCount - presentRecords} buổi).`
+          });
         }
       }
     });
 
-    if (warningCount > 0) {
-      AppStore.save(storeData);
-      onRefreshData();
-      triggerToast(`Đã rà soát và phát học cảnh báo đỏ cho ${warningCount} sinh viên nghỉ học quá hạn.`);
+    if (pendingWarnings.length > 0) {
+      Promise.all(
+        pendingWarnings.map((warning) =>
+          api.createWarning({ studentId: warning.studentId, type: "low_attendance", message: warning.message })
+        )
+      )
+        .then(() => {
+          onRefreshData();
+          triggerToast(`Đã rà soát và phát học cảnh báo đỏ cho ${pendingWarnings.length} sinh viên nghỉ học quá hạn.`);
+        })
+        .catch((err: Error) => triggerToast(err.message || "Không thể tạo cảnh báo chuyên cần."));
     } else {
       triggerToast("Mọi học sinh tại lớp học phần này đều đảm bảo chuyên cần (Tỷ lệ >= 80%).");
     }

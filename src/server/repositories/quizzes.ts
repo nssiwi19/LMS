@@ -1,9 +1,8 @@
 import { Question, Quiz } from "../../types";
 import { Queryable } from "../db";
-import { pool } from "../db";
-import { eventBus } from "../eventBus";
 import { generateId } from "../ids";
 import { questionFromRow, quizFromRow } from "../mappers";
+import { notifyStudent } from "../notify";
 
 export const quizzesRepository = {
   async create(db: Queryable, input: Omit<Quiz, "id">) {
@@ -70,7 +69,12 @@ export const quizzesRepository = {
       "INSERT INTO quiz_attempts (id,quiz_id,student_id,answers_json,score,passed,started_at,submitted_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
       [attempt.id, quizId, studentId, JSON.stringify(answers), score, passed ? 1 : 0, attempt.startedAt, attempt.submittedAt]
     );
-    await eventBus.emit("grade.saved", { studentId, grade: score }, pool);
+    await notifyStudent(
+      db,
+      studentId,
+      `Quiz "${quiz.title}" scored ${score}%${passed ? " — passed" : ""}.`,
+      { relatedEntityType: "quiz", relatedEntityId: quizId }
+    );
     return { row: { ...attempt, correctAnswers: correctCount, total: questions.length } };
   }
 };

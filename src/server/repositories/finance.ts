@@ -21,11 +21,21 @@ export const financeRepository = {
     };
   },
 
-  async payTuition(db: Queryable, feeId: string, paidAmount: number) {
+  async payTuition(db: Queryable, feeId: string, paidAmount: number, ownerStudentId?: string) {
     const fee = (await db.query("SELECT * FROM tuition_fees WHERE id = $1", [feeId])).rows[0];
     if (!fee) return null;
+    if (ownerStudentId && fee.student_id !== ownerStudentId) return null;
     if (paidAmount <= 0) return null;
     if (Number(fee.paid_amount || 0) >= Number(fee.amount)) {
+      if (fee.status !== "paid") {
+        await db.query("UPDATE tuition_fees SET status = 'paid' WHERE id = $1", [feeId]);
+        await db.query("UPDATE student_profiles SET fee_hold = false WHERE user_id = $1", [fee.student_id]);
+        await db.query(
+          "UPDATE academic_warnings SET is_resolved = true, resolved_at = $2 WHERE student_id = $1 AND type = 'unpaid_fee' AND is_resolved = false",
+          [fee.student_id, new Date().toISOString()]
+        );
+        fee.status = "paid";
+      }
       return tuitionFeeFromRow(fee);
     }
     const totalPaid = Math.min(Number(fee.amount), Number(fee.paid_amount || 0) + paidAmount);
@@ -79,7 +89,7 @@ export const financeRepository = {
         await db.query(
           `UPDATE enrollments
            SET status = 'pending_payment'
-           WHERE student_id = $1 AND course_id = $2`,
+           WHERE student_id = $1 AND course_id = $2 AND status = 'pending_payment'`,
           [tx.student_id, tx.course_id]
         );
       }

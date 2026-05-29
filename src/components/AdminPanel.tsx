@@ -120,62 +120,35 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
   };
 
   // Create User Action
-  const handleCreateUserSubmit = (e: React.FormEvent) => {
+  const handleCreateUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserEmail.includes("@") || newUserPassword.length < 6 || !newUserName.trim()) {
-      triggerToast("Thông tin đăng ký chưa hợp lệ (Mật khẩu tối thiểu 6 ký tự).");
+    if (!newUserEmail.includes("@") || newUserPassword.length < 8 || !newUserName.trim()) {
+      triggerToast("Thông tin đăng ký chưa hợp lệ (Mật khẩu tối thiểu 8 ký tự).");
       return;
     }
 
-    const storeData = AppStore.get();
-    const exists = storeData.users.find(u => u.email.toLowerCase() === newUserEmail.toLowerCase());
+    const exists = store.users.find(u => u.email.toLowerCase() === newUserEmail.toLowerCase());
     if (exists) {
       triggerToast("Email đăng ký này tài khoản đã tồn tại.");
       return;
     }
 
-    const credential = hashPassword(newUserPassword);
-    const added: User = {
-      id: generateId("user"),
-      name: newUserName.trim(),
-      email: newUserEmail.toLowerCase().trim(),
-      passwordHash: credential.hash,
-      passwordSalt: credential.salt,
-      role: newUserRole,
-      isActive: true,
-      createdAt: new Date().toISOString()
-    };
-
-    storeData.users.push(added);
-
-    // If it's a student account, auto-generate StudentProfile
-    if (newUserRole === "student") {
-      if (!storeData.studentProfiles) storeData.studentProfiles = [];
-      const studentCode = `SV${new Date().getFullYear()}${String(storeData.studentProfiles.length + 1).padStart(4, "0")}`;
-      storeData.studentProfiles.push({
-        id: generateId("profile"),
-        userId: added.id,
-        studentCode,
-        programId: "prog_se", // software engineering as default seeded
-        departmentId: "dept_cs", // computerscience default
-        academicYear: 1, // year 1
-        enrollmentDate: new Date().toISOString().slice(0, 10),
-        expectedGraduation: new Date(new Date().setFullYear(new Date().getFullYear() + 4)).toISOString().slice(0, 10),
-        status: "active",
-        gpa: 0.0,
-        totalCreditsEarned: 0
+    try {
+      await api.createUser({
+        email: newUserEmail.toLowerCase().trim(),
+        password: newUserPassword,
+        name: newUserName.trim(),
+        role: newUserRole
       });
+      setNewUserEmail("");
+      setNewUserName("");
+      setNewUserPassword("");
+      setShowAddUserModal(false);
+      onRefreshData();
+      triggerToast("Đã lưu trữ và thiết lập tài khoản thành công.");
+    } catch (err: any) {
+      triggerToast(err.message || "Không thể tạo tài khoản.");
     }
-
-    AppStore.log(currentUser.id, "create_user", added.email, `Khởi tạo người dùng quyền: ${added.role}`);
-    AppStore.save(storeData);
-    
-    setNewUserEmail("");
-    setNewUserName("");
-    setNewUserPassword("");
-    setShowAddUserModal(false);
-    onRefreshData();
-    triggerToast("Đã lưu trữ và thiết lập tài khoản thành công.");
   };
 
   // CSV Users Bulk Import Entry
@@ -189,7 +162,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
     const rows = csvText.split("\n").map(r => r.trim()).filter(Boolean);
     let successCount = 0;
     let errorCount = 0;
-    const storeData = AppStore.get();
+    const storeData = structuredClone(store);
 
     rows.forEach((row, index) => {
       if (index === 0 && (row.toLowerCase().includes("name") || row.toLowerCase().includes("email"))) {
@@ -268,18 +241,15 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
 
   // Toggle user active status action
   const handleToggleUserStatus = (userId: string) => {
-    const storeData = AppStore.get();
-    storeData.users = storeData.users.map(u => {
-      if (u.id === userId) {
-        const nextState = !u.isActive;
-        AppStore.log(currentUser.id, "toggle_user_status", u.email, `Thay đổi trạng thái tài khoản thành: ${nextState ? "Active" : "Locked"}`);
-        return { ...u, isActive: nextState };
-      }
-      return u;
-    });
-    AppStore.save(storeData);
-    onRefreshData();
-    triggerToast("Đã cập nhật trạng thái hoạt động người dùng.");
+    const user = store.users.find(u => u.id === userId);
+    if (!user) return;
+    const nextState = !user.isActive;
+    api.setUserStatus(userId, nextState)
+      .then(() => {
+        onRefreshData();
+        triggerToast("Đã cập nhật trạng thái hoạt động người dùng.");
+      })
+      .catch((err: Error) => triggerToast(err.message || "Không thể cập nhật trạng thái."));
   };
 
   const ensureStudentProfile = (storeData: LMSDataStore, userId: string) => {
@@ -304,7 +274,7 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
   const handleUpdateUserRole = (userId: string, newRole: User["role"]) => {
     const allowedRoles: User["role"][] = ["student", "teacher", "admin", "finance", "academic_admin", "le_tan", "advisor"];
     if (!allowedRoles.includes(newRole)) return;
-    const storeData = AppStore.get();
+    const storeData = structuredClone(store);
     storeData.users = storeData.users.map(user => user.id === userId ? { ...user, role: newRole } : user);
     if (newRole === "student") ensureStudentProfile(storeData, userId);
     AppStore.log(currentUser.id, "update_user_role", userId, `Changed role to ${newRole}`);
@@ -315,19 +285,12 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
 
   // Approve Course selection
   const handleApproveCourse = (courseId: string) => {
-    const storeData = AppStore.get();
-    storeData.courses = storeData.courses.map(c => {
-      if (c.id === courseId) {
-        AppStore.log(currentUser.id, "approve_course", c.title, "Phê duyệt công khai khóa giảng dạy.");
-        AppStore.notify(c.teacherId, "success", `Tin vui: Bài yêu cầu mở môn "${c.title}" của bạn đã được quản trị viên duyệt công bố hoàn tất!`);
-        return { ...c, status: "published" };
-      }
-      return c;
-    });
-    api.publishCourse(courseId).catch(err => console.warn("Failed to publish course on server:", err));
-    AppStore.save(storeData);
-    onRefreshData();
-    triggerToast("Đã phê duyệt và phát hành khóa học.");
+    api.publishCourse(courseId)
+      .then(() => {
+        onRefreshData();
+        triggerToast("Đã phê duyệt và phát hành khóa học.");
+      })
+      .catch((err: Error) => triggerToast(err.message || "Không thể phê duyệt khóa học."));
   };
 
   const handleStartRejectCourse = (courseId: string) => {
@@ -342,20 +305,13 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
       return;
     }
 
-    const storeData = AppStore.get();
-    storeData.courses = storeData.courses.map(c => {
-      if (c.id === rejectingCourseId) {
-        AppStore.log(currentUser.id, "reject_course", c.title, `Trả về yêu cầu: ${rejectReason}`);
-        AppStore.notify(c.teacherId, "danger", `Bài đăng ký khóa học "${c.title}" của bạn đã được phản hồi lỗi điều chỉnh học phần lý do: ${rejectReason}`);
-        return { ...c, status: "rejected" };
-      }
-      return c;
-    });
-    api.rejectCourse(rejectingCourseId, rejectReason).catch(err => console.warn("Failed to reject course on server:", err));
-    AppStore.save(storeData);
-    setRejectingCourseId(null);
-    onRefreshData();
-    triggerToast("Học phần lớp học được trả về để điều hành giảng viên bổ sung.");
+    api.rejectCourse(rejectingCourseId, rejectReason)
+      .then(() => {
+        setRejectingCourseId(null);
+        onRefreshData();
+        triggerToast("Học phần lớp học được trả về để điều hành giảng viên bổ sung.");
+      })
+      .catch((err: Error) => triggerToast(err.message || "Không thể từ chối khóa học."));
   };
 
   // Local JSON snapshot export dump backup

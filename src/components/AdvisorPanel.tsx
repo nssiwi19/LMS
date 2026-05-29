@@ -20,6 +20,7 @@ import { User, StudentProfile, AdvisorNote, AcademicWarning, Course, ProgramCour
 import { AppStore } from "../store";
 import { generateId } from "../utils";
 import { api } from "../api";
+import { warningTypeLabel, normalizeWarningType } from "../gradeUtils";
 import ModalPortal from "./ModalPortal";
 
 interface AdvisorPanelProps {
@@ -194,33 +195,12 @@ export default function AdvisorPanel({ currentUser, onLogout, onRefreshData }: A
   };
 
   const handleResolveWarning = (warningId: string) => {
-    const freshStore = AppStore.get();
-    const warning = freshStore.academicWarnings.find(w => w.id === warningId);
-    if (warning) {
-      warning.isResolved = true;
-      
-      freshStore.auditLogs.unshift({
-        id: generateId("log"),
-        userId: currentUser.id,
-        action: "resolve_academic_warning",
-        target: "academic_warnings",
-        detail: `Cố vấn đã xử lý hoàn tất cảnh báo loại ${warning.type} cho SV ID: ${warning.studentId}`,
-        createdAt: new Date().toISOString()
-      });
-
-      freshStore.notifications.unshift({
-        id: generateId("note"),
-        userId: warning.studentId,
-        type: "success",
-        message: `Cảnh báo học tập (${warning.type}) của bạn đã được Cố vấn học tập giải quyết thành công.`,
-        isRead: false,
-        createdAt: new Date().toISOString()
-      });
-
-      AppStore.save(freshStore);
-      onRefreshData();
-      showToast("Xử lý cảnh báo học tập thành công!");
-    }
+    api.resolveWarning(warningId)
+      .then(() => {
+        onRefreshData();
+        showToast("Xử lý cảnh báo học tập thành công!");
+      })
+      .catch((err: Error) => showToast(err.message || "Không thể giải quyết cảnh báo."));
   };
 
   return (
@@ -417,9 +397,9 @@ export default function AdvisorPanel({ currentUser, onLogout, onRefreshData }: A
                         <div key={warning.id} className="p-4 bg-black/25 rounded-xl border border-white/5 flex flex-col md:flex-row justify-between md:items-center gap-3">
                           <div className="space-y-1">
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block ${
-                              warning.type === "attendance" ? "bg-red-500/10 text-red-400" : "bg-amber-500/10 text-amber-400"
+                              normalizeWarningType(warning.type) === "low_attendance" ? "bg-red-500/10 text-red-400" : "bg-amber-500/10 text-amber-400"
                             }`}>
-                              Cảnh báo {warning.type === "attendance" ? "Chuyên cần" : "Kết quả học tập"}
+                              Cảnh báo {warningTypeLabel(warning.type)}
                             </span>
                             <p className="text-xs text-white/75">{warning.message}</p>
                             <span className="text-[10px] text-white/30 block font-mono">Thời gian phát hiện: {new Date(warning.createdAt).toLocaleDateString("vi-VN")}</span>

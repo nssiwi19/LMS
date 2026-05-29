@@ -32,7 +32,10 @@ export const enrollmentsRepository = {
   },
 
   async existsForCourse(db: Queryable, studentId: string, courseId: string) {
-    return Boolean((await db.query("SELECT id FROM enrollments WHERE course_id = $1 AND student_id = $2", [courseId, studentId])).rows[0]);
+    return Boolean((await db.query(
+      "SELECT id FROM enrollments WHERE course_id = $1 AND student_id = $2 AND status IN ('active', 'pending_payment')",
+      [courseId, studentId]
+    )).rows[0]);
   },
 
   async toggleProgress(db: Queryable, enrollmentId: string, lessonId: string) {
