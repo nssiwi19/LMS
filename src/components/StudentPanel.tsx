@@ -843,7 +843,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
         </div>
 
         {/* Right Canvas workspace content bodies */}
-        <div ref={contentRef} className="relative flex-1 w-full bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6 backdrop-blur-md min-w-0 scroll-mt-4">
+        <div ref={contentRef} className="relative flex-1 w-full bg-white/5 border border-white/10 rounded-3xl p-4 md:p-6 min-w-0 scroll-mt-4">
 
         <CourseCatalog {...studentPanelProps} />
         <MyLearningWorkspace {...studentPanelProps} />
