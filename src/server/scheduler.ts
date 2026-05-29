@@ -1,5 +1,6 @@
 import { pool } from "./db";
 import { eventBus } from "./eventBus";
+import { recalculateGPA } from "./gpaCalculator";
 
 export function startScheduler() {
   setInterval(async () => {
@@ -50,6 +51,23 @@ async function checkAttendanceAlerts() {
 async function checkGPAWarnings() {
   const students = await pool.query("SELECT user_id FROM student_profiles WHERE status = 'active'");
   for (const row of students.rows) {
-    await eventBus.emit("grade.saved", { studentId: row.user_id, grade: "GPA check" }, pool);
+    const studentId = row.user_id;
+    const { gpa } = await recalculateGPA(pool, studentId);
+    if (gpa < 2.0) {
+      await pool.query(
+        `INSERT INTO academic_warnings (id, student_id, type, message, is_resolved, created_at)
+         VALUES ($1,$2,'low_gpa',$3,false,$4)
+         ON CONFLICT (student_id, type, COALESCE(course_id, '')) DO UPDATE
+         SET message = EXCLUDED.message`,
+        [`warning_low_gpa_${studentId}`, studentId, `GPA is below 2.0 (${gpa}).`, new Date().toISOString()]
+      );
+      await pool.query("UPDATE student_profiles SET academic_probation = true WHERE user_id = $1", [studentId]);
+    } else {
+      await pool.query(
+        "UPDATE academic_warnings SET is_resolved = true, resolved_at = $2 WHERE student_id = $1 AND type = 'low_gpa' AND is_resolved = false",
+        [studentId, new Date().toISOString()]
+      );
+      await pool.query("UPDATE student_profiles SET academic_probation = false WHERE user_id = $1", [studentId]);
+    }
   }
 }

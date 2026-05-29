@@ -59,23 +59,30 @@ export const financeRepository = {
     )).rows[0];
 
     if (status === "approved") {
-      await db.query(
-        `UPDATE enrollments
-         SET status = 'active'
-         WHERE student_id = $1 AND course_id = $2 AND status = 'pending_payment'`,
-        [tx.student_id, tx.course_id]
-      );
-      if (tx.notes && tx.notes.startsWith("tuition_fee_pay:")) {
+      // Only activate enrollment for course-registration transactions (not semester tuition payments)
+      const isTuitionPayment = tx.notes && tx.notes.startsWith("tuition_fee_pay:");
+      if (!isTuitionPayment && tx.course_id) {
+        await db.query(
+          `UPDATE enrollments
+           SET status = 'active'
+           WHERE student_id = $1 AND course_id = $2 AND status = 'pending_payment'`,
+          [tx.student_id, tx.course_id]
+        );
+      }
+      if (isTuitionPayment) {
         const feeId = tx.notes.replace("tuition_fee_pay:", "");
         await this.payTuition(db, feeId, Number(tx.amount));
       }
     } else {
-      await db.query(
-        `UPDATE enrollments
-         SET status = 'pending_payment'
-         WHERE student_id = $1 AND course_id = $2`,
-        [tx.student_id, tx.course_id]
-      );
+      const isTuitionPayment = tx.notes && tx.notes.startsWith("tuition_fee_pay:");
+      if (!isTuitionPayment && tx.course_id) {
+        await db.query(
+          `UPDATE enrollments
+           SET status = 'pending_payment'
+           WHERE student_id = $1 AND course_id = $2`,
+          [tx.student_id, tx.course_id]
+        );
+      }
     }
 
     return row;

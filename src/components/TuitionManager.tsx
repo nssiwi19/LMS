@@ -141,12 +141,15 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
       // Check duplicated fee
       const exists = storeData.tuitionFees.some(f => f.studentId === prof.userId && f.semesterId === selectedSemesterId);
       if (!exists) {
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 30);
+        const dueDateStr = dueDate.toISOString().slice(0, 10); // YYYY-MM-DD
         const feeItem: TuitionFee = {
           id: generateId("tf"),
           studentId: prof.userId,
           semesterId: selectedSemesterId,
           amount: 15000000, // 15M standard tuition
-          dueDate: "2025-03-31", // Spring deadline
+          dueDate: dueDateStr,
           status: "unpaid",
           paidAmount: 0
         };

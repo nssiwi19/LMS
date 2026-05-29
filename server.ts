@@ -1477,21 +1477,11 @@ app.post("/api/tuition/confirm-transfer", requireAuth, requireRole(["student"]),
   if (!fee || fee.student_id !== req.user!.id) return res.status(404).json({ error: "Tuition fee not found." });
   const remaining = Math.max(0, Number(fee.amount) - Number(fee.paid_amount || 0));
   if (remaining <= 0 || Number(amount) > remaining) return res.status(400).json({ error: "Invalid transfer amount." });
-  const course = (await pool.query(
-    `SELECT c.id
-     FROM enrollments e
-     JOIN courses c ON c.id = e.course_id
-     WHERE e.student_id = $1
-     ORDER BY e.enrolled_at DESC
-     LIMIT 1`,
-    [req.user!.id]
-  )).rows[0] || (await pool.query("SELECT id FROM courses ORDER BY created_at DESC LIMIT 1")).rows[0];
-  if (!course) return res.status(400).json({ error: "No course available to attach transfer transaction." });
   const txId = generateId("tx");
   await pool.query(
     `INSERT INTO transactions (id, student_id, course_id, amount, status, payment_method, created_at, notes)
-     VALUES ($1, $2, $3, $4, 'pending', 'Chuyển khoản Ngân hàng (QR)', $5, $6)`,
-    [txId, req.user!.id, course.id, Number(amount), new Date().toISOString(), `tuition_fee_pay:${feeId}`]
+     VALUES ($1, $2, NULL, $3, 'pending', 'Chuyển khoản Ngân hàng (QR)', $4, $5)`,
+    [txId, req.user!.id, Number(amount), new Date().toISOString(), `tuition_fee_pay:${feeId}`]
   );
   await audit(req, "request_tuition_confirm", feeId, `Pending bank transfer of ${amount} for tuition.`);
   res.json({ ok: true, transactionId: txId });
