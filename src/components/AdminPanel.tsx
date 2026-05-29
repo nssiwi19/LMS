@@ -25,7 +25,8 @@ import {
   ShieldAlert,
   Activity,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  FileText
 } from "lucide-react";
 import { LMSDataStore, User, Course, Lesson, Quiz, Question, Assignment, Submission, QuizAttempt } from "../types";
 import { AppStore } from "../store";
@@ -90,8 +91,23 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
   const [filterRole, setFilterRole] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [userDirTab, setUserDirTab] = useState<"student" | "teacher" | "other">("student");
+  const [auditSearch, setAuditSearch] = useState("");
+  const [auditFilterAction, setAuditFilterAction] = useState("all");
   const [userPage, setUserPage] = useState(1);
+  const [sortField, setSortField] = useState<string>("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
   const itemsPerPage = 8;
+  const [approvalSearch, setApprovalSearch] = useState("");
+  const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -373,6 +389,36 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
     );
 
     return matchesSearch && matchesRole && matchesStatus && matchesDirectory;
+  }).sort((a, b) => {
+    if (!sortField) return 0;
+    let valA: any = a[sortField as keyof User];
+    let valB: any = b[sortField as keyof User];
+
+    if (sortField === "studentCode" || sortField === "gpa") {
+      const profileA = store.studentProfiles?.find(p => p.userId === a.id);
+      const profileB = store.studentProfiles?.find(p => p.userId === b.id);
+      if (sortField === "studentCode") {
+        valA = profileA?.studentCode || "";
+        valB = profileB?.studentCode || "";
+      } else {
+        valA = profileA?.gpa ?? 0;
+        valB = profileB?.gpa ?? 0;
+      }
+    }
+
+    if (valA === undefined || valA === null) return 1;
+    if (valB === undefined || valB === null) return -1;
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return sortOrder === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    }
+    if (typeof valA === "number" && typeof valB === "number") {
+      return sortOrder === "asc" ? valA - valB : valB - valA;
+    }
+    if (typeof valA === "boolean" && typeof valB === "boolean") {
+      return sortOrder === "asc" ? (valA === valB ? 0 : valA ? -1 : 1) : (valA === valB ? 0 : valA ? 1 : -1);
+    }
+    return 0;
   });
 
   const pageCount = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
@@ -620,18 +666,6 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
             />
           )}
 
-          {/* WARNINGS & HISTOGRAMS REPORTS GROUP */}
-          {(activeSubTab === "warnings" || activeSubTab === "reports") && (
-            <WarningAndReports 
-              store={store} 
-              currentUser={currentUser} 
-              onRefreshData={onRefreshData} 
-              triggerToast={triggerToast} 
-              onSelectStudentProfile={handleSelectStudentProfileRedirect} 
-            />
-          )}
-
-          {/* EXISTING APPROVED TAB */}
           {activeSubTab === "approval" && (
             <div className="space-y-6">
               <div className="border-b border-white/10 pb-3">
@@ -639,40 +673,69 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                 <p className="text-xs text-white/50">Phê duyệt để đưa bài khóa học của Giáo viên chuyên môn lên Hệ thống tuyển sinh đào tạo.</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {pendingCourses.map(course => {
+              {/* Reactive filter inputs */}
+              <div className="flex gap-3 bg-white/3 border border-white/5 p-3 rounded-xl text-xs max-w-md">
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm khóa học chờ phê duyệt..."
+                  value={approvalSearch}
+                  onChange={(e) => setApprovalSearch(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 font-sans"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
+                {pendingCourses.filter(c => {
+                  return !approvalSearch ||
+                    c.title.toLowerCase().includes(approvalSearch.toLowerCase()) ||
+                    c.category.toLowerCase().includes(approvalSearch.toLowerCase()) ||
+                    c.description.toLowerCase().includes(approvalSearch.toLowerCase());
+                }).map(course => {
                   const teacherUser = store.users.find(u => u.id === course.teacherId) || { name: "Giảng viên" };
                   return (
-                    <div key={course.id} className="p-4 bg-white/3 border border-white/5 rounded-2xl flex flex-col justify-between">
+                    <div key={course.id} className="p-4 bg-white/3 border border-white/5 rounded-2xl flex flex-col justify-between hover:border-white/10 transition duration-150">
                       <div className="space-y-2">
                         <div className="flex justify-between items-center text-[10px]">
                           <span className="font-mono text-cyan-400 font-bold uppercase">{course.category}</span>
-                          <span className="text-white/40">{teacherUser.name}</span>
+                          <span className="text-white/45">{teacherUser.name}</span>
                         </div>
                         <h4 className="text-sm font-bold text-white leading-snug">{course.title}</h4>
                         <p className="text-xs text-white/60 line-clamp-2">{course.description}</p>
                       </div>
 
-                      <div className="flex gap-2 justify-end text-xs pt-4 border-t border-white/5 mt-4">
+                      <div className="flex gap-2 justify-between items-center text-xs pt-4 border-t border-white/5 mt-4">
                         <button
-                          onClick={() => handleStartRejectCourse(course.id)}
-                          className="px-3.5 py-1.5 text-red-400 hover:bg-red-500/10 rounded-xl transition text-[11px]"
+                          onClick={() => setCourseDetailId(course.id)}
+                          className="px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-white rounded-xl transition text-[11px] font-bold cursor-pointer"
                         >
-                          Trả về yêu cầu
+                          Xem chi tiết 👁️
                         </button>
-                        <button
-                          onClick={() => handleApproveCourse(course.id)}
-                          className="px-4.5 py-1.5 bg-white text-indigo-950 font-bold rounded-xl hover:bg-indigo-50 transition text-[11px]"
-                        >
-                          Phê duyệt lập tức
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleStartRejectCourse(course.id)}
+                            className="px-3.5 py-1.5 text-red-400 hover:bg-red-500/10 rounded-xl transition text-[11px] cursor-pointer"
+                          >
+                            Trả về yêu cầu
+                          </button>
+                          <button
+                            onClick={() => handleApproveCourse(course.id)}
+                            className="px-4.5 py-1.5 bg-white text-indigo-950 font-bold rounded-xl hover:bg-indigo-50 transition text-[11px] cursor-pointer"
+                          >
+                            Phê duyệt lập tức
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
                 })}
-                {pendingCourses.length === 0 && (
+                {pendingCourses.filter(c => {
+                  return !approvalSearch ||
+                    c.title.toLowerCase().includes(approvalSearch.toLowerCase()) ||
+                    c.category.toLowerCase().includes(approvalSearch.toLowerCase()) ||
+                    c.description.toLowerCase().includes(approvalSearch.toLowerCase());
+                }).length === 0 && (
                   <div className="col-span-2 py-16 text-center text-white/30 text-xs">
-                    Sạch tệp hồ tuyển sinh! Không có bài yêu cầu phê duyệt mở học phần nào đang treo.
+                    {pendingCourses.length === 0 ? "Sạch tệp hồ tuyển sinh! Không có bài yêu cầu phê duyệt mở học phần nào đang treo." : "Không tìm thấy khóa học nào phù hợp với bộ lọc."}
                   </div>
                 )}
               </div>
@@ -733,11 +796,23 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-white/10 bg-white/2 text-[10px] uppercase text-white/50">
-                        <th className="py-2.5 px-3">Họ và Tên</th>
-                        <th className="py-2.5 px-3">Email cá nhân</th>
-                        {userDirTab === "student" && <th className="py-2.5 px-3">Hồ sơ học vụ</th>}
-                        <th className="py-2.5 px-3">Quyền hạn</th>
-                        <th className="py-2.5 px-3">Trạng thái khóa</th>
+                        <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("name")}>
+                          Họ và Tên {sortField === "name" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("email")}>
+                          Email cá nhân {sortField === "email" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        {userDirTab === "student" && (
+                          <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("studentCode")}>
+                            Hồ sơ học vụ {sortField === "studentCode" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                          </th>
+                        )}
+                        <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("role")}>
+                          Quyền hạn {sortField === "role" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("isActive")}>
+                          Trạng thái khóa {sortField === "isActive" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
                         <th className="py-2.5 px-3 text-right">Khóa/Mở Khóa</th>
                       </tr>
                     </thead>
@@ -829,6 +904,27 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
             </div>
           )}
 
+          {/* SYSTEM ACADEMIC WARNINGS AND REPORTS STATS */}
+          {activeSubTab === "warnings" && (
+            <div className="space-y-6">
+              <div className="border-b border-white/5 pb-4">
+                <h4 className="text-base font-display font-semibold text-white">Quản lý Cảnh báo Học thuật & Thống kê</h4>
+                <p className="text-xs text-white/50">Xem và giải quyết các cảnh báo chuyên môn, GPA hoặc học phí chậm trong toàn hệ thống.</p>
+              </div>
+              <WarningAndReports 
+                store={store} 
+                currentUser={currentUser} 
+                onRefreshData={onRefreshData} 
+                triggerToast={triggerToast} 
+                onSelectStudentProfile={(userId) => {
+                  setRegistryLookupStudentId(userId);
+                  setActiveSubTab("students");
+                }}
+                defaultTab="warnings"
+              />
+            </div>
+          )}
+
           {/* SYSTEM SECURITY COMPLIANCE AUDIT LOGS */}
           {activeSubTab === "audit" && (
             <div className="space-y-6">
@@ -837,8 +933,43 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                 <p className="text-xs text-white/50">Nhật ký theo dõi các bút toán an ninh, sửa đổi kết cấu điểm số, học bạ chính xác theo thời gian thực.</p>
               </div>
 
+              {/* Reactive filter inputs */}
+              <div className="flex flex-col md:flex-row gap-3 bg-white/3 border border-white/5 p-3.5 rounded-xl text-xs">
+                <div className="flex-1 space-y-1">
+                  <span className="text-[10px] text-white/50 block">Tìm kiếm nhật ký</span>
+                  <input
+                    type="text"
+                    placeholder="Tìm theo hành động, user ID, target, hoặc nội dung..."
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div className="w-full md:w-48 space-y-1">
+                  <span className="text-[10px] text-white/50 block">Lọc theo hành động</span>
+                  <select
+                    value={auditFilterAction}
+                    onChange={(e) => setAuditFilterAction(e.target.value)}
+                    className="w-full px-2 py-1.5 bg-black/25 text-white/80 border border-white/10 rounded-lg focus:outline-none font-sans"
+                  >
+                    <option value="all" className="bg-slate-900">Tất cả hành động</option>
+                    {Array.from(new Set((store?.auditLogs || []).map(l => l.action))).map(act => (
+                      <option key={act} value={act} className="bg-slate-900">{act}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="bg-black/40 border border-white/10 rounded-2xl p-4 font-mono text-[10.5px] leading-relaxed max-h-96 overflow-y-auto space-y-2 text-white/90">
-                {store.auditLogs.map((log, i) => (
+                {((store?.auditLogs || []).filter(log => {
+                  const matchesSearch = !auditSearch || 
+                    log.action.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                    log.userId.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                    log.target.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                    log.detail.toLowerCase().includes(auditSearch.toLowerCase());
+                  const matchesAction = auditFilterAction === "all" || log.action === auditFilterAction;
+                  return matchesSearch && matchesAction;
+                })).map((log, i) => (
                   <div key={log.id || i} className="border-b border-white/5 pb-2">
                     <span className="text-indigo-400">[{log.createdAt.slice(11, 19)}]</span>{" "}
                     <span className="text-cyan-300 font-bold">{log.action.toUpperCase()}</span>{" "}
@@ -847,6 +978,17 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                     <span className="text-white/80">{log.detail}</span>
                   </div>
                 ))}
+                {((store?.auditLogs || []).filter(log => {
+                  const matchesSearch = !auditSearch || 
+                    log.action.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                    log.userId.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                    log.target.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                    log.detail.toLowerCase().includes(auditSearch.toLowerCase());
+                  const matchesAction = auditFilterAction === "all" || log.action === auditFilterAction;
+                  return matchesSearch && matchesAction;
+                })).length === 0 && (
+                  <div className="text-center text-white/30 italic py-6">Không tìm thấy bản ghi nhật ký phù hợp.</div>
+                )}
               </div>
             </div>
           )}
@@ -1048,7 +1190,85 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
           </div>
         </div>
       )}
+      {/* Premium glassmorphic Course Details consultation modal */}
+      {courseDetailId && (() => {
+        const course = store.courses.find(c => c.id === courseDetailId);
+        if (!course) return null;
+        const teacher = store.users.find(u => u.id === course.teacherId) || { name: "Chưa phân công" };
+        const lessons = store.lessons.filter(l => l.courseId === course.id).sort((a,b) => a.order - b.order);
+        const quizzes = store.quizzes.filter(q => q.courseId === course.id);
+        const assignments = store.assignments.filter(a => a.courseId === course.id);
+        const formatVND = (num: number) => {
+          return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+        };
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
+              <div className="space-y-5">
+                <div className="flex justify-between items-start border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">
+                      {course.category}
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-2">{course.title}</h3>
+                    <p className="text-xs text-white/40 mt-1">Giảng viên: <strong className="text-indigo-200">{teacher.name}</strong></p>
+                  </div>
+                  <button 
+                    onClick={() => setCourseDetailId(null)}
+                    className="p-1 rounded-lg hover:bg-white/10 text-white/50 cursor-pointer"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-white/2 p-4 rounded-xl border border-white/5 font-sans">
+                  <div>
+                    <span className="text-white/45 block">Học phí:</span>
+                    <strong className="text-sm font-mono text-emerald-400 font-black">{course.price ? formatVND(course.price) : "Miễn phí"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-white/45 block">Cấp trình độ:</span>
+                    <strong className="text-indigo-300 capitalize">{course.level || "Cơ bản"}</strong>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] text-white/45 font-bold uppercase block">Mô tả khóa đào tạo:</span>
+                  <p className="text-xs text-white/70 leading-relaxed bg-black/15 p-3 rounded-lg border border-white/5 font-sans">{course.description}</p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <span className="text-[11px] text-white/45 font-bold uppercase flex items-center gap-1 font-sans">
+                    <FileText className="h-3.5 w-3.5" /> Khung chương trình ({lessons.length} bài học, {quizzes.length} bài thi, {assignments.length} tự luận)
+                  </span>
+                  
+                  {lessons.length > 0 ? (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 font-sans">
+                      {lessons.map((lesson, idx) => (
+                        <div key={lesson.id} className="p-2.5 bg-white/3 border border-white/5 rounded-lg flex justify-between items-center text-xs">
+                          <span className="font-semibold text-white/90">Bài {idx + 1}: {lesson.title}</span>
+                          <span className="text-[10px] text-white/40 font-mono">{lesson.duration || "15 phút"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/35 italic font-sans">Chưa tải giáo trình bài giảng cho lớp học này.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/10 mt-5 flex justify-end">
+                <button
+                  onClick={() => setCourseDetailId(null)}
+                  className="px-4 py-2 bg-white text-indigo-950 font-bold rounded-xl hover:bg-slate-100 transition text-xs cursor-pointer"
+                >
+                  Đóng thông tin
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

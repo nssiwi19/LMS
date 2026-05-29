@@ -38,6 +38,8 @@ export default function AdvisorPanel({ currentUser, onLogout, onRefreshData }: A
   const [shareWithParent, setShareWithParent] = useState(true);
   const [suggestedPlanText, setSuggestedPlanText] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -49,7 +51,17 @@ export default function AdvisorPanel({ currentUser, onLogout, onRefreshData }: A
   const assignedStudentIds = myAssignments.map(aa => aa.studentId);
   
   // Filter core profiles
-  const myStudents = store.studentProfiles.filter(profile => assignedStudentIds.includes(profile.userId));
+  const myStudents = store.studentProfiles.filter(profile => {
+    const isAssigned = assignedStudentIds.includes(profile.userId);
+    if (!isAssigned) return false;
+    if (!studentSearch.trim()) return true;
+    const u = store.users.find(usr => usr.id === profile.userId);
+    const searchLower = studentSearch.toLowerCase();
+    return (
+      u?.name?.toLowerCase().includes(searchLower) ||
+      profile.studentCode?.toLowerCase().includes(searchLower)
+    );
+  });
   
   // Selected Profile details
   const selectedProfile = store.studentProfiles.find(p => p.userId === selectedStudentId);
@@ -276,6 +288,18 @@ export default function AdvisorPanel({ currentUser, onLogout, onRefreshData }: A
             <p className="text-[10px] text-white/40 mt-0.5">Chọn sinh viên bên dưới để kiểm tra tiến trình, học bạ chi tiết</p>
           </div>
 
+          {/* Student Search Input */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Tìm sinh viên, mã số..."
+              value={studentSearch}
+              onChange={(e) => setStudentSearch(e.target.value)}
+              className="w-full bg-black/25 text-white border border-white/10 rounded-xl py-2 px-3 pl-8 text-xs outline-none focus:border-indigo-400 placeholder-white/20"
+            />
+            <span className="absolute left-2.5 top-2 px-1 text-white/40 text-xs">🔍</span>
+          </div>
+
           <div className="space-y-2 max-h-[500px] overflow-y-auto">
             {myStudents.map(student => {
               const u = store.users.find(usr => usr.id === student.userId);
@@ -447,8 +471,18 @@ export default function AdvisorPanel({ currentUser, onLogout, onRefreshData }: A
 
                         return (
                           <div key={pc.id} className={`p-3 rounded-xl border flex justify-between items-center ${statusColor}`}>
-                            <div className="min-w-0 pr-2">
-                              <span className="font-bold block truncate">{matchedCourse?.title || "Không xác định"}</span>
+                            <div className="min-w-0 pr-2 flex-1">
+                              <span className="font-bold flex items-center gap-1.5 truncate">
+                                {matchedCourse?.title || "Không xác định"}
+                                {matchedCourse && (
+                                  <button
+                                    onClick={() => setCourseDetailId(matchedCourse.id)}
+                                    className="text-[10px] bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 py-0.5 px-1.5 rounded flex items-center gap-0.5 transition cursor-pointer font-sans"
+                                  >
+                                    Xem 👁️
+                                  </button>
+                                )}
+                              </span>
                               <span className="text-[10px] text-white/40 mt-0.5 block">{pc.credits} tín chỉ | Kỳ {pc.semester} | {pc.isRequired ? "Bắt buộc" : "Tự chọn"}</span>
                             </div>
                             <span className="text-[10px] font-bold uppercase tracking-wider shrink-0">{statusText}</span>
@@ -583,10 +617,88 @@ export default function AdvisorPanel({ currentUser, onLogout, onRefreshData }: A
               <p className="text-xs">Vui lòng chọn một học viên từ danh sách bên trái để kiểm tra chi tiết học bạ & thực hiện tư vấn lý lịch học tập.</p>
             </div>
           )}
-
         </div>
-
       </div>
+
+      {/* Premium glassmorphic Course Details consultation modal */}
+      {courseDetailId && (() => {
+        const course = store.courses.find(c => c.id === courseDetailId);
+        if (!course) return null;
+        const teacher = store.users.find(u => u.id === course.teacherId) || { name: "Chưa phân công" };
+        const lessons = store.lessons.filter(l => l.courseId === course.id).sort((a,b) => a.order - b.order);
+        const quizzes = store.quizzes.filter(q => q.courseId === course.id);
+        const assignments = store.assignments.filter(a => a.courseId === course.id);
+        const formatVND = (num: number) => {
+          return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+        };
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
+              <div className="space-y-5">
+                <div className="flex justify-between items-start border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">
+                      {course.category}
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-2">{course.title}</h3>
+                    <p className="text-xs text-white/40 mt-1">Giảng viên: <strong className="text-indigo-200">{teacher.name}</strong></p>
+                  </div>
+                  <button 
+                    onClick={() => setCourseDetailId(null)}
+                    className="p-1 rounded-lg hover:bg-white/10 text-white/50 cursor-pointer font-sans"
+                  >
+                    <span className="text-lg font-bold">✕</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-white/2 p-4 rounded-xl border border-white/5 font-sans">
+                  <div>
+                    <span className="text-white/45 block">Học phí:</span>
+                    <strong className="text-sm font-mono text-emerald-400 font-black">{course.price ? formatVND(course.price) : "Miễn phí"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-white/45 block">Cấp trình độ:</span>
+                    <strong className="text-indigo-300 capitalize">{course.level || "Cơ bản"}</strong>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] text-white/45 font-bold uppercase block">Mô tả khóa đào tạo:</span>
+                  <p className="text-xs text-white/70 leading-relaxed bg-black/15 p-3 rounded-lg border border-white/5 font-sans">{course.description}</p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <span className="text-[11px] text-white/45 font-bold uppercase flex items-center gap-1 font-sans">
+                    Khung chương trình ({lessons.length} bài học, {quizzes.length} bài thi, {assignments.length} tự luận)
+                  </span>
+                  
+                  {lessons.length > 0 ? (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 font-sans">
+                      {lessons.map((lesson, idx) => (
+                        <div key={lesson.id} className="p-2.5 bg-white/3 border border-white/5 rounded-lg flex justify-between items-center text-xs">
+                          <span className="font-semibold text-white/90">Bài {idx + 1}: {lesson.title}</span>
+                          <span className="text-[10px] text-white/40 font-mono">{lesson.duration || "15 phút"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/35 italic font-sans">Chưa tải giáo trình bài giảng cho lớp học này.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/10 mt-5 flex justify-end">
+                <button
+                  onClick={() => setCourseDetailId(null)}
+                  className="px-4 py-2 bg-white text-indigo-950 font-bold rounded-xl hover:bg-slate-100 transition text-xs cursor-pointer font-sans"
+                >
+                  Đóng thông tin
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

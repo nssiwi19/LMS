@@ -37,6 +37,47 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
   const [rejectingTxId, setRejectingTxId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"transactions" | "salaries" | "tuition">("transactions");
+  const [salarySearch, setSalarySearch] = useState("");
+  const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
+
+  // Sorting state for transactions ledger
+  const [txSortField, setTxSortField] = useState<string>("createdAt");
+  const [txSortOrder, setTxSortOrder] = useState<"asc" | "desc">("desc");
+
+  // Sorting state for teacher salaries aggregate
+  const [salarySortField, setSalarySortField] = useState<string>("teacherName");
+  const [salarySortOrder, setSalarySortOrder] = useState<"asc" | "desc">("asc");
+
+  // Sorting state for detailed teacher salaries breakdown
+  const [breakdownSortField, setBreakdownSortField] = useState<string>("teacherName");
+  const [breakdownSortOrder, setBreakdownSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleTxSort = (field: string) => {
+    if (txSortField === field) {
+      setTxSortOrder(txSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setTxSortField(field);
+      setTxSortOrder("asc");
+    }
+  };
+
+  const handleSalarySort = (field: string) => {
+    if (salarySortField === field) {
+      setSalarySortOrder(salarySortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSalarySortField(field);
+      setSalarySortOrder("asc");
+    }
+  };
+
+  const handleBreakdownSort = (field: string) => {
+    if (breakdownSortField === field) {
+      setBreakdownSortOrder(breakdownSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setBreakdownSortField(field);
+      setBreakdownSortOrder("asc");
+    }
+  };
 
   // Dynamic salary computation for teachers
   const teachers = store ? store.users.filter(u => u.role === "teacher") : [];
@@ -88,10 +129,10 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
           status: "approved",
           notes: "Payment matched and enrollment activated."
         });
-        showToast("PhÃª duyá»‡t vÃ  kÃ­ch hoáº¡t quyá»n há»c thÃ nh cÃ´ng!");
+        showToast("Phê duyệt và kích hoạt quyền học thành công!");
         onRefreshData();
       } catch (err: any) {
-        showToast(err.message || "KhÃ´ng thá»ƒ phÃª duyá»‡t giao dá»‹ch.");
+        showToast(err.message || "Không thể phê duyệt giao dịch.");
       }
       return;
     }
@@ -143,10 +184,10 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
       });
       setRejectingTxId(null);
       setRejectionNotes("");
-      showToast("Tá»« chá»‘i giao dá»‹ch thÃ nh cÃ´ng.");
+      showToast("Từ chối giao dịch thành công.");
       onRefreshData();
     } catch (err: any) {
-      showToast(err.message || "KhÃ´ng thá»ƒ tá»« chá»‘i giao dá»‹ch.");
+      showToast(err.message || "Không thể từ chối giao dịch.");
     }
     return;
 
@@ -214,7 +255,123 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
     const matchesEnd = !endDate || txDate <= new Date(endDate + "T23:59:59");
 
     return matchesSearch && matchesStatus && matchesStart && matchesEnd;
-  }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }).sort((a, b) => {
+    if (!txSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (txSortField === "id") {
+      valA = a.id || "";
+      valB = b.id || "";
+    } else if (txSortField === "studentName") {
+      const studentA = store.users.find(u => u.id === a.studentId);
+      const studentB = store.users.find(u => u.id === b.studentId);
+      valA = studentA?.name || "";
+      valB = studentB?.name || "";
+    } else if (txSortField === "courseTitle") {
+      const courseA = store.courses.find(c => c.id === a.courseId);
+      const courseB = store.courses.find(c => c.id === b.courseId);
+      valA = courseA?.title || "";
+      valB = courseB?.title || "";
+    } else if (txSortField === "amount") {
+      valA = a.amount || 0;
+      valB = b.amount || 0;
+    } else if (txSortField === "createdAt") {
+      valA = new Date(a.createdAt).getTime();
+      valB = new Date(b.createdAt).getTime();
+    } else if (txSortField === "status") {
+      valA = a.status || "";
+      valB = b.status || "";
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return txSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return txSortOrder === "asc" ? valA - valB : valB - valA;
+  });
+
+  const sortedTeacherSalaries = [...teacherSalaries.filter(ts => {
+    return !salarySearch ||
+      ts.teacher.name.toLowerCase().includes(salarySearch.toLowerCase()) ||
+      ts.teacher.email.toLowerCase().includes(salarySearch.toLowerCase());
+  })].sort((a, b) => {
+    if (!salarySortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (salarySortField === "teacherName") {
+      valA = a.teacher.name || "";
+      valB = b.teacher.name || "";
+    } else if (salarySortField === "coursesCount") {
+      valA = a.coursesCount;
+      valB = b.coursesCount;
+    } else if (salarySortField === "totalStudents") {
+      valA = a.totalStudents;
+      valB = b.totalStudents;
+    } else if (salarySortField === "baseSalary") {
+      valA = a.baseSalary;
+      valB = b.baseSalary;
+    } else if (salarySortField === "commission") {
+      valA = a.commission;
+      valB = b.commission;
+    } else if (salarySortField === "totalSalary") {
+      valA = a.totalSalary;
+      valB = b.totalSalary;
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return salarySortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return salarySortOrder === "asc" ? valA - valB : valB - valA;
+  });
+
+  const salariesBreakdown = teacherSalaries.flatMap(ts => ts.courseBreakdown.map(item => ({
+    teacherId: ts.teacher.id,
+    teacherName: ts.teacher.name,
+    courseId: item.course.id,
+    courseTitle: item.course.title,
+    studentsCount: item.studentsCount,
+    baseSalary: item.baseSalary,
+    commission: item.commission,
+    total: item.total
+  })));
+
+  const sortedBreakdown = [...salariesBreakdown].sort((a, b) => {
+    if (!breakdownSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (breakdownSortField === "teacherName") {
+      valA = a.teacherName || "";
+      valB = b.teacherName || "";
+    } else if (breakdownSortField === "courseTitle") {
+      valA = a.courseTitle || "";
+      valB = b.courseTitle || "";
+    } else if (breakdownSortField === "studentsCount") {
+      valA = a.studentsCount;
+      valB = b.studentsCount;
+    } else if (breakdownSortField === "baseSalary") {
+      valA = a.baseSalary;
+      valB = b.baseSalary;
+    } else if (breakdownSortField === "commission") {
+      valA = a.commission;
+      valB = b.commission;
+    } else if (breakdownSortField === "total") {
+      valA = a.total;
+      valB = b.total;
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return breakdownSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return breakdownSortOrder === "asc" ? valA - valB : valB - valA;
+  });
 
   // Export financial report to CSV
   const handleExportCSV = () => {
@@ -488,13 +645,25 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
               <table className="w-full text-xs text-left border-collapse">
                 <thead>
                   <tr className="bg-white/5 border-b border-white/10 text-white/50 uppercase font-mono tracking-wider font-bold">
-                    <th className="p-4">Mã giao dịch</th>
-                    <th className="p-4">Học viên</th>
-                    <th className="p-4">Khóa học</th>
-                    <th className="p-4">Học phí (VND)</th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleTxSort("id")}>
+                      Mã giao dịch {txSortField === "id" ? (txSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleTxSort("studentName")}>
+                      Học viên {txSortField === "studentName" ? (txSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleTxSort("courseTitle")}>
+                      Khóa học {txSortField === "courseTitle" ? (txSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleTxSort("amount")}>
+                      Học phí (VND) {txSortField === "amount" ? (txSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                     <th className="p-4">Phương thức</th>
-                    <th className="p-4">Thời gian</th>
-                    <th className="p-4">Trạng thái</th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleTxSort("createdAt")}>
+                      Thời gian {txSortField === "createdAt" ? (txSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleTxSort("status")}>
+                      Trạng thái {txSortField === "status" ? (txSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                     <th className="p-4 text-right">Thao tác nghiệp vụ</th>
                   </tr>
                 </thead>
@@ -510,8 +679,18 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
                           <div className="font-bold text-white">{studentUser?.name || "Không xác định"}</div>
                           <div className="text-[10px] text-white/40 font-mono">{studentUser?.email}</div>
                         </td>
-                        <td className="p-4">
-                          <div className="font-semibold text-white/80 max-w-xs truncate">{courseObj?.title || "Không xác định"}</div>
+                        <td className="p-4 font-sans text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-white/80 max-w-[150px] truncate">{courseObj?.title || "Không xác định"}</span>
+                            {courseObj && (
+                              <button
+                                onClick={() => setCourseDetailId(courseObj.id)}
+                                className="px-1.5 py-0.5 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-white rounded text-[9px] font-bold transition flex items-center gap-0.5 cursor-pointer"
+                              >
+                                Xem 👁️
+                              </button>
+                            )}
+                          </div>
                           <div className="text-[10px] text-white/40 font-mono uppercase">{courseObj?.category}</div>
                         </td>
                         <td className="p-4 font-semibold text-emerald-400 font-mono text-sm">
@@ -631,21 +810,44 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
             <p className="text-xs text-white/50">Lương tự động dựa trên số khóa học phụ trách (3.000.000 VND/khóa) và hoa hồng tuyển sinh (15% học phí của khóa).</p>
           </div>
 
+          {/* Salaries search bar */}
+          <div className="flex gap-3 bg-white/3 border border-white/5 p-3 rounded-xl text-xs max-w-md">
+            <input
+              type="text"
+              placeholder="Tìm kiếm giảng viên theo tên hoặc email..."
+              value={salarySearch}
+              onChange={(e) => setSalarySearch(e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 font-sans"
+            />
+          </div>
+
           <div className="overflow-x-auto rounded-xl border border-white/5">
             <table className="w-full text-xs text-left border-collapse">
               <thead>
                 <tr className="bg-white/5 border-b border-white/10 text-white/50 uppercase font-mono tracking-wider font-bold">
-                  <th className="p-4">Giảng viên</th>
-                  <th className="p-4 text-center">Số khóa học</th>
-                  <th className="p-4 text-center">Tổng học viên</th>
-                  <th className="p-4 text-right">Lương cơ bản</th>
-                  <th className="p-4 text-right">Hoa hồng tuyển sinh</th>
-                  <th className="p-4 text-right text-emerald-400">Tổng Thực Nhận</th>
+                  <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleSalarySort("teacherName")}>
+                    Giảng viên {salarySortField === "teacherName" ? (salarySortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th className="p-4 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleSalarySort("coursesCount")}>
+                    Số khóa học {salarySortField === "coursesCount" ? (salarySortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th className="p-4 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleSalarySort("totalStudents")}>
+                    Tổng học viên {salarySortField === "totalStudents" ? (salarySortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th className="p-4 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleSalarySort("baseSalary")}>
+                    Lương cơ bản {salarySortField === "baseSalary" ? (salarySortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th className="p-4 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleSalarySort("commission")}>
+                    Hoa hồng tuyển sinh {salarySortField === "commission" ? (salarySortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th className="p-4 text-right text-emerald-400 cursor-pointer select-none hover:text-white transition" onClick={() => handleSalarySort("totalSalary")}>
+                    Tổng Thực Nhận {salarySortField === "totalSalary" ? (salarySortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
                   <th className="p-4 text-right">Hành động chi trả</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {teacherSalaries.map(ts => (
+                {sortedTeacherSalaries.map(ts => (
                   <tr key={ts.teacher.id} className="hover:bg-white/5 transition">
                     <td className="p-4 font-bold text-white">
                       <div>{ts.teacher.name}</div>
@@ -666,7 +868,7 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
                     </td>
                   </tr>
                 ))}
-                {teacherSalaries.length === 0 && (
+                {sortedTeacherSalaries.length === 0 && (
                   <tr>
                     <td colSpan={7} className="text-center py-16 text-white/40">
                       Chưa ghi nhận thông tin giảng viên nào trong hệ thống.
@@ -681,26 +883,38 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
             <table className="w-full text-xs text-left border-collapse">
               <thead>
                 <tr className="bg-black/20 border-b border-white/10 text-white/50 uppercase font-mono tracking-wider font-bold">
-                  <th className="p-4">Teacher</th>
-                  <th className="p-4">Course</th>
-                  <th className="p-4 text-center">Active enrollments</th>
-                  <th className="p-4 text-right">Base salary</th>
-                  <th className="p-4 text-right">15% commission</th>
-                  <th className="p-4 text-right text-emerald-400">Course total</th>
+                  <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleBreakdownSort("teacherName")}>
+                    Teacher {breakdownSortField === "teacherName" ? (breakdownSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleBreakdownSort("courseTitle")}>
+                    Course {breakdownSortField === "courseTitle" ? (breakdownSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th className="p-4 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleBreakdownSort("studentsCount")}>
+                    Active enrollments {breakdownSortField === "studentsCount" ? (breakdownSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th className="p-4 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleBreakdownSort("baseSalary")}>
+                    Base salary {breakdownSortField === "baseSalary" ? (breakdownSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th className="p-4 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleBreakdownSort("commission")}>
+                    15% commission {breakdownSortField === "commission" ? (breakdownSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
+                  <th className="p-4 text-right text-emerald-400 cursor-pointer select-none hover:text-white transition" onClick={() => handleBreakdownSort("total")}>
+                    Course total {breakdownSortField === "total" ? (breakdownSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {teacherSalaries.flatMap(ts => ts.courseBreakdown.map(item => (
-                  <tr key={`${ts.teacher.id}-${item.course.id}`} className="hover:bg-white/5 transition">
-                    <td className="p-4 font-bold text-white">{ts.teacher.name}</td>
-                    <td className="p-4 text-white/75">{item.course.title}</td>
+                {sortedBreakdown.map(item => (
+                  <tr key={`${item.teacherId}-${item.courseId}`} className="hover:bg-white/5 transition">
+                    <td className="p-4 font-bold text-white">{item.teacherName}</td>
+                    <td className="p-4 text-white/75">{item.courseTitle}</td>
                     <td className="p-4 text-center font-mono text-sky-300">{item.studentsCount}</td>
                     <td className="p-4 text-right font-mono text-white/65">{formatVND(item.baseSalary)}</td>
                     <td className="p-4 text-right font-mono text-white/65">{formatVND(item.commission)}</td>
                     <td className="p-4 text-right font-mono font-bold text-emerald-300">{formatVND(item.total)}</td>
                   </tr>
-                )))}
-                {teacherSalaries.every(ts => ts.courseBreakdown.length === 0) && (
+                ))}
+                {sortedBreakdown.length === 0 && (
                   <tr>
                     <td colSpan={6} className="text-center py-10 text-white/40">
                       No assigned teacher courses to break down.
@@ -738,6 +952,83 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
           </p>
         </div>
       </div>
+
+      {/* Premium glassmorphic Course Details consultation modal */}
+      {courseDetailId && (() => {
+        const course = store.courses.find(c => c.id === courseDetailId);
+        if (!course) return null;
+        const teacher = store.users.find(u => u.id === course.teacherId) || { name: "Chưa phân công" };
+        const lessons = store.lessons.filter(l => l.courseId === course.id).sort((a,b) => a.order - b.order);
+        const quizzes = store.quizzes.filter(q => q.courseId === course.id);
+        const assignments = store.assignments.filter(a => a.courseId === course.id);
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
+              <div className="space-y-5">
+                <div className="flex justify-between items-start border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">
+                      {course.category}
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-2">{course.title}</h3>
+                    <p className="text-xs text-white/40 mt-1">Giảng viên: <strong className="text-indigo-200">{teacher.name}</strong></p>
+                  </div>
+                  <button 
+                    onClick={() => setCourseDetailId(null)}
+                    className="p-1 rounded-lg hover:bg-white/10 text-white/50 cursor-pointer"
+                  >
+                    <XCircle className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-white/2 p-4 rounded-xl border border-white/5 font-sans">
+                  <div>
+                    <span className="text-white/45 block">Học phí:</span>
+                    <strong className="text-sm font-mono text-emerald-400 font-black">{course.price ? formatVND(course.price) : "Miễn phí"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-white/45 block">Cấp trình độ:</span>
+                    <strong className="text-indigo-300 capitalize">{course.level || "Cơ bản"}</strong>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] text-white/45 font-bold uppercase block">Mô tả khóa đào tạo:</span>
+                  <p className="text-xs text-white/70 leading-relaxed bg-black/15 p-3 rounded-lg border border-white/5 font-sans">{course.description}</p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <span className="text-[11px] text-white/45 font-bold uppercase flex items-center gap-1 font-sans">
+                    <FileText className="h-3.5 w-3.5" /> Khung chương trình ({lessons.length} bài học, {quizzes.length} bài thi, {assignments.length} tự luận)
+                  </span>
+                  
+                  {lessons.length > 0 ? (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 font-sans">
+                      {lessons.map((lesson, idx) => (
+                        <div key={lesson.id} className="p-2.5 bg-white/3 border border-white/5 rounded-lg flex justify-between items-center text-xs">
+                          <span className="font-semibold text-white/90">Bài {idx + 1}: {lesson.title}</span>
+                          <span className="text-[10px] text-white/40 font-mono">{lesson.duration || "15 phút"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/35 italic font-sans">Chưa tải giáo trình bài giảng cho lớp học này.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/10 mt-5 flex justify-end">
+                <button
+                  onClick={() => setCourseDetailId(null)}
+                  className="px-4 py-2 bg-white text-indigo-950 font-bold rounded-xl hover:bg-slate-100 transition text-xs cursor-pointer"
+                >
+                  Đóng thông tin
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

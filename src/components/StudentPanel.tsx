@@ -683,10 +683,10 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
                 certificates: "Chứng nhận",
                 notifications: "Hộp thư",
                 profile: "Lý lịch cá nhân",
-                academics_record: "Kết quả học tập",
+                academics_record: "Trạng thái học tập",
                 student_attendance: "Điểm chuyên cần",
                 student_tuition: "Đóng học phí",
-                student_transcript: "Học bạ",
+                student_transcript: "Kết quả học tập",
                 parent_view: "Cổng phụ huynh",
               }[activeSubTab] || activeSubTab}</strong></span>
             </span>
@@ -793,7 +793,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               }`}
             >
               <GraduationCap className={`h-4.5 w-4.5 ${activeSubTab === "academics_record" ? "text-white" : "text-white/40"}`} />
-              <span>Kết quả học tập</span>
+              <span>Trạng thái học tập</span>
             </button>
             <button
               onClick={() => { setActiveSubTab("student_attendance"); setShowSidebar(false); }}
@@ -826,7 +826,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData }: S
               }`}
             >
               <FileCheck className={`h-4.5 w-4.5 ${activeSubTab === "student_transcript" ? "text-white" : "text-white/40"}`} />
-              <span>Học bạ chính thức</span>
+              <span>Kết quả học tập</span>
             </button>
             <button
               onClick={() => { setActiveSubTab("parent_view"); setShowSidebar(false); }}

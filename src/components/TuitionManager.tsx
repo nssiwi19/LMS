@@ -37,6 +37,19 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
 
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Sorting state for tuition fee receivables roster
+  const [tuitionSortField, setTuitionSortField] = useState<string>("studentCode");
+  const [tuitionSortOrder, setTuitionSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleTuitionSort = (field: string) => {
+    if (tuitionSortField === field) {
+      setTuitionSortOrder(tuitionSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setTuitionSortField(field);
+      setTuitionSortOrder("asc");
+    }
+  };
+
   const students = store.studentProfiles || [];
   const systemSemesters = store.semesters || [];
   const activeSemester = systemSemesters.find(s => s.id === selectedSemesterId);
@@ -62,11 +75,51 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
     return matchesSemester && matchesStatus && matchesOverdue && matchesSearch;
   });
 
+  const sortedFormattedFees = [...formattedFees].sort((a, b) => {
+    if (!tuitionSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (tuitionSortField === "studentCode") {
+      valA = a.studentCode || "";
+      valB = b.studentCode || "";
+    } else if (tuitionSortField === "studentName") {
+      valA = a.studentName || "";
+      valB = b.studentName || "";
+    } else if (tuitionSortField === "semesterId") {
+      valA = a.semesterId || "";
+      valB = b.semesterId || "";
+    } else if (tuitionSortField === "amount") {
+      valA = a.amount || 0;
+      valB = b.amount || 0;
+    } else if (tuitionSortField === "paidAmount") {
+      valA = a.paidAmount || 0;
+      valB = b.paidAmount || 0;
+    } else if (tuitionSortField === "dueDate") {
+      valA = new Date(a.dueDate).getTime();
+      valB = new Date(b.dueDate).getTime();
+    } else if (tuitionSortField === "status") {
+      valA = a.status || "";
+      valB = b.status || "";
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return tuitionSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return tuitionSortOrder === "asc" ? valA - valB : valB - valA;
+  });
+
   // Calculate Aggregates for current semester
   const semesterFees = tuitionRows.filter(f => f.semesterId === selectedSemesterId);
   const totalBilled = semesterFees.reduce((sum, f) => sum + f.amount, 0);
   const totalCollected = semesterFees.reduce((sum, f) => sum + f.paidAmount, 0);
   const collectionRate = totalBilled > 0 ? Math.round((totalCollected / totalBilled) * 100) : 0;
+
+  const paidCount = semesterFees.filter(f => f.status === "paid").length;
+  const partialCount = semesterFees.filter(f => f.status === "partial").length;
+  const unpaidCount = semesterFees.filter(f => f.status === "unpaid").length;
 
   // Bulk issue tuition fees
   const handleBulkIssueTuition = () => {
@@ -127,10 +180,10 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
       await api.payTuition({ feeId: activePaymentFeeId, paidAmount: Number(paymentAmount) });
       setActivePaymentFeeId(null);
       onRefreshData();
-      triggerToast("Ghi nháº­n bÃºt toÃ¡n thanh toÃ¡n há»c vá»‹ thÃ nh cÃ´ng.");
+      triggerToast("Ghi nhận bút toán thanh toán học phí thành công.");
       return;
     } catch (err: any) {
-      triggerToast(err.message || "KhÃ´ng thá»ƒ ghi nháº­n thanh toÃ¡n.");
+      triggerToast(err.message || "Không thể ghi nhận thanh toán.");
       return;
     }
     if (paymentAmount < 0) {
@@ -285,6 +338,45 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
 
       </div>
 
+      {/* Phân nhóm học viên đóng học phí (Dashboard Kế toán) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+        <div className="bg-emerald-950/25 border border-emerald-500/25 p-4 rounded-2xl flex items-center justify-between backdrop-blur-md">
+          <div className="space-y-1">
+            <span className="text-[10px] text-emerald-400 uppercase tracking-widest font-black flex items-center gap-1">
+              <CheckCircle className="h-3.5 w-3.5" /> Học viên Đóng đủ (100%)
+            </span>
+            <h3 className="text-2xl font-mono font-black text-white mt-1">{paidCount} <span className="text-xs text-white/40">sinh viên</span></h3>
+          </div>
+          <div className="p-2.5 bg-emerald-500/10 rounded-xl text-emerald-400">
+            <CheckCircle className="h-6 w-6" />
+          </div>
+        </div>
+
+        <div className="bg-sky-950/25 border border-sky-500/25 p-4 rounded-2xl flex items-center justify-between backdrop-blur-md">
+          <div className="space-y-1">
+            <span className="text-[10px] text-sky-400 uppercase tracking-widest font-black flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5" /> Học viên Trả góp / Một phần
+            </span>
+            <h3 className="text-2xl font-mono font-black text-white mt-1">{partialCount} <span className="text-xs text-white/40">sinh viên</span></h3>
+          </div>
+          <div className="p-2.5 bg-sky-500/10 rounded-xl text-sky-400">
+            <Clock className="h-6 w-6" />
+          </div>
+        </div>
+
+        <div className="bg-red-950/25 border border-red-500/25 p-4 rounded-2xl flex items-center justify-between backdrop-blur-md">
+          <div className="space-y-1">
+            <span className="text-[10px] text-red-400 uppercase tracking-widest font-black flex items-center gap-1">
+              <AlertTriangle className="h-3.5 w-3.5" /> Học viên Chưa thanh toán
+            </span>
+            <h3 className="text-2xl font-mono font-black text-white mt-1">{unpaidCount} <span className="text-xs text-white/40">sinh viên</span></h3>
+          </div>
+          <div className="p-2.5 bg-red-500/10 rounded-xl text-red-400">
+            <AlertTriangle className="h-6 w-6" />
+          </div>
+        </div>
+      </div>
+
       {/* Main filter bars */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/3 border border-white/5 p-4 rounded-xl text-xs">
         <div className="flex flex-wrap items-center gap-3">
@@ -354,24 +446,37 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
         </div>
       </div>
 
-      {/* Tuition Roster Records list */}
       <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden text-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/10 text-white/40 text-[10px] font-bold uppercase bg-white/2">
-                <th className="py-2 px-3">Mã SV</th>
-                <th className="py-2 px-3">Học sinh Sinh viên</th>
-                <th className="py-2 px-3">Học Kỳ Billed</th>
-                <th className="py-2 px-3 text-right">Tổng Định Phí</th>
-                <th className="py-2 px-3 text-right text-emerald-400">Đã Trả</th>
-                <th className="py-2 px-3 text-right">Hạn Định</th>
-                <th className="py-2 px-3 text-center">Tình Trạng</th>
+                <th className="py-2 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("studentCode")}>
+                  Mã SV {tuitionSortField === "studentCode" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-2 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("studentName")}>
+                  Học sinh Sinh viên {tuitionSortField === "studentName" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-2 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("semesterId")}>
+                  Học Kỳ Billed {tuitionSortField === "semesterId" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-2 px-3 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("amount")}>
+                  Tổng Định Phí {tuitionSortField === "amount" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-2 px-3 text-right text-emerald-400 cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("paidAmount")}>
+                  Đã Trả {tuitionSortField === "paidAmount" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-2 px-3 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("dueDate")}>
+                  Hạn Định {tuitionSortField === "dueDate" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-2 px-3 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("status")}>
+                  Tình Trạng {tuitionSortField === "status" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
                 <th className="py-2 px-4 text-right">Bút toán</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-white/95 text-xs font-medium">
-              {formattedFees.map(fee => (
+              {sortedFormattedFees.map(fee => (
                 <tr key={fee.id} className="hover:bg-white/3 transition">
                   <td className="py-3 px-3 font-mono font-bold text-cyan-400">{fee.studentCode}</td>
                   <td className="py-3 px-3">

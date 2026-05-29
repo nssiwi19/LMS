@@ -11,13 +11,15 @@ import {
   AlertTriangle,
   FileSpreadsheet,
   BookOpen,
-  Filter
+  Filter,
+  Trash
 } from "lucide-react";
 import { User, Course, Enrollment, Lesson, LessonProgress } from "../types";
 import { AppStore } from "../store";
 import { useApiStore } from "../hooks/apiHooks";
 import AttendanceManager from "./AttendanceManager";
 import WarningAndReports from "./WarningAndReports";
+import { api } from "../api";
 
 interface AcademicPanelProps {
   currentUser: User;
@@ -35,14 +37,55 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
   const [selectedCourseId, setSelectedCourseId] = useState<string>("all");
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>("all");
   const [searchStudentQuery, setSearchStudentQuery] = useState("");
+  const [courseSearch, setCourseSearch] = useState("");
+  const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Sorting state for student progress ledger
+  const [ledgerSortField, setLedgerSortField] = useState<string>("studentName");
+  const [ledgerSortOrder, setLedgerSortOrder] = useState<"asc" | "desc">("asc");
+
+  // Sorting state for course comparison dataset
+  const [compareSortField, setCompareSortField] = useState<string>("courseTitle");
+  const [compareSortOrder, setCompareSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleLedgerSort = (field: string) => {
+    if (ledgerSortField === field) {
+      setLedgerSortOrder(ledgerSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setLedgerSortField(field);
+      setLedgerSortOrder("asc");
+    }
+  };
+
+  const handleCompareSort = (field: string) => {
+    if (compareSortField === field) {
+      setCompareSortOrder(compareSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setCompareSortField(field);
+      setCompareSortOrder("asc");
+    }
+  };
 
 
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleDeleteCourse = async (courseId: string, courseTitle: string) => {
+    if (!window.confirm(`⚠️ CẢNH BÁO CỰC KỲ QUAN TRỌNG ⚠️\n\nBạn có chắc chắn muốn XÓA VĨNH VIỄN khóa học "${courseTitle}" không?\nHành động này sẽ thực hiện xóa hàng loạt toàn bộ bài học, câu hỏi, bài thi, bài tập và điểm số liên quan đến môn học này.\n\nHành động này không thể hoàn tác!`)) {
+      return;
+    }
+    try {
+      await api.deleteCourse(courseId);
+      showToast(`✅ Đã xóa vĩnh viễn khóa học "${courseTitle}" thành công!`);
+      onRefreshData();
+    } catch (err: any) {
+      showToast(`❌ Không thể xóa khóa học: ${err.message}`);
+    }
   };
 
   // Base Data Queries
@@ -186,6 +229,69 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
     const query = searchStudentQuery.toLowerCase();
     return item.student.name.toLowerCase().includes(query) || 
            item.student.email.toLowerCase().includes(query);
+  });
+
+  const sortedStudentLedger = [...filteredStudentLedger].sort((a, b) => {
+    if (!ledgerSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (ledgerSortField === "studentName") {
+      valA = a.student?.name || "";
+      valB = b.student?.name || "";
+    } else if (ledgerSortField === "courseTitle") {
+      valA = a.course?.title || "";
+      valB = b.course?.title || "";
+    } else if (ledgerSortField === "enrolledAt") {
+      valA = a.enrollment.enrolledAt ? new Date(a.enrollment.enrolledAt).getTime() : 0;
+      valB = b.enrollment.enrolledAt ? new Date(b.enrollment.enrolledAt).getTime() : 0;
+    } else if (ledgerSortField === "progress") {
+      valA = a.progress;
+      valB = b.progress;
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return ledgerSortOrder === "asc" 
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" }) 
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return ledgerSortOrder === "asc" ? valA - valB : valB - valA;
+  });
+
+  const filteredCourseComparison = courseComparisonDataset.filter(item => {
+    return !courseSearch || 
+      item.course.title.toLowerCase().includes(courseSearch.toLowerCase()) ||
+      item.teacherName.toLowerCase().includes(courseSearch.toLowerCase());
+  });
+
+  const sortedCourseComparison = [...filteredCourseComparison].sort((a, b) => {
+    if (!compareSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (compareSortField === "courseTitle") {
+      valA = a.course.title || "";
+      valB = b.course.title || "";
+    } else if (compareSortField === "teacherName") {
+      valA = a.teacherName || "";
+      valB = b.teacherName || "";
+    } else if (compareSortField === "enrollmentCount") {
+      valA = a.enrollmentCount;
+      valB = b.enrollmentCount;
+    } else if (compareSortField === "avgCompletion") {
+      valA = a.avgCompletion;
+      valB = b.avgCompletion;
+    } else if (compareSortField === "avgQuizScore") {
+      valA = a.avgQuizScore;
+      valB = b.avgQuizScore;
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return compareSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return compareSortOrder === "asc" ? valA - valB : valB - valA;
   });
 
   return (
@@ -539,16 +645,26 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
               <table className="w-full text-xs text-left border-collapse">
                 <thead>
                   <tr className="bg-white/5 border-b border-white/10 text-white/50 uppercase font-mono tracking-wider font-bold">
-                    <th className="p-4">Học viên</th>
-                    <th className="p-4">Khóa học</th>
-                    <th className="p-4">Ngày đăng ký</th>
-                    <th className="p-4">Hoàn thành bài học</th>
-                    <th className="p-4">Tiến độ chi tiết</th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleLedgerSort("studentName")}>
+                      Học viên {ledgerSortField === "studentName" ? (ledgerSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleLedgerSort("courseTitle")}>
+                      Khóa học {ledgerSortField === "courseTitle" ? (ledgerSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleLedgerSort("enrolledAt")}>
+                      Ngày đăng ký {ledgerSortField === "enrolledAt" ? (ledgerSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleLedgerSort("progress")}>
+                      Hoàn thành bài học {ledgerSortField === "progress" ? (ledgerSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleLedgerSort("progress")}>
+                      Tiến độ chi tiết {ledgerSortField === "progress" ? (ledgerSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                     <th className="p-4">Đánh giá chung</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {filteredStudentLedger.map((item, idx) => (
+                  {sortedStudentLedger.map((item, idx) => (
                     <tr key={idx} className="hover:bg-white/5 transition duration-150">
                       <td className="p-4 font-bold text-white">
                         <div>{item.student?.name}</div>
@@ -590,7 +706,7 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
                     </tr>
                   ))}
 
-                  {filteredStudentLedger.length === 0 && (
+                  {sortedStudentLedger.length === 0 && (
                     <tr>
                       <td colSpan={6} className="text-center py-16 text-white/45">
                         Không tìm thấy học viên tương ứng với bộ lọc.
@@ -611,27 +727,76 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
               <p className="text-xs text-white/50">Tỷ lệ hoàn thành trung bình, sĩ số đăng ký và kết quả thi trắc nghiệm giữa các đầu mục giảng dạy.</p>
             </div>
 
+            <div className="flex gap-3 bg-white/3 border border-white/5 p-3 rounded-xl text-xs mb-4">
+              <input
+                type="text"
+                placeholder="Tìm kiếm khóa học hoặc giảng viên..."
+                value={courseSearch}
+                onChange={(e) => setCourseSearch(e.target.value)}
+                className="w-full md:w-64 px-2.5 py-1.5 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 font-sans"
+              />
+            </div>
+
             <div className="overflow-x-auto rounded-xl border border-white/5">
-              <table className="w-full text-xs text-left border-collapse">
+              <table className="w-full text-xs text-left border-collapse font-sans">
                 <thead>
                   <tr className="bg-white/5 border-b border-white/10 text-white/50 uppercase font-mono tracking-wider font-bold">
-                    <th className="p-4">Khóa học</th>
-                    <th className="p-4">Giảng viên phụ trách</th>
-                    <th className="p-4">Tổng số học viên</th>
-                    <th className="p-4">Tiến độ hoàn thành trung bình</th>
-                    <th className="p-4">Điểm thi quiz trung bình</th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleCompareSort("courseTitle")}>
+                      Khóa học {compareSortField === "courseTitle" ? (compareSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleCompareSort("teacherName")}>
+                      Giảng viên phụ trách {compareSortField === "teacherName" ? (compareSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleCompareSort("enrollmentCount")}>
+                      Tổng số học viên {compareSortField === "enrollmentCount" ? (compareSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleCompareSort("avgCompletion")}>
+                      Tiến độ hoàn thành trung bình {compareSortField === "avgCompletion" ? (compareSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleCompareSort("avgQuizScore")}>
+                      Điểm thi quiz trung bình {compareSortField === "avgQuizScore" ? (compareSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    {["admin", "super_admin", "academic_admin"].includes(currentUser.role) && (
+                      <th className="p-4 text-right">Thao tác</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {courseComparisonDataset.map((item, idx) => (
+                  {sortedCourseComparison.map((item, idx) => (
                     <tr key={idx} className="hover:bg-white/5 transition duration-150">
-                      <td className="p-4 font-bold text-white text-sm">{item.course.title}</td>
+                      <td className="p-4 font-bold text-white text-sm">
+                        <div className="flex items-center gap-1.5 font-sans">
+                          <span>{item.course.title}</span>
+                          <button
+                            onClick={() => setCourseDetailId(item.course.id)}
+                            className="px-1.5 py-0.5 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-white rounded text-[9px] font-bold transition flex items-center gap-0.5 cursor-pointer font-sans"
+                          >
+                            Xem 👁️
+                          </button>
+                        </div>
+                      </td>
                       <td className="p-4 text-white/60 font-medium">{item.teacherName}</td>
                       <td className="p-4 font-mono font-bold text-sky-400">{item.enrollmentCount} học viên</td>
                       <td className="p-4 font-mono font-bold text-emerald-400">{item.avgCompletion}%</td>
                       <td className="p-4 font-mono font-bold text-indigo-400">{item.avgQuizScore}%</td>
+                      {["admin", "super_admin", "academic_admin"].includes(currentUser.role) && (
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => handleDeleteCourse(item.course.id, item.course.title)}
+                            className="px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 hover:border-red-500/35 rounded-lg font-bold transition flex items-center gap-1 ml-auto cursor-pointer text-[10.5px]"
+                          >
+                            <Trash className="h-3.5 w-3.5" /> Xóa
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
+
+                  {sortedCourseComparison.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="text-center py-10 text-white/30 italic">Không tìm thấy khóa học nào phù hợp.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -756,6 +921,86 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
         )}
 
       </div>
+
+      {/* Premium glassmorphic Course Details consultation modal */}
+      {courseDetailId && (() => {
+        const course = store.courses.find(c => c.id === courseDetailId);
+        if (!course) return null;
+        const teacher = store.users.find(u => u.id === course.teacherId) || { name: "Chưa phân công" };
+        const lessons = store.lessons.filter(l => l.courseId === course.id).sort((a,b) => a.order - b.order);
+        const quizzes = store.quizzes.filter(q => q.courseId === course.id);
+        const assignments = store.assignments.filter(a => a.courseId === course.id);
+        const formatVND = (num: number) => {
+          return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+        };
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
+              <div className="space-y-5">
+                <div className="flex justify-between items-start border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">
+                      {course.category}
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-2">{course.title}</h3>
+                    <p className="text-xs text-white/40 mt-1">Giảng viên: <strong className="text-indigo-200">{teacher.name}</strong></p>
+                  </div>
+                  <button 
+                    onClick={() => setCourseDetailId(null)}
+                    className="p-1 rounded-lg hover:bg-white/10 text-white/50 cursor-pointer font-sans"
+                  >
+                    <span className="text-lg font-bold">✕</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-white/2 p-4 rounded-xl border border-white/5 font-sans">
+                  <div>
+                    <span className="text-white/45 block">Học phí:</span>
+                    <strong className="text-sm font-mono text-emerald-400 font-black">{course.price ? formatVND(course.price) : "Miễn phí"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-white/45 block">Cấp trình độ:</span>
+                    <strong className="text-indigo-300 capitalize">{course.level || "Cơ bản"}</strong>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] text-white/45 font-bold uppercase block">Mô tả khóa đào tạo:</span>
+                  <p className="text-xs text-white/70 leading-relaxed bg-black/15 p-3 rounded-lg border border-white/5 font-sans">{course.description}</p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <span className="text-[11px] text-white/45 font-bold uppercase flex items-center gap-1 font-sans">
+                    Khung chương trình ({lessons.length} bài học, {quizzes.length} bài thi, {assignments.length} tự luận)
+                  </span>
+                  
+                  {lessons.length > 0 ? (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 font-sans">
+                      {lessons.map((lesson, idx) => (
+                        <div key={lesson.id} className="p-2.5 bg-white/3 border border-white/5 rounded-lg flex justify-between items-center text-xs">
+                          <span className="font-semibold text-white/90">Bài {idx + 1}: {lesson.title}</span>
+                          <span className="text-[10px] text-white/40 font-mono">{lesson.duration || "15 phút"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/35 italic font-sans">Chưa tải giáo trình bài giảng cho lớp học này.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/10 mt-5 flex justify-end">
+                <button
+                  onClick={() => setCourseDetailId(null)}
+                  className="px-4 py-2 bg-white text-indigo-950 font-bold rounded-xl hover:bg-slate-100 transition text-xs cursor-pointer font-sans"
+                >
+                  Đóng thông tin
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

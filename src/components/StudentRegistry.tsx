@@ -49,6 +49,34 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
 
   // Target Student for View Modal
   const [detailedStudentId, setDetailedStudentId] = useState<string | null>(null);
+  const [enrollmentSearch, setEnrollmentSearch] = useState("");
+  const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
+
+  // Sorting state for students roster registry
+  const [studentSortField, setStudentSortField] = useState<string>("studentCode");
+  const [studentSortOrder, setStudentSortOrder] = useState<"asc" | "desc">("asc");
+
+  // Sorting state for detailed enrollments log
+  const [enrollSortField, setEnrollSortField] = useState<string>("courseTitle");
+  const [enrollSortOrder, setEnrollSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleStudentSort = (field: string) => {
+    if (studentSortField === field) {
+      setStudentSortOrder(studentSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setStudentSortField(field);
+      setStudentSortOrder("asc");
+    }
+  };
+
+  const handleEnrollSort = (field: string) => {
+    if (enrollSortField === field) {
+      setEnrollSortOrder(enrollSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setEnrollSortField(field);
+      setEnrollSortOrder("asc");
+    }
+  };
 
   // Advisories Notes Create Form state
   const [noteContent, setNoteContent] = useState("");
@@ -86,6 +114,46 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
     const matchesStatus = filterStatus === "all" || st.status === filterStatus;
 
     return matchesSearch && matchesDept && matchesProg && matchesYear && matchesStatus;
+  });
+
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    if (!studentSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (studentSortField === "studentCode") {
+      valA = a.studentCode || "";
+      valB = b.studentCode || "";
+    } else if (studentSortField === "name") {
+      valA = a.name || "";
+      valB = b.name || "";
+    } else if (studentSortField === "departmentId") {
+      const deptA = departments.find(d => d.id === a.departmentId);
+      const deptB = departments.find(d => d.id === b.departmentId);
+      valA = deptA?.name || "";
+      valB = deptB?.name || "";
+    } else if (studentSortField === "programId") {
+      const progA = programs.find(p => p.id === a.programId);
+      const progB = programs.find(p => p.id === b.programId);
+      valA = progA?.name || "";
+      valB = progB?.name || "";
+    } else if (studentSortField === "academicYear") {
+      valA = Number(a.academicYear) || 0;
+      valB = Number(b.academicYear) || 0;
+    } else if (studentSortField === "gpa") {
+      valA = a.gpa || 0;
+      valB = b.gpa || 0;
+    } else if (studentSortField === "status") {
+      valA = a.status || "";
+      valB = b.status || "";
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return studentSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return studentSortOrder === "asc" ? valA - valB : valB - valA;
   });
 
   // Checkbox selectors
@@ -274,18 +342,32 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-white/10 bg-white/2 text-[10.5px] uppercase tracking-wider text-white/50">
-                <th className="py-3 px-3">Mã SV</th>
-                <th className="py-3 px-3">Học sinh Sinh viên</th>
-                <th className="py-3 px-3">Khoa chuyên môn</th>
-                <th className="py-3 px-3">Chương trình đào tạo</th>
-                <th className="py-3 px-3 text-center">Năm học</th>
-                <th className="py-3 px-3 text-center">GPA</th>
-                <th className="py-3 px-3">Trạng thái</th>
+                <th className="py-3 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("studentCode")}>
+                  Mã SV {studentSortField === "studentCode" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-3 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("name")}>
+                  Học sinh Sinh viên {studentSortField === "name" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-3 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("departmentId")}>
+                  Khoa chuyên môn {studentSortField === "departmentId" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-3 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("programId")}>
+                  Chương trình đào tạo {studentSortField === "programId" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-3 px-3 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("academicYear")}>
+                  Năm học {studentSortField === "academicYear" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-3 px-3 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("gpa")}>
+                  GPA {studentSortField === "gpa" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-3 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("status")}>
+                  Trạng thái {studentSortField === "status" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
                 <th className="py-3 px-4 text-right">Xem thêm</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-white/95">
-              {filteredStudents.map(st => {
+              {sortedStudents.map(st => {
                 const dept = departments.find(d => d.id === st.departmentId);
                 const prog = programs.find(p => p.id === st.programId);
                 
@@ -414,45 +496,117 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
 
                   {/* Academic Enrollments logs tracker */}
                   <div className="bg-white/3 border border-white/5 rounded-2xl p-5 space-y-3">
-                    <h4 className="text-xs font-bold text-white/80 uppercase tracking-wider flex items-center gap-1.5">
+                    <h4 className="text-xs font-bold text-white/80 uppercase tracking-wider flex items-center gap-1.5 font-sans">
                       <Calendar className="h-4 w-4 text-indigo-400" /> Tiến trình học tập & Đăng ký môn
                     </h4>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead>
-                          <tr className="border-b border-white/5 text-[10px] text-white/40 uppercase">
-                            <th className="py-2">Học phần lớp học</th>
-                            <th className="py-2">Ngày nhập môn</th>
-                            <th className="py-2">Tên lớp</th>
-                            <th className="py-2 text-right">Trạng thái lớp</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/2">
-                          {detailedEnrollments.map(enroll => {
-                            const course = courses.find(c => c.id === enroll.courseId);
-                            return (
-                              <tr key={enroll.id}>
-                                <td className="py-2.5 font-bold text-white">{course ? course.title : "Không xác định"}</td>
-                                <td className="py-2.5 font-mono text-white/60">{((enroll as any).createdAt || new Date().toISOString()).slice(0,10)}</td>
-                                <td className="py-2.5 text-white/50">{course ? course.category : "Không xác định"}</td>
-                                <td className="py-2.5 text-right capitalize">
-                                  <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold ${
-                                    enroll.status === "active" ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" : "bg-emerald-500/10 text-emerald-400"
-                                  }`}>
-                                    {enroll.status === "active" ? "Đang học" : "Đã xong"}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                          {detailedEnrollments.length === 0 && (
-                            <tr>
-                              <td colSpan={4} className="py-4 text-center text-white/30 text-[11px]">Sinh viên này chưa đăng ký bất kỳ môn học nào.</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
+
+                    {/* Enrollment Search Input */}
+                    <div className="flex gap-3 bg-white/3 border border-white/5 p-2 rounded-xl text-xs max-w-sm">
+                      <input
+                        type="text"
+                        placeholder="Tìm học phần đã đăng ký..."
+                        value={enrollmentSearch}
+                        onChange={(e) => setEnrollmentSearch(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 font-sans"
+                      />
                     </div>
+                    {(() => {
+                      const filteredDetailedEnrollments = detailedEnrollments.filter(enroll => {
+                        const course = courses.find(c => c.id === enroll.courseId);
+                        return !enrollmentSearch ||
+                          (course?.title || "").toLowerCase().includes(enrollmentSearch.toLowerCase()) ||
+                          (course?.category || "").toLowerCase().includes(enrollmentSearch.toLowerCase());
+                      });
+
+                      const sortedDetailedEnrollments = [...filteredDetailedEnrollments].sort((a, b) => {
+                        if (!enrollSortField) return 0;
+                        let valA: any = "";
+                        let valB: any = "";
+
+                        const courseA = courses.find(c => c.id === a.courseId);
+                        const courseB = courses.find(c => c.id === b.courseId);
+
+                        if (enrollSortField === "courseTitle") {
+                          valA = courseA?.title || "";
+                          valB = courseB?.title || "";
+                        } else if (enrollSortField === "createdAt") {
+                          valA = (a as any).createdAt || "";
+                          valB = (b as any).createdAt || "";
+                        } else if (enrollSortField === "category") {
+                          valA = courseA?.category || "";
+                          valB = courseB?.category || "";
+                        } else if (enrollSortField === "status") {
+                          valA = a.status || "";
+                          valB = b.status || "";
+                        }
+
+                        if (typeof valA === "string" && typeof valB === "string") {
+                          return enrollSortOrder === "asc"
+                            ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+                            : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+                        }
+                        return enrollSortOrder === "asc" ? valA - valB : valB - valA;
+                      });
+
+                      return (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs border-collapse font-sans">
+                            <thead>
+                              <tr className="border-b border-white/5 text-[10px] text-white/40 uppercase">
+                                <th className="py-2 cursor-pointer select-none hover:text-white transition" onClick={() => handleEnrollSort("courseTitle")}>
+                                  Học phần lớp học {enrollSortField === "courseTitle" ? (enrollSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                                </th>
+                                <th className="py-2 cursor-pointer select-none hover:text-white transition" onClick={() => handleEnrollSort("createdAt")}>
+                                  Ngày nhập môn {enrollSortField === "createdAt" ? (enrollSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                                </th>
+                                <th className="py-2 cursor-pointer select-none hover:text-white transition" onClick={() => handleEnrollSort("category")}>
+                                  Tên lớp {enrollSortField === "category" ? (enrollSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                                </th>
+                                <th className="py-2 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleEnrollSort("status")}>
+                                  Trạng thái lớp {enrollSortField === "status" ? (enrollSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/2">
+                              {sortedDetailedEnrollments.map(enroll => {
+                                const course = courses.find(c => c.id === enroll.courseId);
+                                return (
+                                  <tr key={enroll.id}>
+                                    <td className="py-2.5 font-bold text-white">
+                                      <div className="flex items-center gap-1.5">
+                                        <span>{course ? course.title : "Không xác định"}</span>
+                                        {course && (
+                                          <button
+                                            onClick={() => setCourseDetailId(course.id)}
+                                            className="px-1.5 py-0.5 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-white rounded text-[9px] font-bold transition flex items-center gap-0.5 cursor-pointer font-sans"
+                                          >
+                                            Xem 👁
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-2.5 font-mono text-white/60">{((enroll as any).createdAt || new Date().toISOString()).slice(0,10)}</td>
+                                    <td className="py-2.5 text-white/50">{course ? course.category : "Không xác định"}</td>
+                                    <td className="py-2.5 text-right capitalize">
+                                      <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold ${
+                                        enroll.status === "active" ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20" : "bg-emerald-500/10 text-emerald-400"
+                                      }`}>
+                                        {enroll.status === "active" ? "Đang học" : "Đã xong"}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {sortedDetailedEnrollments.length === 0 && (
+                                <tr>
+                                  <td colSpan={4} className="text-center py-6 text-white/30 italic">Không tìm thấy lớp học phần phù hợp.</td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Attendance detail status box */}
@@ -614,6 +768,85 @@ export default function StudentRegistry({ store, currentUser, onRefreshData, tri
         </div>
       )}
 
+      {/* Premium glassmorphic Course Details consultation modal */}
+      {courseDetailId && (() => {
+        const course = store.courses.find(c => c.id === courseDetailId);
+        if (!course) return null;
+        const teacher = store.users.find(u => u.id === course.teacherId) || { name: "Chưa phân công" };
+        const lessons = store.lessons.filter(l => l.courseId === course.id).sort((a,b) => a.order - b.order);
+        const quizzes = store.quizzes.filter(q => q.courseId === course.id);
+        const assignments = store.assignments.filter(a => a.courseId === course.id);
+        const formatVND = (num: number) => {
+          return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+        };
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
+              <div className="space-y-5">
+                <div className="flex justify-between items-start border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">
+                      {course.category}
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-2">{course.title}</h3>
+                    <p className="text-xs text-white/40 mt-1">Giảng viên: <strong className="text-indigo-200">{teacher.name}</strong></p>
+                  </div>
+                  <button 
+                    onClick={() => setCourseDetailId(null)}
+                    className="p-1 rounded-lg hover:bg-white/10 text-white/50 cursor-pointer font-sans"
+                  >
+                    <span className="text-lg font-bold">✕</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-white/2 p-4 rounded-xl border border-white/5 font-sans">
+                  <div>
+                    <span className="text-white/45 block">Học phí:</span>
+                    <strong className="text-sm font-mono text-emerald-400 font-black">{course.price ? formatVND(course.price) : "Miễn phí"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-white/45 block">Cấp trình độ:</span>
+                    <strong className="text-indigo-300 capitalize">{course.level || "Cơ bản"}</strong>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] text-white/45 font-bold uppercase block">Mô tả khóa đào tạo:</span>
+                  <p className="text-xs text-white/70 leading-relaxed bg-black/15 p-3 rounded-lg border border-white/5 font-sans">{course.description}</p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <span className="text-[11px] text-white/45 font-bold uppercase flex items-center gap-1 font-sans">
+                    Khung chương trình ({lessons.length} bài học, {quizzes.length} bài thi, {assignments.length} tự luận)
+                  </span>
+                  
+                  {lessons.length > 0 ? (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 font-sans">
+                      {lessons.map((lesson, idx) => (
+                        <div key={lesson.id} className="p-2.5 bg-white/3 border border-white/5 rounded-lg flex justify-between items-center text-xs">
+                          <span className="font-semibold text-white/90">Bài {idx + 1}: {lesson.title}</span>
+                          <span className="text-[10px] text-white/40 font-mono">{lesson.duration || "15 phút"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/35 italic font-sans">Chưa tải giáo trình bài giảng cho lớp học này.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/10 mt-5 flex justify-end">
+                <button
+                  onClick={() => setCourseDetailId(null)}
+                  className="px-4 py-2 bg-white text-indigo-950 font-bold rounded-xl hover:bg-slate-100 transition text-xs cursor-pointer font-sans"
+                >
+                  Đóng thông tin
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

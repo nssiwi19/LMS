@@ -6,6 +6,21 @@ interface ComponentProps {
 }
 
 export default function AssignmentGrader(props: ComponentProps) {
+  const [submissionSearch, setSubmissionSearch] = React.useState("");
+  const [courseDetailId, setCourseDetailId] = React.useState<string | null>(null);
+
+  // Sorting state for student submissions grading table
+  const [subSortField, setSubSortField] = React.useState<string>("studentName");
+  const [subSortOrder, setSubSortOrder] = React.useState<"asc" | "desc">("asc");
+
+  const handleSubSort = (field: string) => {
+    if (subSortField === field) {
+      setSubSortOrder(subSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSubSortField(field);
+      setSubSortOrder("asc");
+    }
+  };
   const {
     activeSubTab,
     setActiveSubTab,
@@ -98,6 +113,46 @@ export default function AssignmentGrader(props: ComponentProps) {
     studentSubmissionsRaw
   } = props;
 
+  const filteredSubmissions = studentSubmissionsRaw.filter((sub: any) => {
+    const student = store.users.find((u: any) => u.id === sub.studentId);
+    const challenge = store.assignments.find((a: any) => a.id === sub.assignmentId);
+    return !submissionSearch ||
+      (student?.name || "").toLowerCase().includes(submissionSearch.toLowerCase()) ||
+      (challenge?.title || "").toLowerCase().includes(submissionSearch.toLowerCase());
+  });
+
+  const sortedSubmissions = [...filteredSubmissions].sort((a: any, b: any) => {
+    if (!subSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    const studentA = store.users.find((u: any) => u.id === a.studentId);
+    const studentB = store.users.find((u: any) => u.id === b.studentId);
+    const challengeA = store.assignments.find((ea: any) => ea.id === a.assignmentId);
+    const challengeB = store.assignments.find((ea: any) => ea.id === b.assignmentId);
+
+    if (subSortField === "studentName") {
+      valA = studentA?.name || "";
+      valB = studentB?.name || "";
+    } else if (subSortField === "challengeTitle") {
+      valA = challengeA?.title || "";
+      valB = challengeB?.title || "";
+    } else if (subSortField === "submittedAt") {
+      valA = new Date(a.submittedAt).getTime();
+      valB = new Date(b.submittedAt).getTime();
+    } else if (subSortField === "score") {
+      valA = a.score !== undefined ? a.score : -1;
+      valB = b.score !== undefined ? b.score : -1;
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return subSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return subSortOrder === "asc" ? valA - valB : valB - valA;
+  });
+
   return (
     <>
         {/* Tab 3: Assignments list & Student submissions grading cockpit */}
@@ -105,26 +160,57 @@ export default function AssignmentGrader(props: ComponentProps) {
           <div className="space-y-6">
             <h4 className="text-base font-display font-semibold text-white">Bảng Chấm điểm Bài tự luận của Học viên</h4>
 
+            {/* Submissions Search Input bar */}
+            <div className="flex gap-3 bg-white/3 border border-white/5 p-3 rounded-xl text-xs max-w-sm">
+              <input
+                type="text"
+                placeholder="Tìm tên học viên hoặc tên bài tập..."
+                value={submissionSearch}
+                onChange={(e) => setSubmissionSearch(e.target.value)}
+                className="w-full px-2.5 py-1.5 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 font-sans"
+              />
+            </div>
+
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-white/80">
+              <table className="w-full text-left text-xs text-white/80 font-sans">
                 <thead className="bg-white/5 border-b border-white/10 text-white uppercase text-[10px] tracking-wider sticky top-0">
                   <tr>
-                    <th className="p-4 font-semibold">Tên Học viên</th>
-                    <th className="p-4 font-semibold">Bài tập Thử thách</th>
-                    <th className="p-4 font-semibold">Ngày nộp</th>
-                    <th className="p-4 font-semibold">Điểm số đạt được</th>
+                    <th className="p-4 font-semibold cursor-pointer select-none hover:text-white transition" onClick={() => handleSubSort("studentName")}>
+                      Tên Học viên {subSortField === "studentName" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 font-semibold cursor-pointer select-none hover:text-white transition" onClick={() => handleSubSort("challengeTitle")}>
+                      Bài tập Thử thách {subSortField === "challengeTitle" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 font-semibold cursor-pointer select-none hover:text-white transition" onClick={() => handleSubSort("submittedAt")}>
+                      Ngày nộp {subSortField === "submittedAt" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 font-semibold cursor-pointer select-none hover:text-white transition" onClick={() => handleSubSort("score")}>
+                      Điểm số đạt được {subSortField === "score" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                     <th className="p-4 font-semibold text-right">Hành động Chấm điểm</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {studentSubmissionsRaw.map(sub => {
+                  {sortedSubmissions.map(sub => {
                     const student = store.users.find(u => u.id === sub.studentId);
                     const challenge = store.assignments.find(a => a.id === sub.assignmentId);
                     
                     return (
                       <tr key={sub.id} className="hover:bg-white/5 transition-colors">
                         <td className="p-4 font-medium text-white">{student?.name || "Học viên ẩn danh"}</td>
-                        <td className="p-4 font-bold text-indigo-200">{challenge?.title || "Không xác định"}</td>
+                        <td className="p-4 font-bold text-indigo-200">
+                          <div className="flex items-center gap-1.5">
+                            <span>{challenge?.title || "Không xác định"}</span>
+                            {challenge && (
+                              <button
+                                onClick={() => setCourseDetailId(challenge.courseId)}
+                                className="px-1.5 py-0.5 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-white rounded text-[9px] font-bold transition flex items-center gap-0.5 cursor-pointer font-sans"
+                              >
+                                Xem 👁️
+                              </button>
+                            )}
+                          </div>
+                        </td>
                         <td className="p-4 text-white/50">{new Date(sub.submittedAt).toLocaleDateString()}</td>
                         <td className="p-4">
                           {sub.score !== undefined ? (
@@ -153,10 +239,16 @@ export default function AssignmentGrader(props: ComponentProps) {
                     );
                   })}
 
-                  {studentSubmissionsRaw.length === 0 && (
+                  {studentSubmissionsRaw.filter(sub => {
+                    const student = store.users.find(u => u.id === sub.studentId);
+                    const challenge = store.assignments.find(a => a.id === sub.assignmentId);
+                    return !submissionSearch ||
+                      (student?.name || "").toLowerCase().includes(submissionSearch.toLowerCase()) ||
+                      (challenge?.title || "").toLowerCase().includes(submissionSearch.toLowerCase());
+                  }).length === 0 && (
                     <tr>
                       <td colSpan={5} className="text-center py-12 text-white/40">
-                        Hiện chưa có học viên nào nộp bài tự luận cho các bài tập được giao.
+                        {studentSubmissionsRaw.length === 0 ? "Hiện chưa có học viên nào nộp bài tự luận cho các bài tập được giao." : "Không tìm thấy bài nộp nào phù hợp với bộ lọc."}
                       </td>
                     </tr>
                   )}
@@ -168,7 +260,7 @@ export default function AssignmentGrader(props: ComponentProps) {
 
       {/* MODAL 5: CREATE ASSIGNMENT FORM */}
       {showAssignModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
             <button 
               onClick={() => setShowAssignModal(false)}
@@ -253,7 +345,7 @@ export default function AssignmentGrader(props: ComponentProps) {
 
       {/* MODAL 6: EVALUATE & GRADE FORM */}
       {activeSubmissionId && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
             <button 
               onClick={() => setActiveSubmissionId(null)}
@@ -325,6 +417,85 @@ export default function AssignmentGrader(props: ComponentProps) {
         </div>
       )}
 
+      {/* Premium glassmorphic Course Details consultation modal */}
+      {courseDetailId && (() => {
+        const course = store.courses.find((c: any) => c.id === courseDetailId);
+        if (!course) return null;
+        const teacher = store.users.find((u: any) => u.id === course.teacherId) || { name: "Chưa phân công" };
+        const lessons = store.lessons.filter((l: any) => l.courseId === course.id).sort((a: any, b: any) => a.order - b.order);
+        const quizzes = store.quizzes.filter((q: any) => q.courseId === course.id);
+        const assignments = store.assignments.filter((a: any) => a.courseId === course.id);
+        const formatVND = (num: number) => {
+          return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+        };
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto text-white">
+            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
+              <div className="space-y-5 text-left">
+                <div className="flex justify-between items-start border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">
+                      {course.category}
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-2">{course.title}</h3>
+                    <p className="text-xs text-white/40 mt-1">Giảng viên: <strong className="text-indigo-200">{teacher.name}</strong></p>
+                  </div>
+                  <button 
+                    onClick={() => setCourseDetailId(null)}
+                    className="p-1 rounded-lg hover:bg-white/10 text-white/50 cursor-pointer font-sans text-white bg-transparent border-none"
+                  >
+                    <span className="text-lg font-bold">✕</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-white/2 p-4 rounded-xl border border-white/5 font-sans">
+                  <div>
+                    <span className="text-white/45 block">Học phí:</span>
+                    <strong className="text-sm font-mono text-emerald-400 font-black">{course.price ? formatVND(course.price) : "Miễn phí"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-white/45 block">Cấp trình độ:</span>
+                    <strong className="text-indigo-300 capitalize">{course.level || "Cơ bản"}</strong>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] text-white/45 font-bold uppercase block">Mô tả khóa đào tạo:</span>
+                  <p className="text-xs text-white/70 leading-relaxed bg-black/15 p-3 rounded-lg border border-white/5 font-sans">{course.description}</p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <span className="text-[11px] text-white/45 font-bold uppercase flex items-center gap-1 font-sans">
+                    Khung chương trình ({lessons.length} bài học, {quizzes.length} bài thi, {assignments.length} tự luận)
+                  </span>
+                  
+                  {lessons.length > 0 ? (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 font-sans">
+                      {lessons.map((lesson: any, idx: number) => (
+                        <div key={lesson.id} className="p-2.5 bg-white/3 border border-white/5 rounded-lg flex justify-between items-center text-xs">
+                          <span className="font-semibold text-white/90">Bài {idx + 1}: {lesson.title}</span>
+                          <span className="text-[10px] text-white/40 font-mono">{lesson.duration || "15 phút"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/35 italic font-sans">Chưa tải giáo trình bài giảng cho lớp học này.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/10 mt-5 flex justify-end">
+                <button
+                  onClick={() => setCourseDetailId(null)}
+                  className="px-4 py-2 bg-white text-indigo-950 font-bold rounded-xl hover:bg-slate-100 transition text-xs cursor-pointer font-sans"
+                >
+                  Đóng thông tin
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 }

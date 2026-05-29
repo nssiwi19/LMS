@@ -22,7 +22,7 @@ import { assignmentsRepository } from "./src/server/repositories/assignments";
 import { financeRepository } from "./src/server/repositories/finance";
 import { academicsRepository } from "./src/server/repositories/academics";
 import { auditRepository } from "./src/server/repositories/audit";
-import { limitStoreForRole, storeSnapshotFromDb } from "./src/server/repositories/storeSnapshot";
+import { limitStoreForRole, storeSnapshotFromDb, invalidateStoreCache } from "./src/server/repositories/storeSnapshot";
 import { advisorsRepository } from "./src/server/repositories/advisors";
 import { parentRepository } from "./src/server/repositories/parent";
 import { courseRegistrationsRepository } from "./src/server/repositories/courseRegistrations";
@@ -50,6 +50,14 @@ const JWT_SECRET_VALUE = JWT_SECRET || "dev-only-e16-lms-secret-do-not-use-in-pr
 const csrfSafeMethods = new Set(["GET", "HEAD", "OPTIONS"]);
 
 app.use(express.json({ limit: "10mb" }));
+
+// Middleware tự động xóa cache khi có bất kỳ yêu cầu thay đổi dữ liệu nào
+app.use((req, _res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
+    invalidateStoreCache();
+  }
+  next();
+});
 
 type AuthRequest = express.Request & { user?: User; linkedStudentId?: string };
 type AsyncRoute = (req: AuthRequest, res: express.Response, next: express.NextFunction) => Promise<unknown>;
@@ -601,46 +609,7 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       }
     }
 
-    // Sync academic_warnings
-    if (store.academicWarnings !== undefined) {
-      const clientWarnings = store.academicWarnings || [];
-      const clientWarningIds = clientWarnings.map(w => w.id);
-      if (clientWarningIds.length > 0) {
-        await client.query(
-          "DELETE FROM academic_warnings WHERE id NOT IN (" +
-          clientWarningIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientWarningIds
-        );
-      } else {
-        await client.query("DELETE FROM academic_warnings");
-      }
-      for (const w of clientWarnings) {
-        await client.query(
-          `INSERT INTO academic_warnings (id, student_id, type, course_id, message, is_resolved, resolved_by, resolved_at, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           ON CONFLICT (id) DO UPDATE SET
-             student_id = EXCLUDED.student_id,
-             type = EXCLUDED.type,
-             course_id = EXCLUDED.course_id,
-             message = EXCLUDED.message,
-             is_resolved = EXCLUDED.is_resolved,
-             resolved_by = EXCLUDED.resolved_by,
-             resolved_at = EXCLUDED.resolved_at,
-             created_at = EXCLUDED.created_at`,
-          [
-            w.id,
-            w.studentId,
-            w.type,
-            w.courseId || null,
-            w.message,
-            Boolean(w.isResolved),
-            w.resolvedBy || null,
-            w.resolvedAt || null,
-            w.createdAt
-          ]
-        );
-      }
-    }
+    // Sync academic_warnings bypassed (server-managed only)
 
     // Sync audit_logs
     if (store.auditLogs !== undefined) {
@@ -670,117 +639,11 @@ async function syncClientStoreToDb(store: Partial<LMSDataStore>) {
       }
     }
 
-    // Sync enrollments
-    if (store.enrollments !== undefined) {
-      const clientEnrollments = store.enrollments || [];
-      const clientEnrollmentIds = clientEnrollments.map(e => e.id);
-      if (clientEnrollmentIds.length > 0) {
-        await client.query(
-          "DELETE FROM enrollments WHERE id NOT IN (" +
-          clientEnrollmentIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientEnrollmentIds
-        );
-      } else {
-        await client.query("DELETE FROM enrollments");
-      }
-      for (const e of clientEnrollments) {
-        await client.query(
-          `INSERT INTO enrollments (id, course_id, student_id, status, enrolled_at, completed_at)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (id) DO UPDATE SET
-             course_id = EXCLUDED.course_id,
-             student_id = EXCLUDED.student_id,
-             status = EXCLUDED.status,
-             enrolled_at = EXCLUDED.enrolled_at,
-             completed_at = EXCLUDED.completed_at`,
-          [e.id, e.courseId, e.studentId, e.status, e.enrolledAt, e.completedAt || null]
-        );
-      }
-    }
+    // Sync enrollments bypassed (server-managed only)
 
-    // Sync transactions
-    if (store.transactions !== undefined) {
-      const clientTransactions = store.transactions || [];
-      const clientTxIds = clientTransactions.map(t => t.id);
-      if (clientTxIds.length > 0) {
-        await client.query(
-          "DELETE FROM transactions WHERE id NOT IN (" +
-          clientTxIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientTxIds
-        );
-      } else {
-        await client.query("DELETE FROM transactions");
-      }
-      for (const t of clientTransactions) {
-        await client.query(
-          `INSERT INTO transactions (id, student_id, course_id, amount, status, payment_method, created_at, processed_at, processed_by, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-           ON CONFLICT (id) DO UPDATE SET
-             student_id = EXCLUDED.student_id,
-             course_id = EXCLUDED.course_id,
-             amount = EXCLUDED.amount,
-             status = EXCLUDED.status,
-             payment_method = EXCLUDED.payment_method,
-             created_at = EXCLUDED.created_at,
-             processed_at = EXCLUDED.processed_at,
-             processed_by = EXCLUDED.processed_by,
-             notes = EXCLUDED.notes`,
-          [
-            t.id,
-            t.studentId,
-            t.courseId,
-            Number(t.amount) || 0,
-            t.status,
-            t.paymentMethod,
-            t.createdAt,
-            t.processedAt || null,
-            t.processedBy || null,
-            t.notes || null
-          ]
-        );
-      }
-    }
+    // Sync transactions bypassed (server-managed only)
 
-    // Sync tuitionFees
-    if (store.tuitionFees !== undefined) {
-      const clientTuition = store.tuitionFees || [];
-      const clientTuitionIds = clientTuition.map(tf => tf.id);
-      if (clientTuitionIds.length > 0) {
-        await client.query(
-          "DELETE FROM tuition_fees WHERE id NOT IN (" +
-          clientTuitionIds.map((_, i) => `$${i + 1}`).join(",") + ")",
-          clientTuitionIds
-        );
-      } else {
-        await client.query("DELETE FROM tuition_fees");
-      }
-      for (const tf of clientTuition) {
-        await client.query(
-          `INSERT INTO tuition_fees (id, student_id, semester_id, amount, due_date, status, paid_amount, paid_at, receipt_code)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-           ON CONFLICT (id) DO UPDATE SET
-             student_id = EXCLUDED.student_id,
-             semester_id = EXCLUDED.semester_id,
-             amount = EXCLUDED.amount,
-             due_date = EXCLUDED.due_date,
-             status = EXCLUDED.status,
-             paid_amount = EXCLUDED.paid_amount,
-             paid_at = EXCLUDED.paid_at,
-             receipt_code = EXCLUDED.receipt_code`,
-          [
-            tf.id,
-            tf.studentId,
-            tf.semesterId || null,
-            Number(tf.amount) || 0,
-            tf.dueDate,
-            tf.status,
-            Number(tf.paidAmount) || 0,
-            tf.paidAt || null,
-            tf.receiptCode || null
-          ]
-        );
-      }
-    }
+    // Sync tuitionFees bypassed (server-managed only)
 
     // Sync advisorNotes
     if (store.advisorNotes !== undefined) {
@@ -1190,6 +1053,91 @@ app.post("/api/courses/:id/reject", requireAuth, requireRole(["admin", "super_ad
   res.json(course);
 }));
 
+app.delete("/api/courses/:id", requireAuth, requireRole(["admin", "super_admin", "academic_admin"]), asyncHandler(async (req, res) => {
+  const courseId = req.params.id;
+  // Kiểm tra sĩ số sinh viên hoạt động
+  const enrollmentsCountRes = await pool.query("SELECT COUNT(*) AS count FROM enrollments WHERE course_id = $1 AND status = 'active'", [courseId]);
+  const enrollmentsCount = Number(enrollmentsCountRes.rows[0].count);
+  if (enrollmentsCount > 0) {
+    return res.status(400).json({ error: "Không thể xóa khóa học đang có sinh viên tham gia học tập thực tế." });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    
+    // Xóa phản hồi diễn đàn liên quan
+    await client.query(
+      `DELETE FROM forum_replies 
+       WHERE post_id IN (SELECT id FROM forum_posts WHERE course_id = $1)`,
+      [courseId]
+    );
+    // Xóa bài viết diễn đàn liên quan
+    await client.query("DELETE FROM forum_posts WHERE course_id = $1", [courseId]);
+
+    // Xóa tiến độ bài học liên quan
+    await client.query(
+      `DELETE FROM lesson_progress 
+       WHERE lesson_id IN (SELECT id FROM lessons WHERE course_id = $1)`,
+      [courseId]
+    );
+    // Xóa các bài học liên quan
+    await client.query("DELETE FROM lessons WHERE course_id = $1", [courseId]);
+
+    // Xóa các lượt thử làm bài quiz liên quan
+    await client.query(
+      `DELETE FROM quiz_attempts 
+       WHERE quiz_id IN (SELECT id FROM quizzes WHERE course_id = $1)`,
+      [courseId]
+    );
+    // Xóa các câu hỏi trắc nghiệm liên quan
+    await client.query(
+      `DELETE FROM questions 
+       WHERE quiz_id IN (SELECT id FROM quizzes WHERE course_id = $1)`,
+      [courseId]
+    );
+    // Xóa các bài thi trắc nghiệm liên quan
+    await client.query("DELETE FROM quizzes WHERE course_id = $1", [courseId]);
+
+    // Xóa bài nộp tự luận liên quan
+    await client.query(
+      `DELETE FROM submissions 
+       WHERE assignment_id IN (SELECT id FROM assignments WHERE course_id = $1)`,
+      [courseId]
+    );
+    // Xóa các bài tập tự luận liên quan
+    await client.query("DELETE FROM assignments WHERE course_id = $1", [courseId]);
+
+    // Xóa giao dịch liên quan
+    await client.query("DELETE FROM transactions WHERE course_id = $1", [courseId]);
+
+    // Xóa chứng chỉ học phần liên quan
+    await client.query("DELETE FROM certificates WHERE course_id = $1", [courseId]);
+
+    // Xóa các lớp học phần/buổi học cụ thể liên quan
+    await client.query("DELETE FROM course_sections WHERE course_id = $1", [courseId]);
+
+    // Xóa đăng ký học phần/enrollments
+    await client.query("DELETE FROM enrollments WHERE course_id = $1", [courseId]);
+
+    // Xóa liên kết chương trình học/khung ngành
+    await client.query("DELETE FROM program_courses WHERE course_id = $1", [courseId]);
+
+    // Cuối cùng xóa khóa học
+    await client.query("DELETE FROM courses WHERE id = $1", [courseId]);
+
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  await audit(req, "delete_course", courseId, "Successfully performed cascading delete on course and related assets.");
+  res.json({ ok: true });
+}));
+
 app.post("/api/lessons", requireAuth, requireRole(["teacher", "admin", "super_admin"]), validateBody(schemas.addLesson), asyncHandler(async (req, res) => {
   if (req.user!.role === "teacher" && !await coursesRepository.teacherOwnsCourse(pool, req.user!.id, req.body.courseId)) return res.status(403).json({ error: "Permission denied." });
   const lesson = await coursesRepository.addLesson(pool, req.body);
@@ -1557,7 +1505,7 @@ app.patch("/api/finance/transactions/:id/review", requireAuth, requireRole(["fin
   res.json(result);
 }));
 
-app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "academic_admin", "admin", "super_admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
+app.post("/api/attendance/sessions", requireAuth, requireRole(["academic_admin", "admin", "super_admin"]), validateBody(schemas.attendanceSession), asyncHandler(async (req, res) => {
   const course = await coursesRepository.findById(pool, req.body.courseId);
   if (!course) return res.status(404).json({ error: "Course not found." });
   if (req.user!.role === "teacher" && course.teacherId !== req.user!.id) return res.status(403).json({ error: "Permission denied." });
@@ -1581,7 +1529,7 @@ app.post("/api/attendance/sessions", requireAuth, requireRole(["teacher", "acade
   res.status(201).json({ session, records });
 }));
 
-app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "academic_admin", "admin", "super_admin"]), validateBody(schemas.attendanceRecord), asyncHandler(async (req, res) => {
+app.patch("/api/attendance/records", requireAuth, requireRole(["academic_admin", "admin", "super_admin"]), validateBody(schemas.attendanceRecord), asyncHandler(async (req, res) => {
   const session = (await pool.query("SELECT * FROM attendance_sessions WHERE id = $1", [req.body.sessionId])).rows[0];
   if (!session) return res.status(404).json({ error: "Attendance session not found." });
   if (req.user!.role === "teacher" && session.teacher_id !== req.user!.id) return res.status(403).json({ error: "Permission denied." });
@@ -1599,6 +1547,33 @@ app.patch("/api/attendance/records", requireAuth, requireRole(["teacher", "acade
   await attendanceRepository.bulkMarkRecords(pool, [record]);
   await audit(req, "update_attendance_record", record.id, `${record.studentId}:${record.status}`);
   res.json(record);
+}));
+
+app.post("/api/attendance/warn-teacher", requireAuth, requireRole(["academic_admin", "admin", "super_admin"]), asyncHandler(async (req, res) => {
+  const { courseId, teacherId } = req.body;
+  if (!courseId || !teacherId) {
+    return res.status(400).json({ error: "Missing courseId or teacherId." });
+  }
+  const course = await coursesRepository.findById(pool, courseId);
+  if (!course) return res.status(404).json({ error: "Course not found." });
+  const teacher = (await pool.query("SELECT * FROM users WHERE id = $1 AND role = 'teacher'", [teacherId])).rows[0];
+  if (!teacher) return res.status(404).json({ error: "Teacher not found." });
+
+  await notificationsRepository.createNotification(
+    pool,
+    teacherId,
+    "danger",
+    `CẢNH CÁO HỌC VỤ: Lớp học phần "${course.title}" chưa có bất kỳ buổi điểm danh nào. Yêu cầu giảng viên cập nhật điểm danh ngay lập tức!`
+  );
+
+  await audit(
+    req,
+    "warning_attendance_compliance",
+    courseId,
+    `Gửi cảnh cáo chưa điểm danh cho giảng viên ${teacher.name} (${teacherId})`
+  );
+
+  res.json({ ok: true });
 }));
 
 app.post("/api/store/sync", requireAuth, asyncHandler(async (req, res) => {

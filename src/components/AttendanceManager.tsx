@@ -30,8 +30,37 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
   // Session selection (or create new)
   const [activeSessionId, setActiveSessionId] = useState("");
 
+  // Sorting state for nonCompliantCourses
+  const [complianceSortField, setComplianceSortField] = useState<string>("courseTitle");
+  const [complianceSortOrder, setComplianceSortOrder] = useState<"asc" | "desc">("asc");
+
+  // Sorting state for courseStudents
+  const [studentSortField, setStudentSortField] = useState<string>("studentCode");
+  const [studentSortOrder, setStudentSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleComplianceSort = (field: string) => {
+    if (complianceSortField === field) {
+      setComplianceSortOrder(complianceSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setComplianceSortField(field);
+      setComplianceSortOrder("asc");
+    }
+  };
+
+  const handleStudentSort = (field: string) => {
+    if (studentSortField === field) {
+      setStudentSortOrder(studentSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setStudentSortField(field);
+      setStudentSortOrder("asc");
+    }
+  };
+
   // New session creation fields
   const [showCreateSession, setShowCreateSession] = useState(false);
+  const [complianceSearch, setComplianceSearch] = useState("");
+  const [studentSearch, setStudentSearch] = useState("");
+  const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
   const [newSessionDate, setNewSessionDate] = useState("");
   const [newSessionTopic, setNewSessionTopic] = useState("");
   const [newSessionTime, setNewSessionTime] = useState("09:00 - 11:30");
@@ -54,6 +83,31 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
       name: usr.name,
       studentCode: pProfile ? pProfile.studentCode : "SV-UNLINK"
     };
+  }).filter(st => {
+    return !studentSearch ||
+      st.name.toLowerCase().includes(studentSearch.toLowerCase()) ||
+      st.studentCode.toLowerCase().includes(studentSearch.toLowerCase());
+  });
+
+  const sortedCourseStudents = [...courseStudents].sort((a, b) => {
+    if (!studentSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (studentSortField === "studentCode") {
+      valA = a.studentCode || "";
+      valB = b.studentCode || "";
+    } else if (studentSortField === "name") {
+      valA = a.name || "";
+      valB = b.name || "";
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return studentSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return studentSortOrder === "asc" ? valA - valB : valB - valA;
   });
 
   // Load records for active session
@@ -86,10 +140,10 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
       setShowCreateSession(false);
       setActiveSessionId(result.session.id);
       onRefreshData();
-      triggerToast("ÄÃ£ khá»Ÿi táº¡o buá»•i Ä‘iá»ƒm danh mÃ´n há»c má»›i thÃ nh cÃ´ng.");
+      triggerToast("Đã khởi tạo buổi điểm danh môn học mới thành công.");
       return;
     } catch (err: any) {
-      triggerToast(err.message || "KhÃ´ng thá»ƒ táº¡o buá»•i Ä‘iá»ƒm danh.");
+      triggerToast(err.message || "Không thể tạo buổi điểm danh.");
       return;
     }
 
@@ -138,7 +192,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
       onRefreshData();
       return;
     } catch (err: any) {
-      triggerToast(err.message || "KhÃ´ng thá»ƒ cáº­p nháº­t Ä‘iá»ƒm danh.");
+      triggerToast(err.message || "Không thể cập nhật điểm danh.");
       return;
     }
     const storeData = AppStore.get();
@@ -237,8 +291,135 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
     return Math.round((presentRecords / sessionsCount) * 100);
   };
 
+  // Compliance checking: courses with zero attendance sessions
+  const nonCompliantCourses = courses.filter(c => {
+    const courseSessions = (store.attendanceSessions || []).filter(s => s.courseId === c.id);
+    const matchesSearch = !complianceSearch ||
+      c.title.toLowerCase().includes(complianceSearch.toLowerCase()) ||
+      (store.users.find(u => u.id === c.teacherId)?.name || "").toLowerCase().includes(complianceSearch.toLowerCase());
+    return courseSessions.length === 0 && matchesSearch;
+  });
+
+  const sortedNonCompliantCourses = [...nonCompliantCourses].sort((a, b) => {
+    if (!complianceSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (complianceSortField === "courseTitle") {
+      valA = a.title || "";
+      valB = b.title || "";
+    } else if (complianceSortField === "teacherName") {
+      valA = store.users.find(u => u.id === a.teacherId)?.name || "";
+      valB = store.users.find(u => u.id === b.teacherId)?.name || "";
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return complianceSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return complianceSortOrder === "asc" ? valA - valB : valB - valA;
+  });
+
   return (
     <div className="space-y-6">
+
+      {/* Giám sát tuân thủ điểm danh giảng viên (Học vụ & Admin) */}
+      {(currentUser.role === "academic_admin" || currentUser.role === "admin" || currentUser.role === "super_admin") && (
+        <div className="bg-white/4 border border-white/5 p-5 rounded-2xl space-y-4">
+          <div className="flex justify-between items-center pb-2 border-b border-white/10">
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+              <ShieldAlert className="h-4 w-4 text-rose-400" /> Giám sát tuân thủ điểm danh giảng viên
+            </h4>
+            <span className="text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded font-bold font-mono">
+              Phát hiện {nonCompliantCourses.length} môn chưa điểm danh
+            </span>
+          </div>
+
+          {nonCompliantCourses.length > 0 ? (
+            <div className="space-y-3">
+              {/* Search bar */}
+              <div className="flex gap-3 bg-white/3 border border-white/5 p-3 rounded-xl text-xs max-w-sm font-sans">
+                <input
+                  type="text"
+                  placeholder="Tìm môn học chưa điểm danh..."
+                  value={complianceSearch}
+                  onChange={(e) => setComplianceSearch(e.target.value)}
+                  className="w-full px-2.5 py-1.5 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 font-sans"
+                />
+              </div>
+
+              <div className="overflow-x-auto text-xs">
+                <table className="w-full text-left border-collapse font-sans">
+                  <thead>
+                    <tr className="border-b border-white/10 text-white/40 uppercase text-[10px]">
+                      <th className="py-2.5 cursor-pointer select-none hover:text-white transition" onClick={() => handleComplianceSort("courseTitle")}>
+                        Tên môn học {complianceSortField === "courseTitle" ? (complianceSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                      </th>
+                      <th className="py-2.5 cursor-pointer select-none hover:text-white transition" onClick={() => handleComplianceSort("teacherName")}>
+                        Giảng viên phụ trách {complianceSortField === "teacherName" ? (complianceSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                      </th>
+                      <th className="py-2.5 text-center">Trạng thái</th>
+                      <th className="py-2.5 text-right">Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5 text-xs text-white/85">
+                    {sortedNonCompliantCourses.map(course => {
+                      const teacher = store.users.find(u => u.id === course.teacherId) || { name: "Chưa phân công", email: "" };
+                      return (
+                        <tr key={course.id}>
+                          <td className="py-3 font-bold text-white">
+                            <div className="flex items-center gap-1.5">
+                              <span>{course.title} ({course.id})</span>
+                              <button
+                                onClick={() => setCourseDetailId(course.id)}
+                                className="px-1.5 py-0.5 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-white rounded text-[9px] font-bold transition flex items-center gap-0.5 cursor-pointer font-sans"
+                              >
+                                Xem 👁️
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-3">
+                            <div className="font-semibold text-white/95">{teacher.name}</div>
+                            <div className="text-[10px] text-white/40">{teacher.email || "N/A"}</div>
+                          </td>
+                          <td className="py-3 text-center">
+                            <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded text-[10px] font-bold">
+                              Chưa Điểm Danh ❌
+                            </span>
+                          </td>
+                          <td className="py-3 text-right">
+                            <button
+                              onClick={async () => {
+                                if (!course.teacherId) {
+                                  triggerToast("Môn học này chưa được phân công giảng viên!");
+                                  return;
+                                }
+                                try {
+                                  await api.warnTeacher({ courseId: course.id, teacherId: course.teacherId });
+                                  triggerToast(`Đã bắn mail và hệ thống cảnh cáo tới giảng viên ${teacher.name}! 📧`);
+                                  onRefreshData();
+                                } catch (err: any) {
+                                  triggerToast(err.message || "Không thể gửi cảnh cáo.");
+                                }
+                              }}
+                              className="px-3 py-1 bg-rose-600/20 hover:bg-rose-600/35 border border-rose-500/30 text-rose-300 font-bold rounded-lg transition cursor-pointer text-[11px]"
+                            >
+                              Bắn mail Cảnh cáo 📧
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-emerald-400 font-semibold italic">100% Giảng viên đã thực hiện điểm danh đầy đủ cho các lớp học phần! 🎉</p>
+          )}
+        </div>
+      )}
       
       {/* Course & Session selectors */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/4 border border-white/5 p-4 rounded-2xl text-xs">
@@ -292,29 +473,52 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
                 {(() => {
                   const activeSession = sessions.find(s => s.id === activeSessionId);
                   return (
-                    <div className="flex justify-between items-center border-b border-white/10 pb-2">
+                    <div className="flex justify-between items-center border-b border-white/10 pb-2 font-sans">
                       <div>
                         <h4 className="text-sm font-bold text-white">
                           Chốt danh sách điểm danh: <span className="text-indigo-400 font-mono font-semibold">{activeSession?.date}</span>
                         </h4>
-                        <p className="text-xs text-white/40">
-                          Chủ đề buổi học: <span className="text-cyan-400 font-semibold">{activeSession?.topic}</span>
-                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-xs text-white/40">
+                            Chủ đề buổi học: <span className="text-cyan-400 font-semibold">{activeSession?.topic}</span>
+                          </p>
+                          <button
+                            onClick={() => setCourseDetailId(selectedCourseId)}
+                            className="px-1.5 py-0.5 bg-indigo-500/20 hover:bg-indigo-500 text-indigo-300 hover:text-white rounded text-[9px] font-bold transition flex items-center gap-0.5 cursor-pointer font-sans"
+                          >
+                            Xem thông tin khóa 👁️
+                          </button>
+                        </div>
                       </div>
-                      <span className="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-0.5 rounded font-mono font-bold">
+                      <span className="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-0.5 rounded font-mono font-bold font-mono">
                         ID: {activeSessionId.slice(0, 8)}
                       </span>
                     </div>
                   );
                 })()}
 
+                {/* Student search input */}
+                <div className="flex gap-3 bg-white/3 border border-white/5 p-3 rounded-xl text-xs max-w-sm">
+                  <input
+                    type="text"
+                    placeholder="Tìm kiếm học viên theo tên hoặc mã SV..."
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 font-sans"
+                  />
+                </div>
+
                 <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="border-b border-white/10 text-[10.5px] uppercase text-white/50 bg-white/2">
-                          <th className="py-2.5 px-3">Mã SV</th>
-                          <th className="py-2.5 px-3">Tên Sinh Viên</th>
+                          <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("studentCode")}>
+                            Mã SV {studentSortField === "studentCode" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                          </th>
+                          <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("name")}>
+                            Tên Sinh Viên {studentSortField === "name" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                          </th>
                           <th className="py-2.5 px-3 text-center">Đúng giờ (Có mặt)</th>
                           <th className="py-2.5 px-3 text-center text-yellow-400">Đi Muộn</th>
                           <th className="py-2.5 px-3 text-center text-orange-400">Có Phép</th>
@@ -322,7 +526,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5 text-xs text-white/90">
-                        {courseStudents.map(st => {
+                        {sortedCourseStudents.map(st => {
                           const record = activeRecords.find(r => r.studentId === st.userId);
                           const activeStatus = record ? record.status : "present";
                           return (
@@ -395,7 +599,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
             </div>
 
             <div className="space-y-3">
-              {courseStudents.map(st => {
+              {sortedCourseStudents.map(st => {
                 const percentage = getStudentPresenceRate(st.userId);
                 return (
                   <div key={st.userId} className="text-xs space-y-1.5 p-2 bg-black/20 rounded-xl border border-white/5">
@@ -415,7 +619,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
                   </div>
                 );
               })}
-              {courseStudents.length === 0 && (
+              {sortedCourseStudents.length === 0 && (
                 <div className="text-center py-6 text-white/30 text-[11px]">Chưa có sinh viên đăng ký môn thi học phần này.</div>
               )}
             </div>
@@ -515,7 +719,85 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
           </div>
         </div>
       )}
+      {/* Premium glassmorphic Course Details consultation modal */}
+      {courseDetailId && (() => {
+        const course = store.courses.find(c => c.id === courseDetailId);
+        if (!course) return null;
+        const teacher = store.users.find(u => u.id === course.teacherId) || { name: "Chưa phân công" };
+        const lessons = store.lessons.filter(l => l.courseId === course.id).sort((a,b) => a.order - b.order);
+        const quizzes = store.quizzes.filter(q => q.courseId === course.id);
+        const assignments = store.assignments.filter(a => a.courseId === course.id);
+        const formatVND = (num: number) => {
+          return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+        };
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 md:pt-10 overflow-y-auto">
+            <div className="bg-slate-900 border border-white/20 rounded-3xl p-6 w-full max-w-2xl shadow-2xl relative my-8 animate-in zoom-in-95 duration-150 text-white font-sans max-h-[85vh] overflow-y-auto flex flex-col justify-between">
+              <div className="space-y-5">
+                <div className="flex justify-between items-start border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-mono">
+                      {course.category}
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-2">{course.title}</h3>
+                    <p className="text-xs text-white/40 mt-1">Giảng viên: <strong className="text-indigo-200">{teacher.name}</strong></p>
+                  </div>
+                  <button 
+                    onClick={() => setCourseDetailId(null)}
+                    className="p-1 rounded-lg hover:bg-white/10 text-white/50 cursor-pointer font-sans"
+                  >
+                    <span className="text-lg font-bold">✕</span>
+                  </button>
+                </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-white/2 p-4 rounded-xl border border-white/5 font-sans">
+                  <div>
+                    <span className="text-white/45 block">Học phí:</span>
+                    <strong className="text-sm font-mono text-emerald-400 font-black">{course.price ? formatVND(course.price) : "Miễn phí"}</strong>
+                  </div>
+                  <div>
+                    <span className="text-white/45 block">Cấp trình độ:</span>
+                    <strong className="text-indigo-300 capitalize">{course.level || "Cơ bản"}</strong>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] text-white/45 font-bold uppercase block">Mô tả khóa đào tạo:</span>
+                  <p className="text-xs text-white/70 leading-relaxed bg-black/15 p-3 rounded-lg border border-white/5 font-sans">{course.description}</p>
+                </div>
+
+                <div className="space-y-2.5">
+                  <span className="text-[11px] text-white/45 font-bold uppercase flex items-center gap-1 font-sans">
+                    Khung chương trình ({lessons.length} bài học, {quizzes.length} bài thi, {assignments.length} tự luận)
+                  </span>
+                  
+                  {lessons.length > 0 ? (
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 font-sans">
+                      {lessons.map((lesson, idx) => (
+                        <div key={lesson.id} className="p-2.5 bg-white/3 border border-white/5 rounded-lg flex justify-between items-center text-xs">
+                          <span className="font-semibold text-white/90">Bài {idx + 1}: {lesson.title}</span>
+                          <span className="text-[10px] text-white/40 font-mono">{lesson.duration || "15 phút"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/35 italic font-sans">Chưa tải giáo trình bài giảng cho lớp học này.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/10 mt-5 flex justify-end">
+                <button
+                  onClick={() => setCourseDetailId(null)}
+                  className="px-4 py-2 bg-white text-indigo-950 font-bold rounded-xl hover:bg-slate-100 transition text-xs cursor-pointer font-sans"
+                >
+                  Đóng thông tin
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

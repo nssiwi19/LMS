@@ -40,6 +40,7 @@ export default function WarningAndReports({
     setActiveTab(defaultTab);
   }, [defaultTab]);
   const [filterWarningType, setFilterWarningType] = useState("all");
+  const [warningSearch, setWarningSearch] = useState("");
 
   // Create warning modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -96,7 +97,11 @@ export default function WarningAndReports({
       (filterWarningType === "low_attendance" && w.type === "attendance") ||
       (filterWarningType === "unpaid_fee" && w.type === "unpaid-fee") ||
       (filterWarningType === "overdue_assignment" && w.type === "overdue-assignment");
-    return matchesType;
+    const matchesSearch = !warningSearch ||
+      w.studentName.toLowerCase().includes(warningSearch.toLowerCase()) ||
+      w.studentCode.toLowerCase().includes(warningSearch.toLowerCase()) ||
+      w.message.toLowerCase().includes(warningSearch.toLowerCase());
+    return matchesType && matchesSearch;
   });
 
   // Resolve warning
@@ -320,20 +325,30 @@ export default function WarningAndReports({
       {activeTab === "warnings" && (
         <div className="space-y-4">
           
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/3 border border-white/5 p-4 rounded-xl text-xs">
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal className="h-3.5 w-3.5 text-white/40" />
-              <select
-                value={filterWarningType}
-                onChange={(e) => setFilterWarningType(e.target.value)}
-                className="px-2.5 py-1.5 bg-black/25 text-white/85 border border-white/10 rounded-xl"
-              >
-                <option value="all" className="bg-slate-900">Mọi Cảnh báo</option>
-                <option value="low_gpa" className="bg-slate-900">GPA Thấp (Dưới 2.0)</option>
-                <option value="low_attendance" className="bg-slate-900">Nghỉ chuyên cần nhiều</option>
-                <option value="unpaid_fee" className="bg-slate-900">Trễ nợ học phí</option>
-                <option value="overdue_assignment" className="bg-slate-900">Trễ deadline bài tập</option>
-              </select>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/3 border border-white/5 p-4 rounded-xl text-xs font-sans">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-white/40" />
+                <select
+                  value={filterWarningType}
+                  onChange={(e) => setFilterWarningType(e.target.value)}
+                  className="px-2.5 py-1.5 bg-black/25 text-white/85 border border-white/10 rounded-xl focus:outline-none"
+                >
+                  <option value="all" className="bg-slate-900">Mọi Cảnh báo</option>
+                  <option value="low_gpa" className="bg-slate-900">GPA Thấp (Dưới 2.0)</option>
+                  <option value="low_attendance" className="bg-slate-900">Nghỉ chuyên cần nhiều</option>
+                  <option value="unpaid_fee" className="bg-slate-900">Trễ nợ học phí</option>
+                  <option value="overdue_assignment" className="bg-slate-900">Trễ deadline bài tập</option>
+                </select>
+              </div>
+
+              <input
+                type="text"
+                placeholder="Tìm tên, mã sinh viên, nội dung..."
+                value={warningSearch}
+                onChange={(e) => setWarningSearch(e.target.value)}
+                className="px-2.5 py-1.5 bg-black/25 text-white placeholder-white/30 border border-white/10 rounded-lg focus:outline-none focus:border-indigo-500 w-48 font-sans"
+              />
             </div>
             
             <div className="flex items-center gap-4">

@@ -3,7 +3,21 @@ import { Course, Enrollment, LessonProgress, User } from "../../types";
 import { Queryable } from "../db";
 import { assignmentFromRow, courseFromRow, DbUserRow, enrollmentFromRow, questionFromRow, quizAttemptFromRow, quizFromRow, submissionFromRow, toPublicUser, tuitionFeeFromRow, academicWarningFromRow } from "../mappers";
 
-export async function storeSnapshotFromDb(db: Queryable) {
+// In-memory cache variables to optimize server performance
+let cachedSnapshot: any = null;
+let lastCacheTime = 0;
+const CACHE_TTL = 15000; // 15 giây TTL dự phòng an toàn
+
+export function invalidateStoreCache() {
+  cachedSnapshot = null;
+  lastCacheTime = 0;
+}
+
+export async function storeSnapshotFromDb(db: Queryable, forceBypassCache = false) {
+  const now = Date.now();
+  if (!forceBypassCache && cachedSnapshot && (now - lastCacheTime < CACHE_TTL)) {
+    return cachedSnapshot;
+  }
   const [
     usersRes,
     coursesRes,
@@ -127,7 +141,7 @@ export async function storeSnapshotFromDb(db: Queryable) {
     return { id: row.id, courseId: row.course_id, authorId: row.author_id, title: row.title, content: row.content, replies: postReplies, createdAt: row.created_at };
   });
 
-  return {
+  const snapshot = {
     ...getInitialStore(),
     users,
     courses,
@@ -165,6 +179,10 @@ export async function storeSnapshotFromDb(db: Queryable) {
     certificates,
     forumPosts
   };
+
+  cachedSnapshot = snapshot;
+  lastCacheTime = Date.now();
+  return snapshot;
 }
 
 export function limitStoreForRole(store: any, user: User) {
