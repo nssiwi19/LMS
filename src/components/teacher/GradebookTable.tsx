@@ -8,6 +8,19 @@ interface ComponentProps {
 export default function GradebookTable(props: ComponentProps) {
   const [searchTerm, setSearchTerm] = React.useState("");
   const [courseDetailId, setCourseDetailId] = React.useState<string | null>(null);
+
+  // Sorting state for student gradebook matrix table
+  const [gradebookSortField, setGradebookSortField] = React.useState<string>("studentName");
+  const [gradebookSortOrder, setGradebookSortOrder] = React.useState<"asc" | "desc">("asc");
+
+  const handleGradebookSort = (field: string) => {
+    if (gradebookSortField === field) {
+      setGradebookSortOrder(gradebookSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setGradebookSortField(field);
+      setGradebookSortOrder("asc");
+    }
+  };
   const {
     activeSubTab,
     setActiveSubTab,
@@ -111,6 +124,40 @@ export default function GradebookTable(props: ComponentProps) {
       (courseObj?.title || "").toLowerCase().includes(searchTerm.toLowerCase());
   });
 
+  const sortedStudents = [...filteredStudents].sort((a: any, b: any) => {
+    if (!gradebookSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    const studentA = store.users.find((u: any) => u.id === a.studentId);
+    const studentB = store.users.find((u: any) => u.id === b.studentId);
+    const courseA = store.courses.find((c: any) => c.id === a.courseId);
+    const courseB = store.courses.find((c: any) => c.id === b.courseId);
+
+    if (gradebookSortField === "studentName") {
+      valA = studentA?.name || "";
+      valB = studentB?.name || "";
+    } else if (gradebookSortField === "courseTitle") {
+      valA = courseA?.title || "";
+      valB = courseB?.title || "";
+    } else if (gradebookSortField === "progress") {
+      const completedA = store.lessonProgress.filter((p: any) => p.enrollmentId === a.id && p.completed).length;
+      const totalA = store.lessons.filter((l: any) => l.courseId === a.courseId).length;
+      const completedB = store.lessonProgress.filter((p: any) => p.enrollmentId === b.id && p.completed).length;
+      const totalB = store.lessons.filter((l: any) => l.courseId === b.courseId).length;
+
+      valA = totalA ? completedA / totalA : 0;
+      valB = totalB ? completedB / totalB : 0;
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return gradebookSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return gradebookSortOrder === "asc" ? valA - valB : valB - valA;
+  });
+
   return (
     <>
         {/* Tab 4: Student gradebook matrix table & CSV Export */}
@@ -145,14 +192,20 @@ export default function GradebookTable(props: ComponentProps) {
               <table className="w-full text-left text-xs text-white/80 font-sans">
                 <thead className="bg-white/5 border-b border-white/10 text-white uppercase text-[10px] tracking-wider sticky top-0">
                   <tr>
-                    <th className="p-4 font-semibold">Tên Học sinh</th>
-                    <th className="p-4 font-semibold">Khóa học đăng ký</th>
-                    <th className="p-4 font-semibold">Tiến độ bài học</th>
+                    <th className="p-4 font-semibold cursor-pointer select-none hover:text-white transition" onClick={() => handleGradebookSort("studentName")}>
+                      Tên Học sinh {gradebookSortField === "studentName" ? (gradebookSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 font-semibold cursor-pointer select-none hover:text-white transition" onClick={() => handleGradebookSort("courseTitle")}>
+                      Khóa học đăng ký {gradebookSortField === "courseTitle" ? (gradebookSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 font-semibold cursor-pointer select-none hover:text-white transition" onClick={() => handleGradebookSort("progress")}>
+                      Tiến độ bài học {gradebookSortField === "progress" ? (gradebookSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                     <th className="p-4 font-semibold text-right flex-shrink-0">Tóm tắt trạng thái</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {filteredStudents.map((enroll, i) => {
+                  {sortedStudents.map((enroll, i) => {
                     const studentUser = store.users.find((u: any) => u.id === enroll.studentId);
                     const courseObj = store.courses.find((c: any) => c.id === enroll.courseId);
                     const completedLessons = store.lessonProgress.filter((p: any) => p.enrollmentId === enroll.id && p.completed).length;
@@ -188,7 +241,7 @@ export default function GradebookTable(props: ComponentProps) {
                     );
                   })}
 
-                  {filteredStudents.length === 0 && (
+                  {sortedStudents.length === 0 && (
                     <tr>
                       <td colSpan={4} className="text-center py-12 text-white/40 italic">
                         {enrolledStudents.length === 0 ? "Chưa có học sinh đăng ký các khóa học này." : "Không tìm thấy học sinh nào phù hợp."}

@@ -34,6 +34,19 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
   const [gradesSearch, setGradesSearch] = useState("");
   const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
 
+  // Sorting state for child grades table
+  const [gradesSortField, setGradesSortField] = useState<string>("courseTitle");
+  const [gradesSortOrder, setGradesSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleGradesSort = (field: string) => {
+    if (gradesSortField === field) {
+      setGradesSortOrder(gradesSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setGradesSortField(field);
+      setGradesSortOrder("asc");
+    }
+  };
+
   // Parents are linked to exactly one student via linkedStudentId
   const childId = currentUser.role === "student" ? currentUser.id : (currentUser.linkedStudentId || "user_student");
   const childUser = store.users.find(u => u.id === childId);
@@ -48,6 +61,40 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
     if (!gradesSearch.trim()) return true;
     const course = store.courses.find(c => c.id === enroll.courseId);
     return course?.title?.toLowerCase().includes(gradesSearch.toLowerCase());
+  });
+
+  const sortedEnrollments = [...filteredEnrollments].sort((a, b) => {
+    if (!gradesSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    const courseA = store.courses.find(c => c.id === a.courseId);
+    const courseB = store.courses.find(c => c.id === b.courseId);
+
+    if (gradesSortField === "courseTitle") {
+      valA = courseA?.title || "";
+      valB = courseB?.title || "";
+    } else if (gradesSortField === "teacherName") {
+      const teacherA = store.users.find(u => u.id === courseA?.teacherId);
+      const teacherB = store.users.find(u => u.id === courseB?.teacherId);
+      valA = teacherA?.name || "";
+      valB = teacherB?.name || "";
+    } else if (gradesSortField === "category") {
+      valA = courseA?.category || "";
+      valB = courseB?.category || "";
+    } else if (gradesSortField === "maxScore") {
+      const attemptsA = store.quizAttempts.filter(qa => qa.studentId === childId && store.quizzes.filter(q => q.courseId === a.courseId).some(q => q.id === qa.quizId));
+      const attemptsB = store.quizAttempts.filter(qa => qa.studentId === childId && store.quizzes.filter(q => q.courseId === b.courseId).some(q => q.id === qa.quizId));
+      valA = attemptsA.length > 0 ? Math.max(...attemptsA.map(qa => qa.score)) : 78;
+      valB = attemptsB.length > 0 ? Math.max(...attemptsB.map(qa => qa.score)) : 78;
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return gradesSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return gradesSortOrder === "asc" ? valA - valB : valB - valA;
   });
 
   if (!childProfile || !childUser) {
@@ -258,14 +305,22 @@ export default function ParentPanel({ currentUser, onLogout, onRefreshData }: Pa
                   <table className="w-full text-left text-xs text-white/75 divide-y divide-white/5">
                     <thead>
                       <tr className="text-white/45 uppercase tracking-wider text-[10px]">
-                        <th className="py-2">Môn Học / Chủ Đề</th>
-                        <th className="py-2">Giáo Viên Phụ Trách</th>
-                        <th className="py-2">Kỳ Đăng Ký</th>
-                        <th className="py-2 text-right">Mức Điểm Đạt</th>
+                        <th className="py-2 cursor-pointer select-none hover:text-white transition" onClick={() => handleGradesSort("courseTitle")}>
+                          Môn Học / Chủ Đề {gradesSortField === "courseTitle" ? (gradesSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        <th className="py-2 cursor-pointer select-none hover:text-white transition" onClick={() => handleGradesSort("teacherName")}>
+                          Giáo Viên Phụ Trách {gradesSortField === "teacherName" ? (gradesSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        <th className="py-2 cursor-pointer select-none hover:text-white transition" onClick={() => handleGradesSort("category")}>
+                          Kỳ Đăng Ký {gradesSortField === "category" ? (gradesSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        <th className="py-2 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleGradesSort("maxScore")}>
+                          Mức Điểm Đạt {gradesSortField === "maxScore" ? (gradesSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {filteredEnrollments.map(enroll => {
+                      {sortedEnrollments.map(enroll => {
                         const course = store.courses.find(c => c.id === enroll.courseId);
                         const teacher = store.users.find(u => u.id === course?.teacherId);
 

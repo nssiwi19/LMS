@@ -89,6 +89,45 @@ export default function StudentAcademics(props: ComponentProps) {
   const [transcriptSearch, setTranscriptSearch] = useState("");
   const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
 
+  // Sorting state for my enrollments schedule
+  const [enrollSortField, setEnrollSortField] = useState<string>("courseTitle");
+  const [enrollSortOrder, setEnrollSortOrder] = useState<"asc" | "desc">("asc");
+
+  // Sorting state for student transactions receipt history
+  const [txSortField, setTxSortField] = useState<string>("createdAt");
+  const [txSortOrder, setTxSortOrder] = useState<"asc" | "desc">("desc");
+
+  // Sorting state for transcripts grades summary
+  const [transcriptSortField, setTranscriptSortField] = useState<string>("courseTitle");
+  const [transcriptSortOrder, setTranscriptSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleEnrollSort = (field: string) => {
+    if (enrollSortField === field) {
+      setEnrollSortOrder(enrollSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setEnrollSortField(field);
+      setEnrollSortOrder("asc");
+    }
+  };
+
+  const handleTxSort = (field: string) => {
+    if (txSortField === field) {
+      setTxSortOrder(txSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setTxSortField(field);
+      setTxSortOrder("asc");
+    }
+  };
+
+  const handleTranscriptSort = (field: string) => {
+    if (transcriptSortField === field) {
+      setTranscriptSortOrder(transcriptSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setTranscriptSortField(field);
+      setTranscriptSortOrder("asc");
+    }
+  };
+
   // Dynamic GPA and Credits calculation
   const enrollmentsByCourse: Record<string, any[]> = {};
   myEnrollments.forEach((enroll: any) => {
@@ -211,6 +250,36 @@ export default function StudentAcademics(props: ComponentProps) {
     return course?.title?.toLowerCase().includes(courseSearch.toLowerCase());
   });
 
+  const sortedMyEnrollments = [...filteredMyEnrollments].sort((a, b) => {
+    if (!enrollSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    const courseA = store.courses.find((c: any) => c.id === a.courseId);
+    const courseB = store.courses.find((c: any) => c.id === b.courseId);
+
+    if (enrollSortField === "courseTitle") {
+      valA = courseA?.title || "";
+      valB = courseB?.title || "";
+    } else if (enrollSortField === "credits") {
+      valA = 3;
+      valB = 3;
+    } else if (enrollSortField === "category") {
+      valA = courseA?.category || "";
+      valB = courseB?.category || "";
+    } else if (enrollSortField === "status") {
+      valA = a.status || "";
+      valB = b.status || "";
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return enrollSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return enrollSortOrder === "asc" ? valA - valB : valB - valA;
+  });
+
   const filteredTransactions = (store.transactions || [])
     .filter((t: any) => t.studentId === currentUser.id)
     .filter((tx: any) => {
@@ -226,9 +295,81 @@ export default function StudentAcademics(props: ComponentProps) {
       );
     });
 
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    if (!txSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (txSortField === "id") {
+      valA = a.id || "";
+      valB = b.id || "";
+    } else if (txSortField === "notes") {
+      const courseA = store.courses.find((c: any) => c.id === a.courseId);
+      valA = a.notes && a.notes.startsWith("tuition_fee_pay:") ? "Học phí học kỳ" : (courseA ? courseA.title : "Học phí");
+      const courseB = store.courses.find((c: any) => c.id === b.courseId);
+      valB = b.notes && b.notes.startsWith("tuition_fee_pay:") ? "Học phí học kỳ" : (courseB ? courseB.title : "Học phí");
+    } else if (txSortField === "amount") {
+      valA = a.amount || 0;
+      valB = b.amount || 0;
+    } else if (txSortField === "paymentMethod") {
+      valA = a.paymentMethod || "";
+      valB = b.paymentMethod || "";
+    } else if (txSortField === "createdAt") {
+      valA = new Date(a.createdAt).getTime();
+      valB = new Date(b.createdAt).getTime();
+    } else if (txSortField === "status") {
+      valA = a.status || "";
+      valB = b.status || "";
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return txSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return txSortOrder === "asc" ? valA - valB : valB - valA;
+  });
+
   const filteredUniqueCourseGrades = uniqueCourseGrades.filter((g: any) => {
+    if (!g) return false;
     if (!transcriptSearch.trim()) return true;
     return g.course?.title?.toLowerCase().includes(transcriptSearch.toLowerCase());
+  });
+
+  const sortedUniqueCourseGrades = [...filteredUniqueCourseGrades].sort((a, b) => {
+    if (!transcriptSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (transcriptSortField === "courseTitle") {
+      valA = a.course?.title || "";
+      valB = b.course?.title || "";
+    } else if (transcriptSortField === "credits") {
+      valA = a.credits || 0;
+      valB = b.credits || 0;
+    } else if (transcriptSortField === "midtermGrade") {
+      valA = a.midtermGrade !== null ? a.midtermGrade : -1;
+      valB = b.midtermGrade !== null ? b.midtermGrade : -1;
+    } else if (transcriptSortField === "finalGrade") {
+      valA = a.finalExamGrade !== null ? a.finalExamGrade : -1;
+      valB = b.finalExamGrade !== null ? b.finalExamGrade : -1;
+    } else if (transcriptSortField === "grade") {
+      valA = a.grade || 0;
+      valB = b.grade || 0;
+    } else if (transcriptSortField === "scale4Val") {
+      valA = a.scale4Val || 0;
+      valB = b.scale4Val || 0;
+    } else if (transcriptSortField === "letterGrade") {
+      valA = a.letterGrade || "";
+      valB = b.letterGrade || "";
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return transcriptSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return transcriptSortOrder === "asc" ? valA - valB : valB - valA;
   });
 
   const unresolvedWarnings = (store.academicWarnings || []).filter(
@@ -574,14 +715,22 @@ export default function StudentAcademics(props: ComponentProps) {
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-white/5 text-[10px] uppercase text-white/45">
-                    <th className="py-2">Học phần Môn học</th>
-                    <th className="py-2 text-center">Tín chỉ</th>
-                    <th className="py-2">Tên lớp đào tạo</th>
-                    <th className="py-2 text-right">Trạng thái</th>
+                    <th className="py-2 cursor-pointer select-none hover:text-white transition" onClick={() => handleEnrollSort("courseTitle")}>
+                      Học phần Môn học {enrollSortField === "courseTitle" ? (enrollSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleEnrollSort("credits")}>
+                      Tín chỉ {enrollSortField === "credits" ? (enrollSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2 cursor-pointer select-none hover:text-white transition" onClick={() => handleEnrollSort("category")}>
+                      Tên lớp đào tạo {enrollSortField === "category" ? (enrollSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleEnrollSort("status")}>
+                      Trạng thái {enrollSortField === "status" ? (enrollSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/2 text-xs text-white/85">
-                  {filteredMyEnrollments.map(enroll => {
+                  {sortedMyEnrollments.map(enroll => {
                     const course = store.courses.find(c => c.id === enroll.courseId);
                     return (
                       <tr key={enroll.id}>
@@ -607,7 +756,7 @@ export default function StudentAcademics(props: ComponentProps) {
                     );
                   })}
 
-                  {filteredMyEnrollments.length === 0 && (
+                  {sortedMyEnrollments.length === 0 && (
                     <tr>
                       <td colSpan={4} className="py-8 text-center text-white/30 italic">Chưa ghi nhận khóa học nào đang tiến hành hoặc không khớp từ khóa tìm kiếm.</td>
                     </tr>
@@ -825,16 +974,28 @@ export default function StudentAcademics(props: ComponentProps) {
                   <table className="w-full text-xs text-left border-collapse">
                     <thead>
                       <tr className="bg-white/5 border-b border-white/10 text-white/50 font-mono tracking-wider font-bold">
-                        <th className="p-3 text-[10.5px]">Mã Giao dịch</th>
-                        <th className="p-3 text-[10.5px]">Nội dung học phí</th>
-                        <th className="p-3 text-right text-[10.5px]">Số tiền nộp</th>
-                        <th className="p-3 text-[10.5px]">Phương thức</th>
-                        <th className="p-3 text-[10.5px]">Thời gian nộp</th>
-                        <th className="p-3 text-right text-[10.5px]">Trạng thái duyệt</th>
+                        <th className="p-3 text-[10.5px] cursor-pointer select-none hover:text-white transition" onClick={() => handleTxSort("id")}>
+                          Mã Giao dịch {txSortField === "id" ? (txSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        <th className="p-3 text-[10.5px] cursor-pointer select-none hover:text-white transition" onClick={() => handleTxSort("notes")}>
+                          Nội dung học phí {txSortField === "notes" ? (txSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        <th className="p-3 text-right text-[10.5px] cursor-pointer select-none hover:text-white transition" onClick={() => handleTxSort("amount")}>
+                          Số tiền nộp {txSortField === "amount" ? (txSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        <th className="p-3 text-[10.5px] cursor-pointer select-none hover:text-white transition" onClick={() => handleTxSort("paymentMethod")}>
+                          Phương thức {txSortField === "paymentMethod" ? (txSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        <th className="p-3 text-[10.5px] cursor-pointer select-none hover:text-white transition" onClick={() => handleTxSort("createdAt")}>
+                          Thời gian nộp {txSortField === "createdAt" ? (txSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        <th className="p-3 text-right text-[10.5px] cursor-pointer select-none hover:text-white transition" onClick={() => handleTxSort("status")}>
+                          Trạng thái duyệt {txSortField === "status" ? (txSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5 text-white/85">
-                      {filteredTransactions.map(tx => {
+                      {sortedTransactions.map(tx => {
                         const course = store.courses.find(c => c.id === tx.courseId);
                         return (
                           <tr key={tx.id} className="hover:bg-white/3 transition duration-150">
@@ -922,17 +1083,31 @@ export default function StudentAcademics(props: ComponentProps) {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-white/10 text-white/40 uppercase text-[10px]">
-                      <th className="py-2.5">Tên môn học giảng dạy</th>
-                      <th className="py-2.5 text-center">Tín chỉ</th>
-                      <th className="py-2.5 text-center">Điểm thành phần (30%)</th>
-                      <th className="py-2.5 text-center">Điểm thi final (70%)</th>
-                      <th className="py-2.5 text-center">Điểm tổng kết (100)</th>
-                      <th className="py-2.5 text-center">Hệ số GPA (4.0)</th>
-                      <th className="py-2.5 text-right">Học bạ xếp loại</th>
+                      <th className="py-2.5 cursor-pointer select-none hover:text-white transition" onClick={() => handleTranscriptSort("courseTitle")}>
+                        Tên môn học giảng dạy {transcriptSortField === "courseTitle" ? (transcriptSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                      </th>
+                      <th className="py-2.5 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleTranscriptSort("credits")}>
+                        Tín chỉ {transcriptSortField === "credits" ? (transcriptSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                      </th>
+                      <th className="py-2.5 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleTranscriptSort("midtermGrade")}>
+                        Điểm thành phần (30%) {transcriptSortField === "midtermGrade" ? (transcriptSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                      </th>
+                      <th className="py-2.5 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleTranscriptSort("finalGrade")}>
+                        Điểm thi final (70%) {transcriptSortField === "finalGrade" ? (transcriptSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                      </th>
+                      <th className="py-2.5 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleTranscriptSort("grade")}>
+                        Điểm tổng kết (100) {transcriptSortField === "grade" ? (transcriptSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                      </th>
+                      <th className="py-2.5 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleTranscriptSort("scale4Val")}>
+                        Hệ số GPA (4.0) {transcriptSortField === "scale4Val" ? (transcriptSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                      </th>
+                      <th className="py-2.5 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleTranscriptSort("letterGrade")}>
+                        Học bạ xếp loại {transcriptSortField === "letterGrade" ? (transcriptSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-xs text-white/85">
-                    {filteredUniqueCourseGrades.map(g => (
+                    {sortedUniqueCourseGrades.map(g => (
                       <tr key={g.courseId}>
                         <td className="py-3 font-bold text-white">
                           <div className="flex items-center gap-2">

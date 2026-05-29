@@ -66,6 +66,55 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
   const [currSemester, setCurrSemester] = useState<number>(1);
   const [academicSearch, setAcademicSearch] = useState("");
 
+  // Sorting states
+  const [yearsSortField, setYearsSortField] = useState<string>("name");
+  const [yearsSortOrder, setYearsSortOrder] = useState<"asc" | "desc">("asc");
+
+  const [semsSortField, setSemsSortField] = useState<string>("name");
+  const [semsSortOrder, setSemsSortOrder] = useState<"asc" | "desc">("asc");
+
+  const [deptsSortField, setDeptsSortField] = useState<string>("code");
+  const [deptsSortOrder, setDeptsSortOrder] = useState<"asc" | "desc">("asc");
+
+  const [currSortField, setCurrSortField] = useState<string>("semester");
+  const [currSortOrder, setCurrSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleYearsSort = (field: string) => {
+    if (yearsSortField === field) {
+      setYearsSortOrder(yearsSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setYearsSortField(field);
+      setYearsSortOrder("asc");
+    }
+  };
+
+  const handleSemsSort = (field: string) => {
+    if (semsSortField === field) {
+      setSemsSortOrder(semsSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSemsSortField(field);
+      setSemsSortOrder("asc");
+    }
+  };
+
+  const handleDeptsSort = (field: string) => {
+    if (deptsSortField === field) {
+      setDeptsSortOrder(deptsSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setDeptsSortField(field);
+      setDeptsSortOrder("asc");
+    }
+  };
+
+  const handleCurrSort = (field: string) => {
+    if (currSortField === field) {
+      setCurrSortOrder(currSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setCurrSortField(field);
+      setCurrSortOrder("asc");
+    }
+  };
+
   // Filter lists safely
   const teachers = store.users.filter(u => u.role === "teacher");
   const years = store.academicYears || [];
@@ -326,15 +375,38 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-white/10 text-white/50 text-[10px] uppercase">
-                    <th className="py-2.5 px-3">Tên năm học</th>
-                    <th className="py-2.5 px-3">Bắt đầu</th>
-                    <th className="py-2.5 px-3">Kết thúc</th>
-                    <th className="py-2.5 px-3">Hiện tại</th>
+                    <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleYearsSort("name")}>
+                      Tên năm học {yearsSortField === "name" ? (yearsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleYearsSort("startDate")}>
+                      Bắt đầu {yearsSortField === "startDate" ? (yearsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleYearsSort("endDate")}>
+                      Kết thúc {yearsSortField === "endDate" ? (yearsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleYearsSort("isCurrent")}>
+                      Hiện tại {yearsSortField === "isCurrent" ? (yearsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                     <th className="py-2.5 px-3 text-right">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {years.filter(y => y.name.toLowerCase().includes(academicSearch.toLowerCase())).map(y => (
+                  {[...years].filter(y => y.name.toLowerCase().includes(academicSearch.toLowerCase())).sort((a, b) => {
+                    let valA: any = a[yearsSortField as keyof AcademicYear];
+                    let valB: any = b[yearsSortField as keyof AcademicYear];
+                    if (valA === undefined || valA === null) return 1;
+                    if (valB === undefined || valB === null) return -1;
+                    if (typeof valA === "string" && typeof valB === "string") {
+                      return yearsSortOrder === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                    }
+                    if (typeof valA === "number" && typeof valB === "number") {
+                      return yearsSortOrder === "asc" ? valA - valB : valB - valA;
+                    }
+                    if (typeof valA === "boolean" && typeof valB === "boolean") {
+                      return yearsSortOrder === "asc" ? (valA === valB ? 0 : valA ? -1 : 1) : (valA === valB ? 0 : valA ? 1 : -1);
+                    }
+                    return 0;
+                  }).map(y => (
                     <tr key={y.id} className="hover:bg-white/5 transition">
                       <td className="py-3 px-3 font-semibold text-white">{y.name}</td>
                       <td className="py-3 px-3 text-white/70">{y.startDate}</td>
@@ -426,16 +498,44 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-white/10 text-white/50 text-[10px] uppercase">
-                    <th className="py-2.5 px-3">Tên Học Kỳ</th>
-                    <th className="py-2.5 px-3">Năm Học</th>
-                    <th className="py-2.5 px-3">Kiểu</th>
-                    <th className="py-2.5 px-3">Thời gian</th>
-                    <th className="py-2.5 px-3">Đăng ký môn</th>
+                    <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSemsSort("name")}>
+                      Tên Học Kỳ {semsSortField === "name" ? (semsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSemsSort("academicYearId")}>
+                      Năm Học {semsSortField === "academicYearId" ? (semsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSemsSort("type")}>
+                      Kiểu {semsSortField === "type" ? (semsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSemsSort("startDate")}>
+                      Thời gian {semsSortField === "startDate" ? (semsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSemsSort("registrationOpen")}>
+                      Đăng ký môn {semsSortField === "registrationOpen" ? (semsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                     <th className="py-2.5 px-3 text-right">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {semesters.filter(s => s.name.toLowerCase().includes(academicSearch.toLowerCase())).map(s => {
+                  {[...semesters].filter(s => s.name.toLowerCase().includes(academicSearch.toLowerCase())).sort((a, b) => {
+                    let valA: any = a[semsSortField as keyof Semester];
+                    let valB: any = b[semsSortField as keyof Semester];
+                    if (semsSortField === "academicYearId") {
+                      const yearA = years.find(y => y.id === a.academicYearId)?.name || "";
+                      const yearB = years.find(y => y.id === b.academicYearId)?.name || "";
+                      valA = yearA;
+                      valB = yearB;
+                    }
+                    if (valA === undefined || valA === null) return 1;
+                    if (valB === undefined || valB === null) return -1;
+                    if (typeof valA === "string" && typeof valB === "string") {
+                      return semsSortOrder === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                    }
+                    if (typeof valA === "number" && typeof valB === "number") {
+                      return semsSortOrder === "asc" ? valA - valB : valB - valA;
+                    }
+                    return 0;
+                  }).map(s => {
                     const linkedY = years.find(y => y.id === s.academicYearId);
                     return (
                       <tr key={s.id} className="hover:bg-white/5 transition">
@@ -572,14 +672,43 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-white/10 text-white/50 text-[10px] uppercase">
-                    <th className="py-2.5 px-3">Mã Khoa</th>
-                    <th className="py-2.5 px-3">Tên Gọi</th>
-                    <th className="py-2.5 px-3">Trưởng khoa phụ trách</th>
-                    <th className="py-2.5 px-3 text-right">Lượng Ngành</th>
+                    <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleDeptsSort("code")}>
+                      Mã Khoa {deptsSortField === "code" ? (deptsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleDeptsSort("name")}>
+                      Tên Gọi {deptsSortField === "name" ? (deptsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleDeptsSort("headTeacherId")}>
+                      Trưởng khoa phụ trách {deptsSortField === "headTeacherId" ? (deptsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="py-2.5 px-3 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleDeptsSort("progsCount")}>
+                      Lượng Ngành {deptsSortField === "progsCount" ? (deptsSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {departments.filter(d => d.name.toLowerCase().includes(academicSearch.toLowerCase()) || d.code.toLowerCase().includes(academicSearch.toLowerCase())).map(d => {
+                  {[...departments].filter(d => d.name.toLowerCase().includes(academicSearch.toLowerCase()) || d.code.toLowerCase().includes(academicSearch.toLowerCase())).sort((a, b) => {
+                    let valA: any = a[deptsSortField as keyof Department];
+                    let valB: any = b[deptsSortField as keyof Department];
+                    if (deptsSortField === "headTeacherId") {
+                      const teacherA = teachers.find(t => t.id === a.headTeacherId)?.name || "";
+                      const teacherB = teachers.find(t => t.id === b.headTeacherId)?.name || "";
+                      valA = teacherA;
+                      valB = teacherB;
+                    } else if (deptsSortField === "progsCount") {
+                      valA = programs.filter(p => p.departmentId === a.id).length;
+                      valB = programs.filter(p => p.departmentId === b.id).length;
+                    }
+                    if (valA === undefined || valA === null) return 1;
+                    if (valB === undefined || valB === null) return -1;
+                    if (typeof valA === "string" && typeof valB === "string") {
+                      return deptsSortOrder === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                    }
+                    if (typeof valA === "number" && typeof valB === "number") {
+                      return deptsSortOrder === "asc" ? valA - valB : valB - valA;
+                    }
+                    return 0;
+                  }).map(d => {
                     const head = teachers.find(t => t.id === d.headTeacherId);
                     const progsCount = programs.filter(p => p.departmentId === d.id).length;
                     return (
@@ -793,15 +922,44 @@ export default function AcademicManager({ store, currentUser, onRefreshData, tri
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>
                           <tr className="border-b border-white/10 text-white/40 text-[10.5px]">
-                            <th className="py-2 px-1">Môn học</th>
-                            <th className="py-2 px-1 text-center">Tín chỉ</th>
-                            <th className="py-2 px-1">Loại môn</th>
-                            <th className="py-2 px-1 text-center">Học kỳ sắp xếp</th>
+                            <th className="py-2 px-1 cursor-pointer select-none hover:text-white transition" onClick={() => handleCurrSort("courseId")}>
+                              Môn học {currSortField === "courseId" ? (currSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                            </th>
+                            <th className="py-2 px-1 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleCurrSort("credits")}>
+                              Tín chỉ {currSortField === "credits" ? (currSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                            </th>
+                            <th className="py-2 px-1 cursor-pointer select-none hover:text-white transition" onClick={() => handleCurrSort("isRequired")}>
+                              Loại môn {currSortField === "isRequired" ? (currSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                            </th>
+                            <th className="py-2 px-1 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleCurrSort("semester")}>
+                              Học kỳ sắp xếp {currSortField === "semester" ? (currSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                            </th>
                             <th className="py-2 px-1 text-right">Rút môn</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                          {activeCurriculums.map(pc => {
+                          {[...activeCurriculums].sort((a, b) => {
+                            let valA: any = a[currSortField as keyof ProgramCourse];
+                            let valB: any = b[currSortField as keyof ProgramCourse];
+                            if (currSortField === "courseId") {
+                              const courseA = courses.find(c => c.id === a.courseId)?.title || "";
+                              const courseB = courses.find(c => c.id === b.courseId)?.title || "";
+                              valA = courseA;
+                              valB = courseB;
+                            }
+                            if (valA === undefined || valA === null) return 1;
+                            if (valB === undefined || valB === null) return -1;
+                            if (typeof valA === "string" && typeof valB === "string") {
+                              return currSortOrder === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                            }
+                            if (typeof valA === "number" && typeof valB === "number") {
+                              return currSortOrder === "asc" ? valA - valB : valB - valA;
+                            }
+                            if (typeof valA === "boolean" && typeof valB === "boolean") {
+                              return currSortOrder === "asc" ? (valA === valB ? 0 : valA ? -1 : 1) : (valA === valB ? 0 : valA ? 1 : -1);
+                            }
+                            return 0;
+                          }).map(pc => {
                             const matchedCourse = courses.find(c => c.id === pc.courseId);
                             return (
                               <tr key={pc.id} className="hover:bg-white/2 transition">

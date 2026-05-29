@@ -25,7 +25,8 @@ import {
   ShieldAlert,
   Activity,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  FileText
 } from "lucide-react";
 import { LMSDataStore, User, Course, Lesson, Quiz, Question, Assignment, Submission, QuizAttempt } from "../types";
 import { AppStore } from "../store";
@@ -93,6 +94,17 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
   const [auditSearch, setAuditSearch] = useState("");
   const [auditFilterAction, setAuditFilterAction] = useState("all");
   const [userPage, setUserPage] = useState(1);
+  const [sortField, setSortField] = useState<string>("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
   const itemsPerPage = 8;
   const [approvalSearch, setApprovalSearch] = useState("");
   const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
@@ -377,6 +389,36 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
     );
 
     return matchesSearch && matchesRole && matchesStatus && matchesDirectory;
+  }).sort((a, b) => {
+    if (!sortField) return 0;
+    let valA: any = a[sortField as keyof User];
+    let valB: any = b[sortField as keyof User];
+
+    if (sortField === "studentCode" || sortField === "gpa") {
+      const profileA = store.studentProfiles?.find(p => p.userId === a.id);
+      const profileB = store.studentProfiles?.find(p => p.userId === b.id);
+      if (sortField === "studentCode") {
+        valA = profileA?.studentCode || "";
+        valB = profileB?.studentCode || "";
+      } else {
+        valA = profileA?.gpa ?? 0;
+        valB = profileB?.gpa ?? 0;
+      }
+    }
+
+    if (valA === undefined || valA === null) return 1;
+    if (valB === undefined || valB === null) return -1;
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return sortOrder === "asc" ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    }
+    if (typeof valA === "number" && typeof valB === "number") {
+      return sortOrder === "asc" ? valA - valB : valB - valA;
+    }
+    if (typeof valA === "boolean" && typeof valB === "boolean") {
+      return sortOrder === "asc" ? (valA === valB ? 0 : valA ? -1 : 1) : (valA === valB ? 0 : valA ? 1 : -1);
+    }
+    return 0;
   });
 
   const pageCount = Math.ceil(filteredUsers.length / itemsPerPage) || 1;
@@ -754,11 +796,23 @@ export default function AdminPanel({ currentUser, onLogout, onRefreshData }: Adm
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="border-b border-white/10 bg-white/2 text-[10px] uppercase text-white/50">
-                        <th className="py-2.5 px-3">Họ và Tên</th>
-                        <th className="py-2.5 px-3">Email cá nhân</th>
-                        {userDirTab === "student" && <th className="py-2.5 px-3">Hồ sơ học vụ</th>}
-                        <th className="py-2.5 px-3">Quyền hạn</th>
-                        <th className="py-2.5 px-3">Trạng thái khóa</th>
+                        <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("name")}>
+                          Họ và Tên {sortField === "name" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("email")}>
+                          Email cá nhân {sortField === "email" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        {userDirTab === "student" && (
+                          <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("studentCode")}>
+                            Hồ sơ học vụ {sortField === "studentCode" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                          </th>
+                        )}
+                        <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("role")}>
+                          Quyền hạn {sortField === "role" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
+                        <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleSort("isActive")}>
+                          Trạng thái khóa {sortField === "isActive" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </th>
                         <th className="py-2.5 px-3 text-right">Khóa/Mở Khóa</th>
                       </tr>
                     </thead>

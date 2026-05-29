@@ -42,6 +42,32 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Sorting state for student progress ledger
+  const [ledgerSortField, setLedgerSortField] = useState<string>("studentName");
+  const [ledgerSortOrder, setLedgerSortOrder] = useState<"asc" | "desc">("asc");
+
+  // Sorting state for course comparison dataset
+  const [compareSortField, setCompareSortField] = useState<string>("courseTitle");
+  const [compareSortOrder, setCompareSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleLedgerSort = (field: string) => {
+    if (ledgerSortField === field) {
+      setLedgerSortOrder(ledgerSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setLedgerSortField(field);
+      setLedgerSortOrder("asc");
+    }
+  };
+
+  const handleCompareSort = (field: string) => {
+    if (compareSortField === field) {
+      setCompareSortOrder(compareSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setCompareSortField(field);
+      setCompareSortOrder("asc");
+    }
+  };
+
 
 
   const showToast = (msg: string) => {
@@ -203,6 +229,69 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
     const query = searchStudentQuery.toLowerCase();
     return item.student.name.toLowerCase().includes(query) || 
            item.student.email.toLowerCase().includes(query);
+  });
+
+  const sortedStudentLedger = [...filteredStudentLedger].sort((a, b) => {
+    if (!ledgerSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (ledgerSortField === "studentName") {
+      valA = a.student?.name || "";
+      valB = b.student?.name || "";
+    } else if (ledgerSortField === "courseTitle") {
+      valA = a.course?.title || "";
+      valB = b.course?.title || "";
+    } else if (ledgerSortField === "enrolledAt") {
+      valA = a.enrollment.enrolledAt ? new Date(a.enrollment.enrolledAt).getTime() : 0;
+      valB = b.enrollment.enrolledAt ? new Date(b.enrollment.enrolledAt).getTime() : 0;
+    } else if (ledgerSortField === "progress") {
+      valA = a.progress;
+      valB = b.progress;
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return ledgerSortOrder === "asc" 
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" }) 
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return ledgerSortOrder === "asc" ? valA - valB : valB - valA;
+  });
+
+  const filteredCourseComparison = courseComparisonDataset.filter(item => {
+    return !courseSearch || 
+      item.course.title.toLowerCase().includes(courseSearch.toLowerCase()) ||
+      item.teacherName.toLowerCase().includes(courseSearch.toLowerCase());
+  });
+
+  const sortedCourseComparison = [...filteredCourseComparison].sort((a, b) => {
+    if (!compareSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (compareSortField === "courseTitle") {
+      valA = a.course.title || "";
+      valB = b.course.title || "";
+    } else if (compareSortField === "teacherName") {
+      valA = a.teacherName || "";
+      valB = b.teacherName || "";
+    } else if (compareSortField === "enrollmentCount") {
+      valA = a.enrollmentCount;
+      valB = b.enrollmentCount;
+    } else if (compareSortField === "avgCompletion") {
+      valA = a.avgCompletion;
+      valB = b.avgCompletion;
+    } else if (compareSortField === "avgQuizScore") {
+      valA = a.avgQuizScore;
+      valB = b.avgQuizScore;
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return compareSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return compareSortOrder === "asc" ? valA - valB : valB - valA;
   });
 
   return (
@@ -556,16 +645,26 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
               <table className="w-full text-xs text-left border-collapse">
                 <thead>
                   <tr className="bg-white/5 border-b border-white/10 text-white/50 uppercase font-mono tracking-wider font-bold">
-                    <th className="p-4">Học viên</th>
-                    <th className="p-4">Khóa học</th>
-                    <th className="p-4">Ngày đăng ký</th>
-                    <th className="p-4">Hoàn thành bài học</th>
-                    <th className="p-4">Tiến độ chi tiết</th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleLedgerSort("studentName")}>
+                      Học viên {ledgerSortField === "studentName" ? (ledgerSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleLedgerSort("courseTitle")}>
+                      Khóa học {ledgerSortField === "courseTitle" ? (ledgerSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleLedgerSort("enrolledAt")}>
+                      Ngày đăng ký {ledgerSortField === "enrolledAt" ? (ledgerSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleLedgerSort("progress")}>
+                      Hoàn thành bài học {ledgerSortField === "progress" ? (ledgerSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleLedgerSort("progress")}>
+                      Tiến độ chi tiết {ledgerSortField === "progress" ? (ledgerSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                     <th className="p-4">Đánh giá chung</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {filteredStudentLedger.map((item, idx) => (
+                  {sortedStudentLedger.map((item, idx) => (
                     <tr key={idx} className="hover:bg-white/5 transition duration-150">
                       <td className="p-4 font-bold text-white">
                         <div>{item.student?.name}</div>
@@ -607,7 +706,7 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
                     </tr>
                   ))}
 
-                  {filteredStudentLedger.length === 0 && (
+                  {sortedStudentLedger.length === 0 && (
                     <tr>
                       <td colSpan={6} className="text-center py-16 text-white/45">
                         Không tìm thấy học viên tương ứng với bộ lọc.
@@ -642,22 +741,28 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
               <table className="w-full text-xs text-left border-collapse font-sans">
                 <thead>
                   <tr className="bg-white/5 border-b border-white/10 text-white/50 uppercase font-mono tracking-wider font-bold">
-                    <th className="p-4">Khóa học</th>
-                    <th className="p-4">Giảng viên phụ trách</th>
-                    <th className="p-4">Tổng số học viên</th>
-                    <th className="p-4">Tiến độ hoàn thành trung bình</th>
-                    <th className="p-4">Điểm thi quiz trung bình</th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleCompareSort("courseTitle")}>
+                      Khóa học {compareSortField === "courseTitle" ? (compareSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleCompareSort("teacherName")}>
+                      Giảng viên phụ trách {compareSortField === "teacherName" ? (compareSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleCompareSort("enrollmentCount")}>
+                      Tổng số học viên {compareSortField === "enrollmentCount" ? (compareSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleCompareSort("avgCompletion")}>
+                      Tiến độ hoàn thành trung bình {compareSortField === "avgCompletion" ? (compareSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleCompareSort("avgQuizScore")}>
+                      Điểm thi quiz trung bình {compareSortField === "avgQuizScore" ? (compareSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                     {["admin", "super_admin", "academic_admin"].includes(currentUser.role) && (
                       <th className="p-4 text-right">Thao tác</th>
                     )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {courseComparisonDataset.filter(item => {
-                    return !courseSearch || 
-                      item.course.title.toLowerCase().includes(courseSearch.toLowerCase()) ||
-                      item.teacherName.toLowerCase().includes(courseSearch.toLowerCase());
-                  }).map((item, idx) => (
+                  {sortedCourseComparison.map((item, idx) => (
                     <tr key={idx} className="hover:bg-white/5 transition duration-150">
                       <td className="p-4 font-bold text-white text-sm">
                         <div className="flex items-center gap-1.5 font-sans">
@@ -687,11 +792,7 @@ export default function AcademicPanel({ currentUser, onLogout, onRefreshData }: 
                     </tr>
                   ))}
 
-                  {courseComparisonDataset.filter(item => {
-                    return !courseSearch || 
-                      item.course.title.toLowerCase().includes(courseSearch.toLowerCase()) ||
-                      item.teacherName.toLowerCase().includes(courseSearch.toLowerCase());
-                  }).length === 0 && (
+                  {sortedCourseComparison.length === 0 && (
                     <tr>
                       <td colSpan={6} className="text-center py-10 text-white/30 italic">Không tìm thấy khóa học nào phù hợp.</td>
                     </tr>

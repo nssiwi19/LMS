@@ -8,6 +8,19 @@ interface ComponentProps {
 export default function AssignmentGrader(props: ComponentProps) {
   const [submissionSearch, setSubmissionSearch] = React.useState("");
   const [courseDetailId, setCourseDetailId] = React.useState<string | null>(null);
+
+  // Sorting state for student submissions grading table
+  const [subSortField, setSubSortField] = React.useState<string>("studentName");
+  const [subSortOrder, setSubSortOrder] = React.useState<"asc" | "desc">("asc");
+
+  const handleSubSort = (field: string) => {
+    if (subSortField === field) {
+      setSubSortOrder(subSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSubSortField(field);
+      setSubSortOrder("asc");
+    }
+  };
   const {
     activeSubTab,
     setActiveSubTab,
@@ -100,6 +113,46 @@ export default function AssignmentGrader(props: ComponentProps) {
     studentSubmissionsRaw
   } = props;
 
+  const filteredSubmissions = studentSubmissionsRaw.filter((sub: any) => {
+    const student = store.users.find((u: any) => u.id === sub.studentId);
+    const challenge = store.assignments.find((a: any) => a.id === sub.assignmentId);
+    return !submissionSearch ||
+      (student?.name || "").toLowerCase().includes(submissionSearch.toLowerCase()) ||
+      (challenge?.title || "").toLowerCase().includes(submissionSearch.toLowerCase());
+  });
+
+  const sortedSubmissions = [...filteredSubmissions].sort((a: any, b: any) => {
+    if (!subSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    const studentA = store.users.find((u: any) => u.id === a.studentId);
+    const studentB = store.users.find((u: any) => u.id === b.studentId);
+    const challengeA = store.assignments.find((ea: any) => ea.id === a.assignmentId);
+    const challengeB = store.assignments.find((ea: any) => ea.id === b.assignmentId);
+
+    if (subSortField === "studentName") {
+      valA = studentA?.name || "";
+      valB = studentB?.name || "";
+    } else if (subSortField === "challengeTitle") {
+      valA = challengeA?.title || "";
+      valB = challengeB?.title || "";
+    } else if (subSortField === "submittedAt") {
+      valA = new Date(a.submittedAt).getTime();
+      valB = new Date(b.submittedAt).getTime();
+    } else if (subSortField === "score") {
+      valA = a.score !== undefined ? a.score : -1;
+      valB = b.score !== undefined ? b.score : -1;
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return subSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return subSortOrder === "asc" ? valA - valB : valB - valA;
+  });
+
   return (
     <>
         {/* Tab 3: Assignments list & Student submissions grading cockpit */}
@@ -122,21 +175,23 @@ export default function AssignmentGrader(props: ComponentProps) {
               <table className="w-full text-left text-xs text-white/80 font-sans">
                 <thead className="bg-white/5 border-b border-white/10 text-white uppercase text-[10px] tracking-wider sticky top-0">
                   <tr>
-                    <th className="p-4 font-semibold">Tên Học viên</th>
-                    <th className="p-4 font-semibold">Bài tập Thử thách</th>
-                    <th className="p-4 font-semibold">Ngày nộp</th>
-                    <th className="p-4 font-semibold">Điểm số đạt được</th>
+                    <th className="p-4 font-semibold cursor-pointer select-none hover:text-white transition" onClick={() => handleSubSort("studentName")}>
+                      Tên Học viên {subSortField === "studentName" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 font-semibold cursor-pointer select-none hover:text-white transition" onClick={() => handleSubSort("challengeTitle")}>
+                      Bài tập Thử thách {subSortField === "challengeTitle" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 font-semibold cursor-pointer select-none hover:text-white transition" onClick={() => handleSubSort("submittedAt")}>
+                      Ngày nộp {subSortField === "submittedAt" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 font-semibold cursor-pointer select-none hover:text-white transition" onClick={() => handleSubSort("score")}>
+                      Điểm số đạt được {subSortField === "score" ? (subSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                     <th className="p-4 font-semibold text-right">Hành động Chấm điểm</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {studentSubmissionsRaw.filter(sub => {
-                    const student = store.users.find(u => u.id === sub.studentId);
-                    const challenge = store.assignments.find(a => a.id === sub.assignmentId);
-                    return !submissionSearch ||
-                      (student?.name || "").toLowerCase().includes(submissionSearch.toLowerCase()) ||
-                      (challenge?.title || "").toLowerCase().includes(submissionSearch.toLowerCase());
-                  }).map(sub => {
+                  {sortedSubmissions.map(sub => {
                     const student = store.users.find(u => u.id === sub.studentId);
                     const challenge = store.assignments.find(a => a.id === sub.assignmentId);
                     

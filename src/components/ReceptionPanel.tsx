@@ -47,6 +47,19 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
   const [searchQuery, setSearchQuery] = useState("");
   const [courseSearch, setCourseSearch] = useState("");
 
+  // Sorting state for students search roster
+  const [studentSortField, setStudentSortField] = useState<string>("studentName");
+  const [studentSortOrder, setStudentSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleStudentSort = (field: string) => {
+    if (studentSortField === field) {
+      setStudentSortOrder(studentSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setStudentSortField(field);
+      setStudentSortOrder("asc");
+    }
+  };
+
   // Toast notifications
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -128,6 +141,36 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
     return u.name.toLowerCase().includes(cleanQuery) ||
            u.email.toLowerCase().includes(cleanQuery) ||
            (u.phone && u.phone.includes(cleanQuery));
+  });
+
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    if (!studentSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (studentSortField === "studentName") {
+      valA = a.name || "";
+      valB = b.name || "";
+    } else if (studentSortField === "phone") {
+      valA = a.phone || "";
+      valB = b.phone || "";
+    } else if (studentSortField === "createdAt") {
+      valA = new Date(a.createdAt).getTime();
+      valB = new Date(b.createdAt).getTime();
+    } else if (studentSortField === "enrollmentsCount") {
+      valA = store.enrollments.filter(e => e.studentId === a.id).length;
+      valB = store.enrollments.filter(e => e.studentId === b.id).length;
+    } else if (studentSortField === "status") {
+      valA = a.isActive ? 1 : 0;
+      valB = b.isActive ? 1 : 0;
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return studentSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return studentSortOrder === "asc" ? valA - valB : valB - valA;
   });
 
   const selectedCourse = selectedCourseId ? store.courses.find(c => c.id === selectedCourseId) : null;
@@ -214,16 +257,26 @@ export default function ReceptionPanel({ currentUser, onLogout, onRefreshData }:
               <table className="w-full text-xs text-left border-collapse">
                 <thead>
                   <tr className="bg-white/5 border-b border-white/10 text-white/50 uppercase font-mono tracking-wider font-bold">
-                    <th className="p-4">Học viên</th>
-                    <th className="p-4">Số điện thoại</th>
-                    <th className="p-4">Ngày đăng ký</th>
-                    <th className="p-4">Khóa học đang học</th>
-                    <th className="p-4">Trạng thái hệ thống</th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("studentName")}>
+                      Học viên {studentSortField === "studentName" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("phone")}>
+                      Số điện thoại {studentSortField === "phone" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("createdAt")}>
+                      Ngày đăng ký {studentSortField === "createdAt" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("enrollmentsCount")}>
+                      Khóa học đang học {studentSortField === "enrollmentsCount" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
+                    <th className="p-4 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("status")}>
+                      Trạng thái hệ thống {studentSortField === "status" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                    </th>
                     <th className="p-4 text-right">Hỗ trợ khẩn cấp</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {filteredStudents.map(student => {
+                  {sortedStudents.map(student => {
                     const studentEnrollments = store.enrollments.filter(e => e.studentId === student.id);
 
                     return (

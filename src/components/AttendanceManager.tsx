@@ -30,6 +30,32 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
   // Session selection (or create new)
   const [activeSessionId, setActiveSessionId] = useState("");
 
+  // Sorting state for nonCompliantCourses
+  const [complianceSortField, setComplianceSortField] = useState<string>("courseTitle");
+  const [complianceSortOrder, setComplianceSortOrder] = useState<"asc" | "desc">("asc");
+
+  // Sorting state for courseStudents
+  const [studentSortField, setStudentSortField] = useState<string>("studentCode");
+  const [studentSortOrder, setStudentSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleComplianceSort = (field: string) => {
+    if (complianceSortField === field) {
+      setComplianceSortOrder(complianceSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setComplianceSortField(field);
+      setComplianceSortOrder("asc");
+    }
+  };
+
+  const handleStudentSort = (field: string) => {
+    if (studentSortField === field) {
+      setStudentSortOrder(studentSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setStudentSortField(field);
+      setStudentSortOrder("asc");
+    }
+  };
+
   // New session creation fields
   const [showCreateSession, setShowCreateSession] = useState(false);
   const [complianceSearch, setComplianceSearch] = useState("");
@@ -61,6 +87,27 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
     return !studentSearch ||
       st.name.toLowerCase().includes(studentSearch.toLowerCase()) ||
       st.studentCode.toLowerCase().includes(studentSearch.toLowerCase());
+  });
+
+  const sortedCourseStudents = [...courseStudents].sort((a, b) => {
+    if (!studentSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (studentSortField === "studentCode") {
+      valA = a.studentCode || "";
+      valB = b.studentCode || "";
+    } else if (studentSortField === "name") {
+      valA = a.name || "";
+      valB = b.name || "";
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return studentSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return studentSortOrder === "asc" ? valA - valB : valB - valA;
   });
 
   // Load records for active session
@@ -253,6 +300,27 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
     return courseSessions.length === 0 && matchesSearch;
   });
 
+  const sortedNonCompliantCourses = [...nonCompliantCourses].sort((a, b) => {
+    if (!complianceSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (complianceSortField === "courseTitle") {
+      valA = a.title || "";
+      valB = b.title || "";
+    } else if (complianceSortField === "teacherName") {
+      valA = store.users.find(u => u.id === a.teacherId)?.name || "";
+      valB = store.users.find(u => u.id === b.teacherId)?.name || "";
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return complianceSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return complianceSortOrder === "asc" ? valA - valB : valB - valA;
+  });
+
   return (
     <div className="space-y-6">
 
@@ -285,14 +353,18 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
                 <table className="w-full text-left border-collapse font-sans">
                   <thead>
                     <tr className="border-b border-white/10 text-white/40 uppercase text-[10px]">
-                      <th className="py-2.5">Tên môn học</th>
-                      <th className="py-2.5">Giảng viên phụ trách</th>
+                      <th className="py-2.5 cursor-pointer select-none hover:text-white transition" onClick={() => handleComplianceSort("courseTitle")}>
+                        Tên môn học {complianceSortField === "courseTitle" ? (complianceSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                      </th>
+                      <th className="py-2.5 cursor-pointer select-none hover:text-white transition" onClick={() => handleComplianceSort("teacherName")}>
+                        Giảng viên phụ trách {complianceSortField === "teacherName" ? (complianceSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                      </th>
                       <th className="py-2.5 text-center">Trạng thái</th>
                       <th className="py-2.5 text-right">Hành động</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5 text-xs text-white/85">
-                    {nonCompliantCourses.map(course => {
+                    {sortedNonCompliantCourses.map(course => {
                       const teacher = store.users.find(u => u.id === course.teacherId) || { name: "Chưa phân công", email: "" };
                       return (
                         <tr key={course.id}>
@@ -441,8 +513,12 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="border-b border-white/10 text-[10.5px] uppercase text-white/50 bg-white/2">
-                          <th className="py-2.5 px-3">Mã SV</th>
-                          <th className="py-2.5 px-3">Tên Sinh Viên</th>
+                          <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("studentCode")}>
+                            Mã SV {studentSortField === "studentCode" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                          </th>
+                          <th className="py-2.5 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleStudentSort("name")}>
+                            Tên Sinh Viên {studentSortField === "name" ? (studentSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                          </th>
                           <th className="py-2.5 px-3 text-center">Đúng giờ (Có mặt)</th>
                           <th className="py-2.5 px-3 text-center text-yellow-400">Đi Muộn</th>
                           <th className="py-2.5 px-3 text-center text-orange-400">Có Phép</th>
@@ -450,7 +526,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5 text-xs text-white/90">
-                        {courseStudents.map(st => {
+                        {sortedCourseStudents.map(st => {
                           const record = activeRecords.find(r => r.studentId === st.userId);
                           const activeStatus = record ? record.status : "present";
                           return (
@@ -523,7 +599,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
             </div>
 
             <div className="space-y-3">
-              {courseStudents.map(st => {
+              {sortedCourseStudents.map(st => {
                 const percentage = getStudentPresenceRate(st.userId);
                 return (
                   <div key={st.userId} className="text-xs space-y-1.5 p-2 bg-black/20 rounded-xl border border-white/5">
@@ -543,7 +619,7 @@ export default function AttendanceManager({ store, currentUser, onRefreshData, t
                   </div>
                 );
               })}
-              {courseStudents.length === 0 && (
+              {sortedCourseStudents.length === 0 && (
                 <div className="text-center py-6 text-white/30 text-[11px]">Chưa có sinh viên đăng ký môn thi học phần này.</div>
               )}
             </div>

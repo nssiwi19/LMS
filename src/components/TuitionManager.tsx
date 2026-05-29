@@ -37,6 +37,19 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
 
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Sorting state for tuition fee receivables roster
+  const [tuitionSortField, setTuitionSortField] = useState<string>("studentCode");
+  const [tuitionSortOrder, setTuitionSortOrder] = useState<"asc" | "desc">("asc");
+
+  const handleTuitionSort = (field: string) => {
+    if (tuitionSortField === field) {
+      setTuitionSortOrder(tuitionSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setTuitionSortField(field);
+      setTuitionSortOrder("asc");
+    }
+  };
+
   const students = store.studentProfiles || [];
   const systemSemesters = store.semesters || [];
   const activeSemester = systemSemesters.find(s => s.id === selectedSemesterId);
@@ -60,6 +73,42 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
       fee.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       fee.studentCode.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSemester && matchesStatus && matchesOverdue && matchesSearch;
+  });
+
+  const sortedFormattedFees = [...formattedFees].sort((a, b) => {
+    if (!tuitionSortField) return 0;
+    let valA: any = "";
+    let valB: any = "";
+
+    if (tuitionSortField === "studentCode") {
+      valA = a.studentCode || "";
+      valB = b.studentCode || "";
+    } else if (tuitionSortField === "studentName") {
+      valA = a.studentName || "";
+      valB = b.studentName || "";
+    } else if (tuitionSortField === "semesterId") {
+      valA = a.semesterId || "";
+      valB = b.semesterId || "";
+    } else if (tuitionSortField === "amount") {
+      valA = a.amount || 0;
+      valB = b.amount || 0;
+    } else if (tuitionSortField === "paidAmount") {
+      valA = a.paidAmount || 0;
+      valB = b.paidAmount || 0;
+    } else if (tuitionSortField === "dueDate") {
+      valA = new Date(a.dueDate).getTime();
+      valB = new Date(b.dueDate).getTime();
+    } else if (tuitionSortField === "status") {
+      valA = a.status || "";
+      valB = b.status || "";
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return tuitionSortOrder === "asc"
+        ? valA.localeCompare(valB, "vi", { sensitivity: "base" })
+        : valB.localeCompare(valA, "vi", { sensitivity: "base" });
+    }
+    return tuitionSortOrder === "asc" ? valA - valB : valB - valA;
   });
 
   // Calculate Aggregates for current semester
@@ -397,24 +446,37 @@ export default function TuitionManager({ store, currentUser, onRefreshData, trig
         </div>
       </div>
 
-      {/* Tuition Roster Records list */}
       <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden text-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/10 text-white/40 text-[10px] font-bold uppercase bg-white/2">
-                <th className="py-2 px-3">Mã SV</th>
-                <th className="py-2 px-3">Học sinh Sinh viên</th>
-                <th className="py-2 px-3">Học Kỳ Billed</th>
-                <th className="py-2 px-3 text-right">Tổng Định Phí</th>
-                <th className="py-2 px-3 text-right text-emerald-400">Đã Trả</th>
-                <th className="py-2 px-3 text-right">Hạn Định</th>
-                <th className="py-2 px-3 text-center">Tình Trạng</th>
+                <th className="py-2 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("studentCode")}>
+                  Mã SV {tuitionSortField === "studentCode" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-2 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("studentName")}>
+                  Học sinh Sinh viên {tuitionSortField === "studentName" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-2 px-3 cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("semesterId")}>
+                  Học Kỳ Billed {tuitionSortField === "semesterId" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-2 px-3 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("amount")}>
+                  Tổng Định Phí {tuitionSortField === "amount" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-2 px-3 text-right text-emerald-400 cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("paidAmount")}>
+                  Đã Trả {tuitionSortField === "paidAmount" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-2 px-3 text-right cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("dueDate")}>
+                  Hạn Định {tuitionSortField === "dueDate" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
+                <th className="py-2 px-3 text-center cursor-pointer select-none hover:text-white transition" onClick={() => handleTuitionSort("status")}>
+                  Tình Trạng {tuitionSortField === "status" ? (tuitionSortOrder === "asc" ? "▲" : "▼") : "↕"}
+                </th>
                 <th className="py-2 px-4 text-right">Bút toán</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-white/95 text-xs font-medium">
-              {formattedFees.map(fee => (
+              {sortedFormattedFees.map(fee => (
                 <tr key={fee.id} className="hover:bg-white/3 transition">
                   <td className="py-3 px-3 font-mono font-bold text-cyan-400">{fee.studentCode}</td>
                   <td className="py-3 px-3">
