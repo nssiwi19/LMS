@@ -533,7 +533,7 @@ function AppShell() {
                   <span className="text-xs text-indigo-300 font-mono tracking-widest uppercase">Đang tải phân hệ học vụ...</span>
                 </div>
               }>
-                {(currentUser.role === "admin" || currentUser.role === "super_admin") && (
+                {(currentUser.role === "admin" || currentUser.role === "super_admin" || currentUser.role === "manager") && (
                   <AdminPanel
                     currentUser={currentUser}
                     onLogout={handleLogout}
