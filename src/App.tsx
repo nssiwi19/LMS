@@ -561,7 +561,7 @@ function AppShell() {
                     onRefreshData={refreshStoreDataFromServer}
                   />
                 )}
-                {currentUser.role === "le_tan" && (
+                {currentUser.role === "sale" && (
                   <ReceptionPanel
                     currentUser={currentUser}
                     onLogout={handleLogout}
