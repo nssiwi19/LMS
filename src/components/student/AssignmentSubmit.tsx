@@ -110,49 +110,45 @@ export default function AssignmentSubmit(props: ComponentProps) {
         {/* Tab 3: Assignments list & Submissions panels */}
         {activeSubTab === "assignments" && (
           <div className="space-y-6">
-            <h4 className="text-base font-display font-semibold text-white">Danh sách Thách thức & Bài tập thực hành</h4>
+            <h4 className="text-base font-display font-semibold text-white">Bài tập chưa hoàn thành của các khóa học</h4>
 
             <div className="space-y-4">
-              {store.assignments.filter(a => myEnrolledCourseIds.includes(a.courseId)).map(a => {
-                const sub = store.submissions.find(s => s.assignmentId === a.id && s.studentId === currentUser.id);
-                const courseTitle = store.courses.find(c => c.id === a.courseId)?.title || "Không xác định";
-                const isDeadlineExpired = new Date(a.deadline).getTime() < Date.now();
+              {(() => {
+                const uncompletedAssignments = store.assignments.filter(a => {
+                  if (!myEnrolledCourseIds.includes(a.courseId)) return false;
+                  const sub = store.submissions.find(s => s.assignmentId === a.id && s.studentId === currentUser.id);
+                  return !sub;
+                });
 
-                return (
-                  <div key={a.id} className="bg-white/5 border border-white/10 p-5 rounded-2xl hover:border-white/20 transition duration-150">
-                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                      <div className="space-y-2 flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[10px] font-mono font-bold text-indigo-300 uppercase">{courseTitle}</span>
-                          <span className="text-[10px] font-mono text-white/40">Hạn nộp: {new Date(a.deadline).toLocaleDateString()}</span>
+                if (uncompletedAssignments.length === 0) {
+                  return (
+                    <div className="text-center py-16 text-white/40 bg-black/10 rounded-3xl border border-dashed border-white/10 text-xs flex flex-col items-center justify-center gap-2">
+                      <CheckCircle className="h-10 w-10 text-emerald-400 mb-1" />
+                      <p className="font-semibold text-white">Tuyệt vời! Bạn đã hoàn thành tất cả bài tập.</p>
+                      <p className="text-[11px] text-white/40">Không có bài tập chưa hoàn thành nào tại thời điểm này.</p>
+                    </div>
+                  );
+                }
+
+                return uncompletedAssignments.map(a => {
+                  const courseTitle = store.courses.find(c => c.id === a.courseId)?.title || "Không xác định";
+                  const isDeadlineExpired = new Date(a.deadline).getTime() < Date.now();
+
+                  return (
+                    <div key={a.id} className="bg-gradient-to-b from-white/5 to-white/[0.02] border border-white/10 p-5 rounded-2xl hover:border-white/20 transition-all duration-200 shadow-xl relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full filter blur-xl pointer-events-none" />
+                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                        <div className="space-y-2 flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-mono font-bold text-indigo-300 bg-indigo-500/10 py-0.5 px-2.5 rounded-full border border-indigo-500/20 uppercase">{courseTitle}</span>
+                            <span className="text-[10px] font-mono text-white/40">Hạn nộp: {new Date(a.deadline).toLocaleDateString("vi-VN")}</span>
+                          </div>
+
+                          <h5 className="text-sm font-bold text-white pr-2 leading-snug break-words">{a.title}</h5>
+                          <p className="text-xs text-white/60 leading-relaxed max-w-2xl font-sans break-words">{a.description}</p>
                         </div>
 
-                        <h5 className="text-sm font-bold text-white pr-2 truncate">{a.title}</h5>
-                        <p className="text-xs text-white/60 leading-relaxed max-w-2xl font-sans break-words">{a.description}</p>
-
-                        {sub && (
-                          <div className="pt-2 bg-black/20 p-3 rounded-xl border border-white/5 space-y-1.5 max-w-2xl">
-                            <span className="text-[10px] font-mono text-emerald-400 font-bold block">Nội dung bài làm đã nộp</span>
-                            
-                            {/* Chống tràn chữ: Dùng whitespace-pre-wrap & break-words */}
-                            <div className="bg-slate-950/40 p-2.5 rounded-lg border border-white/5 max-h-40 overflow-y-auto pr-1">
-                              <p className="text-xs text-white/70 font-mono whitespace-pre-wrap break-words">{sub.content}</p>
-                            </div>
-                            
-                            {sub.score !== undefined ? (
-                              <div className="pt-1.5 border-t border-white/5 text-xs text-white flex items-center gap-3">
-                                <span>Điểm số: <strong className="text-emerald-400">{sub.score}/{a.maxScore}</strong></span>
-                                {sub.feedback && <span className="text-white/40 font-sans italic">" {sub.feedback} "</span>}
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-amber-300 font-bold block pt-1 font-mono">Trạng thái: Đang chấm điểm...</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex-shrink-0 self-start md:self-auto">
-                        {!sub ? (
+                        <div className="flex-shrink-0 self-start md:self-auto">
                           <button
                             onClick={() => {
                               if (isDeadlineExpired) {
@@ -164,43 +160,16 @@ export default function AssignmentSubmit(props: ComponentProps) {
                               setExistingAttachment(null);
                             }}
                             disabled={isDeadlineExpired}
-                            className="p-1.5 px-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs rounded-xl disabled:bg-white/10 disabled:text-white/40 transition cursor-pointer"
+                            className="p-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl disabled:bg-white/10 disabled:text-white/40 disabled:cursor-not-allowed transition cursor-pointer shadow-lg shadow-indigo-600/10"
                           >
                             Nộp bài làm
                           </button>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              if (isDeadlineExpired) {
-                                triggerToast("Đã quá hạn nộp bài tập này!");
-                                return;
-                              }
-                              setSubmittingAssignmentId(a.id);
-                              const match = sub.content.match(/\[Tệp đính kèm:\s*([^\]]+)\]/);
-                              if (match) {
-                                setExistingAttachment(match[1]);
-                                setSubmissionCodeText(sub.content.replace(/\s*\[Tệp đính kèm:[^\]]+\]/g, "").trim());
-                              } else {
-                                setExistingAttachment(null);
-                                setSubmissionCodeText(sub.content);
-                              }
-                            }}
-                            className="p-1.5 px-3 bg-white/5 hover:bg-white/10 text-xs border border-white/10 text-white/80 rounded-xl transition cursor-pointer"
-                          >
-                            Cập nhật bài nộp
-                          </button>
-                        )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-
-              {store.assignments.filter(a => myEnrolledCourseIds.includes(a.courseId)).length === 0 && (
-                <div className="text-center py-16 text-white/40 bg-black/10 rounded-2xl border border-dashed border-white/5 text-xs">
-                  Hiện chưa có bài tập tự luận hay thách thức thực hành nào được giao cho khóa học này.
-                </div>
-              )}
+                  );
+                });
+              })()}
             </div>
           </div>
         )}

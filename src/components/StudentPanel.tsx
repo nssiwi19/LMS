@@ -328,7 +328,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
     ).length;
 
     if (studentAttemptsCount >= quiz.maxAttempts) {
-      triggerToast("Evaluation attempts exhausted on this profile directory!");
+      triggerToast(`Bạn đã dùng hết số lượt làm bài kiểm tra này (Tối đa: ${quiz.maxAttempts} lần)!`);
       return;
     }
 
@@ -698,7 +698,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
               <span className="text-white/40">— đang xem: <strong className="text-indigo-300">{{
                 catalog: "Khám phá khóa học",
                 learning: "Lớp học của tôi",
-                assignments: "Bài tập tự luận",
+                assignments: "Bài tập chưa hoàn thành",
                 certificates: "Chứng nhận",
                 notifications: "Hộp thư",
                 profile: "Lý lịch cá nhân",
@@ -755,6 +755,17 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
               <span>Lớp học của tôi</span>
             </button>
             <button
+              onClick={() => { setActiveSubTab("student_timetable"); setShowSidebar(false); }}
+              className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
+                activeSubTab === "student_timetable" 
+                  ? "bg-white/10 text-indigo-300 font-bold border border-white/10 shadow-lg shadow-indigo-500/5" 
+                  : "text-white/60 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Calendar className={`h-4.5 w-4.5 ${activeSubTab === "student_timetable" ? "text-indigo-300" : "text-white/40"}`} />
+              <span>Thời khóa biểu</span>
+            </button>
+            <button
               onClick={() => { setActiveSubTab("assignments"); setShowSidebar(false); }}
               className={`w-full text-left px-4 py-3 font-semibold rounded-2xl transition duration-150 cursor-pointer flex items-center gap-2.5 ${
                 activeSubTab === "assignments" 
@@ -763,7 +774,7 @@ export default function StudentPanel({ currentUser, onLogout, onRefreshData, act
               }`}
             >
               <FileText className={`h-4.5 w-4.5 ${activeSubTab === "assignments" ? "text-indigo-300" : "text-white/40"}`} />
-              <span>Bài tập tự luận</span>
+              <span>Bài tập chưa hoàn thành</span>
             </button>
             <button
               onClick={() => { setActiveSubTab("certificates"); setShowSidebar(false); }}

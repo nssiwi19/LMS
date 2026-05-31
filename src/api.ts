@@ -1,12 +1,17 @@
 import { LMSDataStore } from "./types";
 
 export function setCsrfToken(token: string | null) {
-  if (token) sessionStorage.setItem("mcna_lms_csrf", token);
-  else sessionStorage.removeItem("mcna_lms_csrf");
+  if (token) {
+    sessionStorage.setItem("mcna_lms_csrf", token);
+    sessionStorage.setItem("e16_lms_csrf", token);
+  } else {
+    sessionStorage.removeItem("mcna_lms_csrf");
+    sessionStorage.removeItem("e16_lms_csrf");
+  }
 }
 
 async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const csrfToken = sessionStorage.getItem("mcna_lms_csrf");
+  const csrfToken = sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");
   const response = await fetch(url, {
     ...init,
     credentials: "include",

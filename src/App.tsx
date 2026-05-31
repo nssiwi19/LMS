@@ -30,7 +30,6 @@ const TeacherPanel = React.lazy(() => import("./components/TeacherPanel"));
 const StudentPanel = React.lazy(() => import("./components/StudentPanel"));
 const FinancePanel = React.lazy(() => import("./components/FinancePanel"));
 const ReceptionPanel = React.lazy(() => import("./components/ReceptionPanel"));
-const AcademicPanel = React.lazy(() => import("./components/AcademicPanel"));
 const AdvisorPanel = React.lazy(() => import("./components/AdvisorPanel"));
 const ParentPanel = React.lazy(() => import("./components/ParentPanel"));
 import { api, setCsrfToken } from "./api";
@@ -563,13 +562,6 @@ function AppShell() {
                 )}
                 {currentUser.role === "sale" && (
                   <ReceptionPanel
-                    currentUser={currentUser}
-                    onLogout={handleLogout}
-                    onRefreshData={refreshStoreDataFromServer}
-                  />
-                )}
-                {(currentUser.role === "academic_admin") && (
-                  <AcademicPanel
                     currentUser={currentUser}
                     onLogout={handleLogout}
                     onRefreshData={refreshStoreDataFromServer}

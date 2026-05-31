@@ -90,6 +90,7 @@ export default function StudentAcademics(props: ComponentProps) {
   const [txSearch, setTxSearch] = useState("");
   const [transcriptSearch, setTranscriptSearch] = useState("");
   const [courseDetailId, setCourseDetailId] = useState<string | null>(null);
+  const [warningsCollapsed, setWarningsCollapsed] = useState(true);
 
   // Sorting state for my enrollments schedule
   const [enrollSortField, setEnrollSortField] = useState<string>("courseTitle");
@@ -323,22 +324,43 @@ export default function StudentAcademics(props: ComponentProps) {
   return (
     <>
       {unresolvedWarnings.length > 0 && (
-        <div className="mb-6 space-y-3">
-          {unresolvedWarnings.map((w: any) => (
-            <div
-              key={w.id}
-              className="p-4 bg-red-500/10 border border-red-500/25 rounded-2xl text-red-400 text-xs flex items-start gap-3.5 leading-relaxed font-sans shadow-lg animate-pulse"
-            >
-              <BadgeAlert className="h-5 w-5 shrink-0 text-red-500 mt-0.5" />
-              <div className="space-y-1">
-                <span className="font-bold text-white block uppercase tracking-wider text-[10px]">
-                  Cảnh báo học tập chưa xử lý: {warningTypeLabel(w.type)}
-                </span>
-                <p className="text-red-300/90">{w.message}</p>
-                <span className="text-[10px] text-white/30 mt-1 block">Ngày tạo cảnh báo: {fmtDate(w.createdAt)}</span>
+        <div className="mb-6 bg-gradient-to-r from-red-950/30 to-amber-950/20 border border-red-500/20 rounded-2xl p-4 shadow-lg">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 text-xs text-red-400 font-sans">
+              <BadgeAlert className="h-5 w-5 text-red-500 shrink-0" />
+              <div>
+                <span className="font-bold text-white block">Cảnh báo học vụ quan trọng!</span>
+                <p className="text-red-300/80">Bạn đang có <strong className="text-red-400 font-mono">{unresolvedWarnings.length} cảnh báo học tập</strong> chưa được xử lý.</p>
               </div>
             </div>
-          ))}
+            
+            <button
+              onClick={() => setWarningsCollapsed(!warningsCollapsed)}
+              className="text-xs font-semibold text-indigo-300 hover:text-white px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl transition cursor-pointer flex items-center gap-1.5 font-mono shrink-0"
+            >
+              <span>{warningsCollapsed ? "Xem chi tiết" : "Thu gọn"}</span>
+              <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${!warningsCollapsed ? "rotate-90" : ""}`} />
+            </button>
+          </div>
+
+          {!warningsCollapsed && (
+            <div className="mt-4 pt-4 border-t border-white/5 space-y-3">
+              {unresolvedWarnings.map((w: any) => (
+                <div
+                  key={w.id}
+                  className="p-3.5 bg-black/30 border border-red-500/10 rounded-xl text-xs space-y-1 font-sans leading-relaxed"
+                >
+                  <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-1.5 mb-1.5">
+                    <span className="font-bold text-white uppercase tracking-wider text-[9px] text-red-400">
+                      ⚠️ Loại cảnh báo: {warningTypeLabel(w.type)}
+                    </span>
+                    <span className="text-[9px] text-white/30 font-mono">Ngày tạo: {fmtDate(w.createdAt)}</span>
+                  </div>
+                  <p className="text-red-200/85">{w.message}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

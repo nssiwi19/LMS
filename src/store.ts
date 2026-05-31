@@ -828,8 +828,8 @@ export class AppStore {
           if (!this.storeInstance.systemEvents) this.storeInstance.systemEvents = initial.systemEvents || [];
 
           // Ensure new seeded roles are present
-          const rolesToBackfill = ["le_tan", "academic_admin", "finance", "advisor", "parent"];
-          const hasAllRoles = rolesToBackfill.every(r => this.storeInstance!.users.some(u => u.role === u.role && u.role === r));
+          const rolesToBackfill = ["sale", "admin", "finance", "advisor", "parent"];
+          const hasAllRoles = rolesToBackfill.every(r => this.storeInstance!.users.some(u => u.role === r));
           if (!hasAllRoles) {
             // Append missing users
             initial.users.forEach(u => {
@@ -874,14 +874,14 @@ export class AppStore {
     
     if (typeof sessionStorage !== "undefined") {
       const role = sessionStorage.getItem("e16_lms_role");
-      if (role && !["admin", "super_admin", "academic_admin", "finance"].includes(role)) {
+      if (role && !["manager", "super_admin", "admin", "finance"].includes(role)) {
         // Skip calling /api/store/sync as this role does not have permission
         return;
       }
     }
 
     if (typeof fetch !== "undefined") {
-      const csrfToken = sessionStorage.getItem("e16_lms_csrf");
+      const csrfToken = sessionStorage.getItem("mcna_lms_csrf") || sessionStorage.getItem("e16_lms_csrf");
       this.syncPromise = fetch("/api/store/sync", {
         method: "POST",
         credentials: "include",
