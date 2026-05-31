@@ -11,7 +11,8 @@ import {
   Calendar,
   AlertCircle,
   HelpCircle,
-  TrendingUp
+  TrendingUp,
+  Users
 } from "lucide-react";
 import { User, Transaction, Course } from "../types";
 import { AppStore } from "../store";
@@ -433,7 +434,7 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
       </div>
 
       {/* Stats Cards Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         <div className="bg-white/5 border border-white/10 p-5 rounded-2xl flex items-center justify-between">
           <div>
             <span className="text-xs text-white/50 block font-medium">Tổng doanh thu thực tế</span>
@@ -442,6 +443,17 @@ export default function FinancePanel({ currentUser, onLogout, onRefreshData }: F
           </div>
           <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl flex items-center justify-center">
             <DollarSign className="h-6 w-6" />
+          </div>
+        </div>
+
+        <div className="bg-white/5 border border-white/10 p-5 rounded-2xl flex items-center justify-between">
+          <div>
+            <span className="text-xs text-white/50 block font-medium">Tổng chi lương giảng viên</span>
+            <span className="text-xl font-bold text-rose-400 mt-1 block">{formatVND(totalSalaryExpense)}</span>
+            <span className="text-[10px] text-white/30 font-mono">Dựa trên lớp học & tuyển sinh</span>
+          </div>
+          <div className="w-12 h-12 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl flex items-center justify-center">
+            <Users className="h-6 w-6" />
           </div>
         </div>
 
